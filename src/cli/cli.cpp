@@ -143,36 +143,67 @@ void cli::fs_update_cli::automatic_update_firmware_state(const char *firmware_fi
         throw(std::overflow_error(error_msg.str()));
     }
     const unsigned int fw_version = static_cast<unsigned int>(std::stoul(fw_version_env));
+    const update_definitions::UBootBootstateFlags current_state = this->update_handler->get_update_reboot_state();
 
-    try
+    if (current_state == update_definitions::UBootBootstateFlags::NO_UPDATE_REBOOT_PENDING)
     {
-        this->update_handler->automatic_update_firmware(firmware_file, fw_version);
-    }
-    catch(const fs::UpdateInProgress &e)
-    {
-        std::stringstream error_msg;
-        error_msg << "Automatic firmware update progress error: " << e.what() << std::endl;
-        this->serial_cout->write(error_msg.str());
-        this->return_code = 1;
-    }
-    catch(const fs::BaseFSUpdateException &e)
-    {
-        std::stringstream error_msg;
-        error_msg << "Automatic firmware update error: " << e.what() << std::endl;
-        this->serial_cout->write(error_msg.str());
-        this->return_code = 2;
-    }
-    catch (const std::exception &e)
-    {
-        std::stringstream error_msg;
-        error_msg << "Automatic firmware update system error: " << e.what() << std::endl;
-        this->serial_cout->write(error_msg.str());
-        this->return_code = 3;
-    }
+        try
+        {
+            this->update_handler->automatic_update_firmware(firmware_file, fw_version);
+        }
+        catch(const fs::UpdateInProgress &e)
+        {
+            std::stringstream error_msg;
+            error_msg << "Automatic firmware update progress error: " << e.what() << std::endl;
+            this->serial_cout->write(error_msg.str());
+            this->return_code = 1;
+        }
+        catch(const fs::BaseFSUpdateException &e)
+        {
+            std::stringstream error_msg;
+            error_msg << "Automatic firmware update error: " << e.what() << std::endl;
+            this->serial_cout->write(error_msg.str());
+            this->return_code = 2;
+        }
+        catch (const std::exception &e)
+        {
+            std::stringstream error_msg;
+            error_msg << "Automatic firmware update system error: " << e.what() << std::endl;
+            this->serial_cout->write(error_msg.str());
+            this->return_code = 3;
+        }
 
-    std::stringstream out;
-    out << "Automatic firmware update successful" << std::endl;
-    this->serial_cout->write(out.str());
+        std::stringstream out;
+        out << "Automatic firmware update successful" << std::endl;
+        this->serial_cout->write(out.str());
+    }
+    else
+    {
+        try
+        {
+            if (this->update_handler->commit_update() == false)
+            {
+                std::stringstream error_msg;
+                error_msg << "Automatic firmware update error: Commit update returns no commit needed although no update state is not reached!" << std::endl;
+                this->serial_cout->write(error_msg.str());
+                throw(std::logic_error("This state is not allowed not be reached when a commit is necessary"));
+            }
+        }
+        catch(const fs::NotAllowedUpdateState &e)
+        {
+            std::stringstream error_msg;
+            error_msg << "Automatic firmware update error: Not allowed update state in UBoot" << std::endl;
+            this->serial_cout->write(error_msg.str());
+            this->return_code = 1;
+        }
+        catch(const std::exception &e)
+        {
+            std::stringstream error_msg;
+            error_msg << "Automatic firmware update error: " << e.what() << std::endl;
+            this->serial_cout->write(error_msg.str());
+            this->return_code = 2;
+        }
+    }
 }
 
 void cli::fs_update_cli::automatic_update_application_state(const char *application_file_env,
@@ -189,36 +220,67 @@ void cli::fs_update_cli::automatic_update_application_state(const char *applicat
         throw(std::overflow_error(error_msg.str()));
     }
     const unsigned int app_version = static_cast<unsigned int>(std::stoul(app_version_env));
+    const update_definitions::UBootBootstateFlags current_state = this->update_handler->get_update_reboot_state();
 
-    try
+    if (current_state == update_definitions::UBootBootstateFlags::NO_UPDATE_REBOOT_PENDING)
     {
-        this->update_handler->automatic_update_application(application_file, app_version);
-    }
-    catch(const fs::UpdateInProgress &e)
-    {
-        std::stringstream error_msg;
-        error_msg << "Automatic application update progress error: " << e.what() << std::endl;
-        this->serial_cout->write(error_msg.str());
-        this->return_code = 1;
-    }
-    catch(const fs::BaseFSUpdateException &e)
-    {
-        std::stringstream error_msg;
-        error_msg << "Automatic application update error: " << e.what() << std::endl;
-        this->serial_cout->write(error_msg.str());
-        this->return_code = 2;
-    }
-    catch (const std::exception &e)
-    {
-        std::stringstream error_msg;
-        error_msg << "Automatic application update system error: " << e.what() << std::endl;
-        this->serial_cout->write(error_msg.str());
-        this->return_code = 3;
-    }
+        try
+        {
+            this->update_handler->automatic_update_application(application_file, app_version);
+        }
+        catch(const fs::UpdateInProgress &e)
+        {
+            std::stringstream error_msg;
+            error_msg << "Automatic application update progress error: " << e.what() << std::endl;
+            this->serial_cout->write(error_msg.str());
+            this->return_code = 1;
+        }
+        catch(const fs::BaseFSUpdateException &e)
+        {
+            std::stringstream error_msg;
+            error_msg << "Automatic application update error: " << e.what() << std::endl;
+            this->serial_cout->write(error_msg.str());
+            this->return_code = 2;
+        }
+        catch (const std::exception &e)
+        {
+            std::stringstream error_msg;
+            error_msg << "Automatic application update system error: " << e.what() << std::endl;
+            this->serial_cout->write(error_msg.str());
+            this->return_code = 3;
+        }
 
-    std::stringstream out;
-    out << "Automatic application successful" << std::endl;
-    this->serial_cout->write(out.str());
+        std::stringstream out;
+        out << "Automatic application successful" << std::endl;
+        this->serial_cout->write(out.str());
+    }
+    else
+    {
+        try
+        {
+            if (this->update_handler->commit_update() == false)
+            {
+                std::stringstream error_msg;
+                error_msg << "Automatic application update error: Commit update returns no commit needed although no update state is not reached!" << std::endl;
+                this->serial_cout->write(error_msg.str());
+                throw(std::logic_error("This state is not allowed not be reached when a commit is necessary"));
+            }
+        }
+        catch(const fs::NotAllowedUpdateState &e)
+        {
+            std::stringstream error_msg;
+            error_msg << "Automatic application update error: Not allowed update state in UBoot" << std::endl;
+            this->serial_cout->write(error_msg.str());
+            this->return_code = 1;
+        }
+        catch(const std::exception &e)
+        {
+            std::stringstream error_msg;
+            error_msg << "Automatic application update error: " << e.what() << std::endl;
+            this->serial_cout->write(error_msg.str());
+            this->return_code = 2;
+        }
+    }
 }
 
 void cli::fs_update_cli::automatic_firmware_application_state(const char *application_file_env, 
@@ -249,35 +311,67 @@ void cli::fs_update_cli::automatic_firmware_application_state(const char *applic
     const unsigned int fw_version = static_cast<unsigned int>(std::stoul(fw_version_env));
     const unsigned int app_version = static_cast<unsigned int>(std::stoul(app_version_env));
 
-    try
-    {
-        this->update_handler->automatic_update_firmware_and_application(firmware_file, application_file, app_version, fw_version);
-    }
-    catch(const fs::UpdateInProgress &e)
-    {
-        std::stringstream error_msg;
-        error_msg << "Automatic firmware & application update progress error: " << e.what() << std::endl;
-        this->serial_cout->write(error_msg.str());
-        this->return_code = 1;
-    }
-    catch(const fs::BaseFSUpdateException &e)
-    {
-        std::stringstream error_msg;
-        error_msg << "Automatic firmware & application update error: " << e.what() << std::endl;
-        this->serial_cout->write(error_msg.str());
-        this->return_code = 2;
-    }
-    catch (const std::exception &e)
-    {
-        std::stringstream error_msg;
-        error_msg << "Automatic firmware & application update system error: " << e.what() << std::endl;
-        this->serial_cout->write(error_msg.str());
-        this->return_code = 3;
-    }
+    const update_definitions::UBootBootstateFlags current_state = this->update_handler->get_update_reboot_state();
 
-    std::stringstream out;
-    out << "Automatic firmware & application successful" << std::endl;
-    this->serial_cout->write(out.str());
+    if (current_state == update_definitions::UBootBootstateFlags::NO_UPDATE_REBOOT_PENDING)
+    {
+        try
+        {
+            this->update_handler->automatic_update_firmware_and_application(firmware_file, application_file, app_version, fw_version);
+        }
+        catch(const fs::UpdateInProgress &e)
+        {
+            std::stringstream error_msg;
+            error_msg << "Automatic firmware & application update progress error: " << e.what() << std::endl;
+            this->serial_cout->write(error_msg.str());
+            this->return_code = 1;
+        }
+        catch(const fs::BaseFSUpdateException &e)
+        {
+            std::stringstream error_msg;
+            error_msg << "Automatic firmware & application update error: " << e.what() << std::endl;
+            this->serial_cout->write(error_msg.str());
+            this->return_code = 2;
+        }
+        catch (const std::exception &e)
+        {
+            std::stringstream error_msg;
+            error_msg << "Automatic firmware & application update system error: " << e.what() << std::endl;
+            this->serial_cout->write(error_msg.str());
+            this->return_code = 3;
+        }
+
+        std::stringstream out;
+        out << "Automatic firmware & application successful" << std::endl;
+        this->serial_cout->write(out.str());
+    }
+    else
+    {
+        try
+        {
+            if (this->update_handler->commit_update() == false)
+            {
+                std::stringstream error_msg;
+                error_msg << "Automatic firmware & application update error: Commit update returns no commit needed although no update state is not reached!" << std::endl;
+                this->serial_cout->write(error_msg.str());
+                throw(std::logic_error("This state is not allowed not be reached when a commit is necessary"));
+            }
+        }
+        catch(const fs::NotAllowedUpdateState &e)
+        {
+            std::stringstream error_msg;
+            std::cerr << "Automatic firmware & application update error: Not allowed update state in UBoot" << std::endl;
+            this->serial_cout->write(error_msg.str());
+            this->return_code = 1;
+        }
+        catch(const std::exception &e)
+        {
+            std::stringstream error_msg;
+            std::cerr << "Automatic firmware & application update error: " << e.what() << std::endl;
+            this->serial_cout->write(error_msg.str());
+            this->return_code = 2;
+        }
+    }
 }
 
 void cli::fs_update_cli::commit_update()
