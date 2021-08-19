@@ -43,4 +43,4 @@ target_link_libraries(fs_updater_cli
       )
 
 set_target_properties(fs_updater_cli PROPERTIES OUTPUT_NAME "fs-updater")
-install(TARGETS fs_updater_cli RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}/usr/bin)
+install(TARGETS fs_updater_cli RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
