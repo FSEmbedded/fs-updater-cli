@@ -4,7 +4,7 @@ project(fs_updater_cli)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-set(CMAKE_CXX_FLAGS "-Wall -Wextra -Os -s")
+#set(CMAKE_CXX_FLAGS "-Wall -Wextra -Os -s")
 
 set(SOURCES
     "src/main.cpp"
