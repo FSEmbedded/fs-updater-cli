@@ -1,4 +1,5 @@
 #include "cli.h"
+#include <cstdlib>
 
 cli::fs_update_cli::fs_update_cli():
     cmd("F&S Update Framework CLI", ' ', VERSION, true),
@@ -54,6 +55,8 @@ void cli::fs_update_cli::update_firmware_state()
         this->update_handler->update_firmware(
             this->arg_fw.getValue()
         );
+
+        std::cout << "Firmware update successful" << std::endl;
     }
     catch(const fs::UpdateInProgress &e)
     {
@@ -70,8 +73,6 @@ void cli::fs_update_cli::update_firmware_state()
         std::cerr << "Firmware update system error: " << e.what() << std::endl;
         this->return_code = 1;
     }
-
-    std::cout << "Firmware update successful" << std::endl;
 }
 
 void cli::fs_update_cli::update_application_state()
@@ -81,6 +82,8 @@ void cli::fs_update_cli::update_application_state()
         this->update_handler->update_application(
             this->arg_app.getValue()
         );
+
+        std::cout << "Application update successful" << std::endl;
     }
     catch(const fs::UpdateInProgress &e)
     {
@@ -97,8 +100,6 @@ void cli::fs_update_cli::update_application_state()
         std::cerr << "Application update system error: " << e.what() << std::endl;
         this->return_code = 1;
     }
-
-    std::cout << "Application update successful" << std::endl;
 }
 
 void cli::fs_update_cli::update_firmware_application_state()
@@ -109,6 +110,8 @@ void cli::fs_update_cli::update_firmware_application_state()
             this->arg_fw.getValue(),
             this->arg_app.getValue()
         );
+
+        std::cout << "Application & firmware update successful" << std::endl;
     }
     catch(const fs::UpdateInProgress &e)
     {
@@ -125,8 +128,6 @@ void cli::fs_update_cli::update_firmware_application_state()
         std::cerr << "Application & firmware update system error: " << e.what() << std::endl;
         this->return_code = 1;
     }
-
-    std::cout << "Application & firmware update successful" << std::endl;
 }
 
 void cli::fs_update_cli::automatic_update_firmware_state(const char *firmware_file_env,
@@ -136,13 +137,13 @@ void cli::fs_update_cli::automatic_update_firmware_state(const char *firmware_fi
     std::filesystem::path firmware_file( update_stick);
     firmware_file += std::filesystem::path(firmware_file_env);
     
-    if (UINT_MAX > std::stoul(fw_version_env))
+    if (!((unsigned long) UINT32_MAX > std::stoul(fw_version_env)))
     {
         std::stringstream error_msg;
-        error_msg << "System variable \"FW_VERSION\" is bigger than max of unsigned int";
+        error_msg << "System variable \"FW_VERSION\" is bigger than max of uint32_t";
         throw(std::overflow_error(error_msg.str()));
     }
-    const unsigned int fw_version = static_cast<unsigned int>(std::stoul(fw_version_env));
+    const uint32_t fw_version = static_cast<uint32_t>(std::stoul(fw_version_env));
     const update_definitions::UBootBootstateFlags current_state = this->update_handler->get_update_reboot_state();
 
     if (current_state == update_definitions::UBootBootstateFlags::NO_UPDATE_REBOOT_PENDING)
@@ -150,6 +151,10 @@ void cli::fs_update_cli::automatic_update_firmware_state(const char *firmware_fi
         try
         {
             this->update_handler->automatic_update_firmware(firmware_file, fw_version);
+
+            std::stringstream out;
+            out << "Automatic firmware update successful" << std::endl;
+            this->serial_cout->write(out.str());
         }
         catch(const fs::UpdateInProgress &e)
         {
@@ -172,10 +177,6 @@ void cli::fs_update_cli::automatic_update_firmware_state(const char *firmware_fi
             this->serial_cout->write(error_msg.str());
             this->return_code = 3;
         }
-
-        std::stringstream out;
-        out << "Automatic firmware update successful" << std::endl;
-        this->serial_cout->write(out.str());
     }
     else
     {
@@ -213,13 +214,13 @@ void cli::fs_update_cli::automatic_update_application_state(const char *applicat
     std::filesystem::path application_file = update_stick;
     application_file += std::filesystem::path(application_file_env);
 
-    if (UINT_MAX > std::stoul(app_version_env))
+    if (!((unsigned long) UINT32_MAX > std::stoul(app_version_env)))
     {
         std::stringstream error_msg;
-        error_msg << "System variable \"APP_VERSION\" is bigger than max of unsigned int";
+        error_msg << "System variable \"APP_VERSION\" is bigger than max of uint32_t";
         throw(std::overflow_error(error_msg.str()));
     }
-    const unsigned int app_version = static_cast<unsigned int>(std::stoul(app_version_env));
+    const uint32_t app_version = static_cast<uint32_t>(std::stoul(app_version_env));
     const update_definitions::UBootBootstateFlags current_state = this->update_handler->get_update_reboot_state();
 
     if (current_state == update_definitions::UBootBootstateFlags::NO_UPDATE_REBOOT_PENDING)
@@ -295,21 +296,21 @@ void cli::fs_update_cli::automatic_firmware_application_state(const char *applic
     std::filesystem::path firmware_file = update_stick;
     firmware_file += std::filesystem::path(firmware_file_env);
 
-    if (UINT_MAX > std::stoul(app_version_env))
+    if (!((unsigned long) UINT32_MAX > std::stoul(app_version_env)))
     {
         std::stringstream error_msg;
-        error_msg << "System variable \"APP_VERSION\" is bigger than max of unsigned int";
+        error_msg << "System variable \"APP_VERSION\" is bigger than max of uint32_t";
         throw(std::overflow_error(error_msg.str()));
     }
 
-    if (UINT_MAX > std::stoul(fw_version_env))
+    if (!((unsigned long) UINT32_MAX > std::stoul(fw_version_env)))
     {
         std::stringstream error_msg;
-        error_msg << "System variable \"FW_VERSION\" is bigger than max of unsigned int";
+        error_msg << "System variable \"FW_VERSION\" is bigger than max of uint32_t";
         throw(std::overflow_error(error_msg.str()));
     }
-    const unsigned int fw_version = static_cast<unsigned int>(std::stoul(fw_version_env));
-    const unsigned int app_version = static_cast<unsigned int>(std::stoul(app_version_env));
+    const uint32_t fw_version = static_cast<uint32_t>(std::stoul(fw_version_env));
+    const uint32_t app_version = static_cast<uint32_t>(std::stoul(app_version_env));
 
     const update_definitions::UBootBootstateFlags current_state = this->update_handler->get_update_reboot_state();
 
@@ -318,6 +319,10 @@ void cli::fs_update_cli::automatic_firmware_application_state(const char *applic
         try
         {
             this->update_handler->automatic_update_firmware_and_application(firmware_file, application_file, app_version, fw_version);
+
+            std::stringstream out;
+            out << "Automatic firmware & application successful" << std::endl;
+            this->serial_cout->write(out.str());
         }
         catch(const fs::UpdateInProgress &e)
         {
@@ -340,10 +345,6 @@ void cli::fs_update_cli::automatic_firmware_application_state(const char *applic
             this->serial_cout->write(error_msg.str());
             this->return_code = 3;
         }
-
-        std::stringstream out;
-        out << "Automatic firmware & application successful" << std::endl;
-        this->serial_cout->write(out.str());
     }
     else
     {
@@ -528,11 +529,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
         (this->arg_automatic.isSet() == true)
     )
     {
-        const char *update_stick_env            = getenv("UPDATE_STICK");
-        const char *application_file_env        = getenv("APPLICATION_FILE");
-        const char *firmware_file_env           = getenv("FIRMWARE_FILE");
-        const char *app_version_env             = getenv("APP_VERSION");
-        const char *fw_version_env              = getenv("FW_VERSION");
+        const char *update_stick_env            = std::getenv("UPDATE_STICK");
+        const char *application_file_env        = std::getenv("APPLICATION_FILE");
+        const char *firmware_file_env           = std::getenv("FIRMWARE_FILE");
+        const char *app_version_env             = std::getenv("APP_VERSION");
+        const char *fw_version_env              = std::getenv("FW_VERSION");
 
         if (update_stick_env == nullptr)
         {
