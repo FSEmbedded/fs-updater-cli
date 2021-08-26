@@ -16,5 +16,6 @@ void SynchronizedSerial::write(const std::string &in)
 {
     std::lock_guard<std::mutex> lock(this->lock_query);
     this->serial_object << in;
+    this->serial_object.flush();
 }
 
