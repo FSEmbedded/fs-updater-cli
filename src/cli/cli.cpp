@@ -570,6 +570,10 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
     {
         std::cerr << "No argument given, nothing done. Use --help to get all commands." << std::endl;
     }
+    else
+    {
+        std::cerr << "Wrong combination or set of variables. Pleas refer --help or manual" << std::endl;
+    }
 }
 
 int cli::fs_update_cli::getReturnCode() const
