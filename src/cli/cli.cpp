@@ -134,7 +134,13 @@ void cli::fs_update_cli::automatic_update_firmware_state(const char *firmware_fi
                                                          const char *fw_version_env,
                                                          const std::filesystem::path &update_stick)
 {
-    std::filesystem::path firmware_file( update_stick);
+    std::filesystem::path firmware_file(update_stick);
+
+    if (update_stick.string().back() != '/')
+    {
+        firmware_file += std::filesystem::path("/");
+    }
+    
     firmware_file += std::filesystem::path(firmware_file_env);
     
     if (!((unsigned long) UINT32_MAX > std::stoul(fw_version_env)))
@@ -212,6 +218,11 @@ void cli::fs_update_cli::automatic_update_application_state(const char *applicat
                                                             std::filesystem::path update_stick)
 {
     std::filesystem::path application_file = update_stick;
+    
+    if (update_stick.string().back() != '/')
+    {
+        application_file += std::filesystem::path("/");
+    }
     application_file += std::filesystem::path(application_file_env);
 
     if (!((unsigned long) UINT32_MAX > std::stoul(app_version_env)))
@@ -228,6 +239,9 @@ void cli::fs_update_cli::automatic_update_application_state(const char *applicat
         try
         {
             this->update_handler->automatic_update_application(application_file, app_version);
+            std::stringstream out;
+            out << "Automatic application successful" << std::endl;
+            this->serial_cout->write(out.str());
         }
         catch(const fs::UpdateInProgress &e)
         {
@@ -250,10 +264,6 @@ void cli::fs_update_cli::automatic_update_application_state(const char *applicat
             this->serial_cout->write(error_msg.str());
             this->return_code = 3;
         }
-
-        std::stringstream out;
-        out << "Automatic application successful" << std::endl;
-        this->serial_cout->write(out.str());
     }
     else
     {
@@ -296,6 +306,11 @@ void cli::fs_update_cli::automatic_firmware_application_state(const char *applic
     std::filesystem::path firmware_file = update_stick;
     firmware_file += std::filesystem::path(firmware_file_env);
 
+    if (update_stick.string().back() != '/')
+    {
+        application_file += std::filesystem::path("/");
+        firmware_file += std::filesystem::path("/");
+    }
     if (!((unsigned long) UINT32_MAX > std::stoul(app_version_env)))
     {
         std::stringstream error_msg;
@@ -547,7 +562,7 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
         // Automatic firmware update
         if ((firmware_file_env != nullptr) && (fw_version_env != nullptr))
         {
-            this->automatic_update_firmware_state(firmware_file_env, fw_version_env,update_stick);
+            this->automatic_update_firmware_state(firmware_file_env, fw_version_env, update_stick);
         }
         // Automatic application update
         else if ((application_file_env != nullptr) && (app_version_env != nullptr))
