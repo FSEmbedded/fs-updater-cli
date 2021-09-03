@@ -146,7 +146,7 @@ void cli::fs_update_cli::automatic_update_firmware_state(const char *firmware_fi
     if (!((unsigned long) UINT32_MAX > std::stoul(fw_version_env)))
     {
         std::stringstream error_msg;
-        error_msg << "System variable \"FW_VERSION\" is bigger than max of uint32_t";
+        error_msg << "System variable \"FW_VERSION\" is bigger than max of uint32_t: " << std::stoul(fw_version_env);
         throw(std::overflow_error(error_msg.str()));
     }
     const uint32_t fw_version = static_cast<uint32_t>(std::stoul(fw_version_env));
@@ -228,7 +228,7 @@ void cli::fs_update_cli::automatic_update_application_state(const char *applicat
     if (!((unsigned long) UINT32_MAX > std::stoul(app_version_env)))
     {
         std::stringstream error_msg;
-        error_msg << "System variable \"APP_VERSION\" is bigger than max of uint32_t";
+        error_msg << "System variable \"APP_VERSION\" is bigger than max of uint32_t: " << std::stoul(app_version_env);
         throw(std::overflow_error(error_msg.str()));
     }
     const uint32_t app_version = static_cast<uint32_t>(std::stoul(app_version_env));
@@ -314,14 +314,14 @@ void cli::fs_update_cli::automatic_firmware_application_state(const char *applic
     if (!((unsigned long) UINT32_MAX > std::stoul(app_version_env)))
     {
         std::stringstream error_msg;
-        error_msg << "System variable \"APP_VERSION\" is bigger than max of uint32_t";
+        error_msg << "System variable \"APP_VERSION\" is bigger than max of uint32_t: " << std::stoul(app_version_env);
         throw(std::overflow_error(error_msg.str()));
     }
 
     if (!((unsigned long) UINT32_MAX > std::stoul(fw_version_env)))
     {
         std::stringstream error_msg;
-        error_msg << "System variable \"FW_VERSION\" is bigger than max of uint32_t";
+        error_msg << "System variable \"FW_VERSION\" is bigger than max of uint32_t: " << std::stoul(fw_version_env);
         throw(std::overflow_error(error_msg.str()));
     }
     const uint32_t fw_version = static_cast<uint32_t>(std::stoul(fw_version_env));
