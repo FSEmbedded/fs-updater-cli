@@ -468,12 +468,12 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
     {
         if (this->arg_automatic.isSet() == false)
         {
-            this->logger_sink = std::make_shared<logger::LoggerSinkStdout>(logger::logLevel::ERROR);
+            this->logger_sink = std::make_shared<logger::LoggerSinkStdout>(logger::logLevel::WARNING);
         }
         else
         {
             this->serial_cout = std::make_shared<SynchronizedSerial>();
-            this->logger_sink = std::make_unique<logger::LoggerSinkSerial>(logger::logLevel::ERROR, serial_cout); 
+            this->logger_sink = std::make_unique<logger::LoggerSinkSerial>(logger::logLevel::WARNING, serial_cout); 
         }
     }
 
