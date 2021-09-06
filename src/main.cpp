@@ -10,11 +10,6 @@ int main(int argc, const char ** argv)
         cli_handler.parse_input(argc, argv);
         return cli_handler.getReturnCode();
     }
-    catch(const fs::BaseFSUpdateException &e)
-    {
-        std::cerr << "Unhandled fs::BaseFSUpdateException: " << e.what() << std::endl;
-        return 13;
-    }
     catch(const std::exception &e)
     {
         std::cerr << "Unhandled std::exception: " << e.what() << std::endl;
