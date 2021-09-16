@@ -42,21 +42,79 @@ namespace cli
             std::shared_ptr<logger::LoggerHandler> logger_handler;
 
             int return_code;
-
+            /**
+             * Internal function to run update and handle errors as return_value:
+             * Firmware update progress error: 3
+             * Firmware update error: 2
+             * Firmware update system error: 1
+             */
             void update_firmware_state();
+            
+            /**
+             * Internal function to run update and handle errors as return_value:
+             * Application update progress error: 3
+             * Application update error: 2
+             * Application update system error: 1
+             */
             void update_application_state();
+
+            /**
+             * Internal function to run update and handle errors as return_value:
+             * Application & firmware update progress error: 3
+             * Application & firmware update error: 2
+             * Application & firmware update system error: 1
+             */
             void update_firmware_application_state();
+
+            /**
+             * Internal function which map the update state to a string.
+             */
             void get_update_reboot_state();
 
-            void automatic_update_firmware_state(const char * firmware_file_env, const char * fw_version_env, const std::filesystem::path &update_stick);
+            /**
+             * Internal function which will test against the current version of firmware and run update.
+             * Print state and errors to serial output.
+             * @param firmware_file_env Zero terminated char array of firmware update package
+             * @param fw_version_env Zero terminated char array of firmware version
+             * @param update_stick Path to update stick directory
+             * @throw std::overflow_error Firmware version string is a number which is bigger than the maximum allowed size.
+             * @throw std::logic_error Is thrown when a commit must set but nothing has been done. That's incorrect in a logical view.
+             */
+            void automatic_update_firmware_state(const char * firmware_file_env,
+                                                 const char * fw_version_env,
+                                                 const std::filesystem::path &update_stick);
+
+            /**
+             * Internal function which will test against the current version of application and run update.
+             * Print state and errors to serial output.
+             * @param application_file_env Zero terminated char array of application update package
+             * @param app_version_env Zero terminated char array of of application version
+             * @param update_stick Path to update stick directory
+             * @throw std::overflow_error Application version string is a number which is bigger than the maximum allowed size.
+             * @throw std::logic_error Is thrown when a commit must set but nothing has been done. That's incorrect in a logical view.
+             */
             void automatic_update_application_state(const char *application_file_env,
                                                     const char *app_version_env,
                                                     std::filesystem::path update_stick);
+
+            /**
+             * Internal function which will test against the current version of application & firmware and run update.
+             * Print state and errors to serial output.
+             * @param application_file_env Zero terminated char array of application update package
+             * @param firmware_file_env Zero terminated char array of firmware update package
+             * @param fw_version_env Zero terminated char array of firmware version
+             * @param app_version_env Zero terminated char array of of application version
+             * @throw std::overflow_error Application or firmware version string is a number which is bigger than the maximum allowed size.
+             * @throw std::logic_error Is thrown when a commit must set but nothing has been done. That's incorrect in a logical view.
+             */
             void automatic_firmware_application_state(const char *application_file_env, 
                                                       const char *firmware_file_env, 
                                                       const char *fw_version_env,
                                                       const char *app_version_env,
                                                       const std::filesystem::path update_stick);
+            /**
+             * Internal function to commit update and print a string of performed commit or not performed commit.
+             */
             void commit_update();
 
 
@@ -68,6 +126,7 @@ namespace cli
             fs_update_cli &operator=(const fs_update_cli &) = delete;
             fs_update_cli(fs_update_cli &&) = delete;
             fs_update_cli &operator=(fs_update_cli &&) = delete;
+
             /**
              * Parse input and run as described in commands.
              * @param argc Number of arguments.
