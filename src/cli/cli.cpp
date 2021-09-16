@@ -184,6 +184,38 @@ void cli::fs_update_cli::automatic_update_firmware_state(const char *firmware_fi
             this->return_code = 3;
         }
     }
+    else if (current_state == update_definitions::UBootBootstateFlags::FW_UPDATE_REBOOT_FAILED)
+    {
+        try
+        {
+            if (this->update_handler->commit_update() == false)
+            {
+                std::stringstream error_msg;
+                error_msg << "Automatic firmware update error: Commit update returns no commit needed although no update state is not reached!" << std::endl;
+                this->serial_cout->write(error_msg.str());
+                throw(std::logic_error("This state is not allowed not be reached when a commit is necessary"));
+            }
+
+            std::stringstream msg;
+            msg << "Automatic firmwareupdate error: Update reboot after firmware failed" << std::endl;
+            this->serial_cout->write(msg.str());
+            this->return_code = 5;
+        }
+        catch(const fs::NotAllowedUpdateState &e)
+        {
+            std::stringstream error_msg;
+            error_msg << "Automatic firmware update error: Not allowed update state in UBoot" << std::endl;
+            this->serial_cout->write(error_msg.str());
+            this->return_code = 1;
+        }
+        catch(const std::exception &e)
+        {
+            std::stringstream error_msg;
+            error_msg << "Automatic firmware update error: " << e.what() << std::endl;
+            this->serial_cout->write(error_msg.str());
+            this->return_code = 2;
+        }
+    }
     else
     {
         try
@@ -263,6 +295,38 @@ void cli::fs_update_cli::automatic_update_application_state(const char *applicat
             error_msg << "Automatic application update system error: " << e.what() << std::endl;
             this->serial_cout->write(error_msg.str());
             this->return_code = 3;
+        }
+    }
+    else if (current_state == update_definitions::UBootBootstateFlags::FW_UPDATE_REBOOT_FAILED)
+    {
+        try
+        {
+            if (this->update_handler->commit_update() == false)
+            {
+                std::stringstream error_msg;
+                error_msg << "Automatic application update error: Commit update returns no commit needed although no update state is not reached!" << std::endl;
+                this->serial_cout->write(error_msg.str());
+                throw(std::logic_error("This state is not allowed not be reached when a commit is necessary"));
+            }
+
+            std::stringstream msg;
+            msg << "Automatic application update error: Update reboot after firmware failed" << std::endl;
+            this->serial_cout->write(msg.str());
+            this->return_code = 5;
+        }
+        catch(const fs::NotAllowedUpdateState &e)
+        {
+            std::stringstream error_msg;
+            error_msg << "Automatic application update error: Not allowed update state in UBoot" << std::endl;
+            this->serial_cout->write(error_msg.str());
+            this->return_code = 1;
+        }
+        catch(const std::exception &e)
+        {
+            std::stringstream error_msg;
+            error_msg << "Automatic application update error: " << e.what() << std::endl;
+            this->serial_cout->write(error_msg.str());
+            this->return_code = 2;
         }
     }
     else
@@ -359,6 +423,38 @@ void cli::fs_update_cli::automatic_firmware_application_state(const char *applic
             error_msg << "Automatic firmware & application update system error: " << e.what() << std::endl;
             this->serial_cout->write(error_msg.str());
             this->return_code = 3;
+        }
+    }
+    else if (current_state == update_definitions::UBootBootstateFlags::FW_UPDATE_REBOOT_FAILED)
+    {
+        try
+        {
+            if (this->update_handler->commit_update() == false)
+            {
+                std::stringstream error_msg;
+                error_msg << "Automatic firmware & application update error: Commit update returns no commit needed although no update state is not reached!" << std::endl;
+                this->serial_cout->write(error_msg.str());
+                throw(std::logic_error("This state is not allowed not be reached when a commit is necessary"));
+            }
+
+            std::stringstream msg;
+            msg << "Automatic firmware & application update error: Update reboot after firmware failed" << std::endl;
+            this->serial_cout->write(msg.str());
+            this->return_code = 5;
+        }
+        catch(const fs::NotAllowedUpdateState &e)
+        {
+            std::stringstream error_msg;
+            error_msg << "Automatic firmware & application update error: Not allowed update state in UBoot" << std::endl;
+            this->serial_cout->write(error_msg.str());
+            this->return_code = 1;
+        }
+        catch(const std::exception &e)
+        {
+            std::stringstream error_msg;
+            error_msg << "Automatic firmware & application update error: " << e.what() << std::endl;
+            this->serial_cout->write(error_msg.str());
+            this->return_code = 2;
         }
     }
     else
