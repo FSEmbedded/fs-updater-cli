@@ -19,8 +19,19 @@ namespace logger
             std::shared_ptr<SynchronizedSerial> sink;
 
         public:
-            LoggerSinkSerial(logger::logLevel level, std::shared_ptr<SynchronizedSerial> &);
+            /**
+             * Init logger endpoint for serial interface.
+             * @param level Set the expected log level which should be thrown
+             * @param ptr Set the dynamic shared object for access the serial output.
+             */
+            LoggerSinkSerial(logger::logLevel level, std::shared_ptr<SynchronizedSerial> &ptr);
+
             ~LoggerSinkSerial() = default;
-            virtual void setLogEntry(const std::shared_ptr<logger::LogEntry> &) override;
+
+            /**
+             * Override virtual function and define the specific setLogEntry function for serial output.
+             * @param ptr Shared object of logger::LogEntry which should be log.
+             */
+            virtual void setLogEntry(const std::shared_ptr<logger::LogEntry> &ptr) override;
     };
 }
