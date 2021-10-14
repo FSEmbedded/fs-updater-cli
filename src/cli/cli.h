@@ -35,7 +35,7 @@ namespace cli
             TCLAP::SwitchArg arg_urs;
             TCLAP::SwitchArg arg_automatic;
             TCLAP::SwitchArg arg_debug;
-            
+
             std::unique_ptr<fs::FSUpdate> update_handler;
             std::shared_ptr<SynchronizedSerial> serial_cout;
             std::shared_ptr<logger::LoggerSinkBase> logger_sink;
@@ -49,7 +49,7 @@ namespace cli
              * Firmware update system error: 1
              */
             void update_firmware_state();
-            
+
             /**
              * Internal function to run update and handle errors as return_value:
              * Application update progress error: 3
@@ -69,7 +69,7 @@ namespace cli
             /**
              * Internal function which map the update state to a string.
              */
-            void get_update_reboot_state();
+            void print_update_reboot_state();
 
             /**
              * Internal function which will test against the current version of firmware and run update.
@@ -112,20 +112,13 @@ namespace cli
                                                       const char *fw_version_env,
                                                       const char *app_version_env,
                                                       const std::filesystem::path update_stick);
+
+            bool allow_automatic_update();
+
             /**
              * Internal function to commit update and print a string of performed commit or not performed commit.
              */
             void commit_update();
-
-
-        public:
-            fs_update_cli();
-            ~fs_update_cli();
-
-            fs_update_cli(const fs_update_cli &) = delete;
-            fs_update_cli &operator=(const fs_update_cli &) = delete;
-            fs_update_cli(fs_update_cli &&) = delete;
-            fs_update_cli &operator=(fs_update_cli &&) = delete;
 
             /**
              * Parse input and run as described in commands.
@@ -134,6 +127,16 @@ namespace cli
              * @throw ErrorNotSystemVariable
              */
             void parse_input(int argc, const char ** argv);
+
+        public:
+            fs_update_cli(int argc, const char ** argv);
+            ~fs_update_cli();
+
+            fs_update_cli(const fs_update_cli &) = delete;
+            fs_update_cli &operator=(const fs_update_cli &) = delete;
+            fs_update_cli(fs_update_cli &&) = delete;
+            fs_update_cli &operator=(fs_update_cli &&) = delete;
+
 
             /**
              * Get return code of application.
