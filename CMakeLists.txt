@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 #set(CMAKE_CXX_FLAGS "-Wall -Wextra -Os -s")
+#set(CMAKE_CXX_FLAGS "-Wall -Wextra -O -g1 -ggdb3")
 
 set(SOURCES
     "src/main.cpp"
@@ -14,9 +15,9 @@ set(SOURCES
 )
 
 find_library(inicpp_lib NAMES libinicpp.a libinicpp.so)
-find_library(ubootenv_lib NAMES libubootenv.a libubootenv.so)
-find_library(z_lib NAMES lbiz.a libz.so)
-find_library(botan_lib NAMES libbotan-2.a libbotan-2.so)
+find_library(ubootenv_lib NAMES libubootenv.so)
+find_library(z_lib NAMES libz.so)
+find_library(botan_lib NAMES libbotan-2.so)
 # Do not use libpthread.a if you do not link against a static version of glibc and link botan against a static version of glibc.
 find_library(pthread_lib NAMES libpthread.so)
 find_library(jsoncpp_lib NAMES libjsoncpp_static.a libjsoncpp.so)
