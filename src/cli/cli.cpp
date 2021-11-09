@@ -134,11 +134,11 @@ void cli::fs_update_cli::update_firmware_application_state()
 
 void cli::fs_update_cli::automatic_update_firmware_state(const char *firmware_file_env,
                                                          const char *fw_version_env,
-                                                         const std::filesystem::path &update_stick)
+                                                         const std::string &update_stick)
 {
-    std::string firmware_file(update_stick.string());
+    std::string firmware_file(update_stick);
 
-    if (update_stick.string().back() != '/')
+    if (update_stick.back() != '/')
     {
         firmware_file += std::string("/");
     }
@@ -188,11 +188,11 @@ void cli::fs_update_cli::automatic_update_firmware_state(const char *firmware_fi
 
 void cli::fs_update_cli::automatic_update_application_state(const char *application_file_env,
                                                             const char *app_version_env,
-                                                            std::filesystem::path update_stick)
+                                                            std::string update_stick)
 {
-    std::string application_file(update_stick.string());
+    std::string application_file(update_stick);
     
-    if (update_stick.string().back() != '/')
+    if (update_stick.back() != '/')
     {
         application_file += std::string("/");
     }
@@ -241,12 +241,12 @@ void cli::fs_update_cli::automatic_firmware_application_state(const char *applic
                                                               const char *firmware_file_env, 
                                                               const char *fw_version_env,
                                                               const char *app_version_env,
-                                                              const std::filesystem::path update_stick)
+                                                              const std::string update_stick)
 {
-    std::string application_file(update_stick.string());
-    std::string firmware_file(update_stick.string());
+    std::string application_file(update_stick);
+    std::string firmware_file(update_stick);
 
-    if (update_stick.string().back() != '/')
+    if (update_stick.back() != '/')
     {
         application_file += std::string("/");
         firmware_file += std::string("/");

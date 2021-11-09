@@ -12,7 +12,6 @@
 #include <string>
 #include <stdexcept>
 #include <climits>
-#include <filesystem>
 #include <exception>
 #include <vector>
 #include <iostream>
@@ -82,7 +81,7 @@ namespace cli
              */
             void automatic_update_firmware_state(const char * firmware_file_env,
                                                  const char * fw_version_env,
-                                                 const std::filesystem::path &update_stick);
+                                                 const std::string &update_stick);
 
             /**
              * Internal function which will test against the current version of application and run update.
@@ -95,7 +94,7 @@ namespace cli
              */
             void automatic_update_application_state(const char *application_file_env,
                                                     const char *app_version_env,
-                                                    std::filesystem::path update_stick);
+                                                    std::string update_stick);
 
             /**
              * Internal function which will test against the current version of application & firmware and run update.
@@ -111,7 +110,7 @@ namespace cli
                                                       const char *firmware_file_env, 
                                                       const char *fw_version_env,
                                                       const char *app_version_env,
-                                                      const std::filesystem::path update_stick);
+                                                      const std::string update_stick);
             /**
              * Helper function to get the state that allow automatic update.
              */
