@@ -112,7 +112,9 @@ namespace cli
                                                       const char *fw_version_env,
                                                       const char *app_version_env,
                                                       const std::filesystem::path update_stick);
-
+            /**
+             * Helper function to get the state that allow automatic update.
+             */
             bool allow_automatic_update();
 
             /**

@@ -395,10 +395,12 @@ void cli::fs_update_cli::commit_update()
         if (this->update_handler->commit_update() == true)
         {
             std::cout << "Commit update" << std::endl;
+            this->return_code = 110;
         }
         else
         {
             std::cout << "Commit update not needed" << std::endl;
+            this->return_code = 111;
         }
     }
     catch(const fs::NotAllowedUpdateState &e)
@@ -420,30 +422,37 @@ void cli::fs_update_cli::print_update_reboot_state()
     if (update_reboot_state == update_definitions::UBootBootstateFlags::FAILED_APP_UPDATE)
     {
         std::cout << "Application update failed" << std::endl;
+        this->return_code = 100 + int(update_definitions::UBootBootstateFlags::FAILED_APP_UPDATE);
     }
     else if (update_reboot_state == update_definitions::UBootBootstateFlags::FAILED_FW_UPDATE)
     {
         std::cout << "Firmware update failed" << std::endl;
+        this->return_code = 100 + int(update_definitions::UBootBootstateFlags::FAILED_FW_UPDATE);
     }
     else if (update_reboot_state == update_definitions::UBootBootstateFlags::FW_UPDATE_REBOOT_FAILED)
     {
         std::cout << "Firmware reboot update failed" << std::endl;
+        this->return_code = 100 + int(update_definitions::UBootBootstateFlags::FW_UPDATE_REBOOT_FAILED);
     }
     else if (update_reboot_state == update_definitions::UBootBootstateFlags::INCOMPLETE_FW_UPDATE)
     {
         std::cout << "Incomplete firmware update" << std::endl;
+        this->return_code = 100 + int(update_definitions::UBootBootstateFlags::INCOMPLETE_FW_UPDATE);
     }
     else if (update_reboot_state == update_definitions::UBootBootstateFlags::INCOMPLETE_APP_UPDATE)
     {
         std::cout << "Incomplete application update" << std::endl;
+        this->return_code = 100 + int(update_definitions::UBootBootstateFlags::INCOMPLETE_APP_UPDATE);
     }
     else if (update_reboot_state == update_definitions::UBootBootstateFlags::INCOMPLETE_APP_FW_UPDATE)
     {
         std::cout << "Incomplete application and firmware update" << std::endl;
+        this->return_code = 100 + int(update_definitions::UBootBootstateFlags::INCOMPLETE_APP_FW_UPDATE);
     }
     else
     {
         std::cout << "No update pending" << std::endl;
+        this->return_code = 100 + int(update_definitions::UBootBootstateFlags::NO_UPDATE_REBOOT_PENDING);
     }
 }
 
