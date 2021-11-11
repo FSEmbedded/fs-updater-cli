@@ -563,7 +563,8 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
             std::stringstream out;
             out << "Environment variable \"UPDATE_STICK\" is no set" << std::endl;
             this->serial_cout->write(out.str());
-            exit(2);
+            this->return_code = 2;
+            return;
         }
         const std::string update_stick(update_stick_env);
 
@@ -587,6 +588,15 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
         {
             if (this->allow_automatic_update())
                 this->automatic_firmware_application_state(application_file_env, firmware_file_env, fw_version_env, app_version_env, update_stick);
+        }
+                // No correct pair of env variables found
+        else
+        {
+            std::stringstream out;
+            out << "Not correct pairs of FIRMWARE_FILE & FW_VERSION and/or APPLICATION_FILE & APP_VERSION" << std::endl;
+            this->serial_cout->write(out.str());
+            this->return_code = 5;
+            return;
         }
     }    
     else if(
