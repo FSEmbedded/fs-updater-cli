@@ -568,32 +568,62 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
         }
         const std::string update_stick(update_stick_env);
 
-        // Automatic firmware update
+        // Automatic application & firmware update
         if ((firmware_file_env != nullptr) && (fw_version_env != nullptr) &&
-            (application_file_env == nullptr) && (fw_version_env == nullptr))
+            (application_file_env != nullptr) && (app_version_env != nullptr))
         {
-            if (this->allow_automatic_update())
-                this->automatic_update_firmware_state(firmware_file_env, fw_version_env, update_stick);
+        		this->automatic_firmware_application_state(application_file_env, firmware_file_env, fw_version_env, app_version_env, update_stick);
+        }
+        // Automatic firmware update
+        else if ((firmware_file_env != nullptr) && (fw_version_env != nullptr))
+        {
+        		this->automatic_update_firmware_state(firmware_file_env, fw_version_env, update_stick);
         }
         // Automatic application update
-        else if ((firmware_file_env == nullptr) && (fw_version_env == nullptr) &&
-                 (application_file_env != nullptr) && (fw_version_env != nullptr))
+        else if ((application_file_env != nullptr) && (app_version_env != nullptr))
         {
-            if (this->allow_automatic_update())
-                this->automatic_update_application_state(application_file_env, app_version_env, update_stick);
-        }
-        // Automatic application & firmware update
-        else if ((firmware_file_env != nullptr) && (fw_version_env != nullptr) &&
-                 (application_file_env != nullptr) && (fw_version_env != nullptr))
-        {
-            if (this->allow_automatic_update())
-                this->automatic_firmware_application_state(application_file_env, firmware_file_env, fw_version_env, app_version_env, update_stick);
+        		this->automatic_update_application_state(application_file_env, app_version_env, update_stick);
         }
                 // No correct pair of env variables found
         else
         {
             std::stringstream out;
-            out << "Not correct pairs of FIRMWARE_FILE & FW_VERSION and/or APPLICATION_FILE & APP_VERSION" << std::endl;
+            out << "Not correct pairs of FIRMWARE_FILE & FW_VERSION and/or APPLICATION_FILE & APP_VERSION system variables set" << std::endl;
+            if (firmware_file_env == nullptr)
+            {
+                out << "\"FIRMWARE_FILE\" env variable -- not set" << std::endl;
+            }
+            else
+            {
+                out << "\"FIRMWARE_FILE\" env variable -- set" << std::endl;
+            }
+
+            if (application_file_env == nullptr)
+            {
+                out << "\"APPLICATION_FILE\" env variable -- not set" << std::endl;
+            }
+            else
+            {
+                out << "\"APPLICATION_FILE\" env variable -- set" << std::endl;
+            }
+
+            if (app_version_env == nullptr)
+            {
+                out << "\"APP_VERSION\" env variable -- not set" << std::endl;
+            }
+            else
+            {
+                out << "\"APP_VERSION\" env variable -- set" << std::endl;
+            }
+
+            if (fw_version_env == nullptr)
+            {
+                out << "\"FW_VERSION\" env variable -- not set" << std::endl;
+            }
+            else
+            {
+                out << "\"FW_VERSION\" env variable -- set" << std::endl;
+            }
             this->serial_cout->write(out.str());
             this->return_code = 5;
             return;
