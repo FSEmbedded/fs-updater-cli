@@ -15,7 +15,6 @@ void logger::LoggerSinkSerial::setLogEntry(const std::shared_ptr<logger::LogEntr
     }
     else if( (ptr->getLogLevel() == logger::logLevel::WARNING) &&
         (
-            (this->log_level == logger::logLevel::WARNING) ||
             (this->log_level == logger::logLevel::DEBUG)
         )
     )
