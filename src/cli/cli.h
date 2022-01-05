@@ -17,7 +17,7 @@
 #include <iostream>
 #include <fstream>
 
-#define VERSION "0.0.1"
+#define VERSION "1.0.0"
 
 /**
  * Namespace contain all CLI related classes of functionality

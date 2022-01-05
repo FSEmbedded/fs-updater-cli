@@ -1,8 +1,9 @@
 #include "cli.h"
 #include <cstdlib>
+#include <iostream>
 
 cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
-    cmd("F&S Update Framework CLI", ' ', VERSION, true),
+    cmd("F&S Update Framework CLI", ' ', VERSION, false),
     arg_app("", 
         "application_file", 
         "path to application",
@@ -35,6 +36,7 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
     ),
     return_code(0)
 {
+    std::cout << "F&S Update Framework CLI Version: " << VERSION << " build at: " <<  __DATE__ << ", " << __TIME__  << "." << std::endl;
     this->cmd.add(arg_app);
     this->cmd.add(arg_fw);
     this->cmd.add(arg_commit_update);
