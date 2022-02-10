@@ -1,8 +1,9 @@
 #include "cli.h"
 #include <cstdlib>
+#include <iostream>
 
 cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
-    cmd("F&S Update Framework CLI", ' ', VERSION, true),
+    cmd("F&S Update Framework CLI", ' ', VERSION, false),
     arg_app("", 
         "application_file", 
         "path to application",
@@ -35,6 +36,7 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
     ),
     return_code(0)
 {
+    std::cout << "F&S Update Framework CLI Version: " << VERSION << " build at: " <<  __DATE__ << ", " << __TIME__  << "." << std::endl;
     this->cmd.add(arg_app);
     this->cmd.add(arg_fw);
     this->cmd.add(arg_commit_update);
@@ -395,10 +397,12 @@ void cli::fs_update_cli::commit_update()
         if (this->update_handler->commit_update() == true)
         {
             std::cout << "Commit update" << std::endl;
+            this->return_code = 110;
         }
         else
         {
             std::cout << "Commit update not needed" << std::endl;
+            this->return_code = 111;
         }
     }
     catch(const fs::NotAllowedUpdateState &e)
@@ -420,30 +424,37 @@ void cli::fs_update_cli::print_update_reboot_state()
     if (update_reboot_state == update_definitions::UBootBootstateFlags::FAILED_APP_UPDATE)
     {
         std::cout << "Application update failed" << std::endl;
+        this->return_code = 100 + int(update_definitions::UBootBootstateFlags::FAILED_APP_UPDATE);
     }
     else if (update_reboot_state == update_definitions::UBootBootstateFlags::FAILED_FW_UPDATE)
     {
         std::cout << "Firmware update failed" << std::endl;
+        this->return_code = 100 + int(update_definitions::UBootBootstateFlags::FAILED_FW_UPDATE);
     }
     else if (update_reboot_state == update_definitions::UBootBootstateFlags::FW_UPDATE_REBOOT_FAILED)
     {
         std::cout << "Firmware reboot update failed" << std::endl;
+        this->return_code = 100 + int(update_definitions::UBootBootstateFlags::FW_UPDATE_REBOOT_FAILED);
     }
     else if (update_reboot_state == update_definitions::UBootBootstateFlags::INCOMPLETE_FW_UPDATE)
     {
         std::cout << "Incomplete firmware update" << std::endl;
+        this->return_code = 100 + int(update_definitions::UBootBootstateFlags::INCOMPLETE_FW_UPDATE);
     }
     else if (update_reboot_state == update_definitions::UBootBootstateFlags::INCOMPLETE_APP_UPDATE)
     {
         std::cout << "Incomplete application update" << std::endl;
+        this->return_code = 100 + int(update_definitions::UBootBootstateFlags::INCOMPLETE_APP_UPDATE);
     }
     else if (update_reboot_state == update_definitions::UBootBootstateFlags::INCOMPLETE_APP_FW_UPDATE)
     {
         std::cout << "Incomplete application and firmware update" << std::endl;
+        this->return_code = 100 + int(update_definitions::UBootBootstateFlags::INCOMPLETE_APP_FW_UPDATE);
     }
     else
     {
         std::cout << "No update pending" << std::endl;
+        this->return_code = 100 + int(update_definitions::UBootBootstateFlags::NO_UPDATE_REBOOT_PENDING);
     }
 }
 
@@ -563,20 +574,17 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
         if ((firmware_file_env != nullptr) && (fw_version_env != nullptr) &&
             (application_file_env != nullptr) && (app_version_env != nullptr))
         {
-            if (this->allow_automatic_update())
         		this->automatic_firmware_application_state(application_file_env, firmware_file_env, fw_version_env, app_version_env, update_stick);
         }
         // Automatic firmware update
         else if ((firmware_file_env != nullptr) && (fw_version_env != nullptr))
         {
-            if (this->allow_automatic_update())
         		this->automatic_update_firmware_state(firmware_file_env, fw_version_env, update_stick);
         }
         // Automatic application update
         else if ((application_file_env != nullptr) && (app_version_env != nullptr))
         {
-            if (this->allow_automatic_update())
-        	    this->automatic_update_application_state(application_file_env, app_version_env, update_stick);
+        		this->automatic_update_application_state(application_file_env, app_version_env, update_stick);
         }
                 // No correct pair of env variables found
         else
