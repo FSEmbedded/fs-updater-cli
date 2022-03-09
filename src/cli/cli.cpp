@@ -34,6 +34,14 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
         "debug",
         "activate debug output"
     ),
+    get_fw_version("",
+        "firmware_version",
+        "print current firmware version"
+    ),
+    get_app_version("",
+        "application_version",
+        "print current application version"
+    ),
     return_code(0)
 {
     std::cout << "F&S Update Framework CLI Version: " << VERSION << " build at: " <<  __DATE__ << ", " << __TIME__  << "." << std::endl;
@@ -43,6 +51,8 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
     this->cmd.add(arg_urs);
     this->cmd.add(arg_automatic);
     this->cmd.add(arg_debug);
+    this->cmd.add(get_fw_version);
+    this->cmd.add(get_app_version);
 
     this->parse_input(argc, argv);
 }
@@ -458,6 +468,16 @@ void cli::fs_update_cli::print_update_reboot_state()
     }
 }
 
+void cli::fs_update_cli::print_current_application_version()
+{
+    std::cout << this->update_handler->get_application_version() << std::endl;
+}
+
+void cli::fs_update_cli::print_current_firmware_version()
+{
+    std::cout << this->update_handler->get_firmware_version() << std::endl;
+}
+
 void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 {
     this->cmd.parse(argc, argv);
@@ -496,7 +516,9 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
         (this->arg_fw.isSet() == true) &&
         (this->arg_commit_update.isSet() == false) &&
         (this->arg_urs.isSet() == false) &&
-        (this->arg_automatic.isSet() == false)
+        (this->arg_automatic.isSet() == false) &&
+        (this->get_app_version.isSet() == false) &&
+        (this->get_fw_version.isSet() == false)
     )
     {
         this->update_firmware_state();
@@ -506,7 +528,9 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
         (this->arg_fw.isSet() == false) &&
         (this->arg_commit_update.isSet() == false) &&
         (this->arg_urs.isSet() == false) &&
-        (this->arg_automatic.isSet() == false)
+        (this->arg_automatic.isSet() == false) &&
+        (this->get_app_version.isSet() == false) &&
+        (this->get_fw_version.isSet() == false)
     )
     {
         // update application
@@ -517,7 +541,9 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
         (this->arg_fw.isSet() == true) &&
         (this->arg_commit_update.isSet() == false) &&
         (this->arg_urs.isSet() == false) &&
-        (this->arg_automatic.isSet() == false)
+        (this->arg_automatic.isSet() == false) &&
+        (this->get_app_version.isSet() == false) &&
+        (this->get_fw_version.isSet() == false)
     )
     {
         // update firmware and application
@@ -528,7 +554,9 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
         (this->arg_fw.isSet() == false) &&
         (this->arg_commit_update.isSet() == true) &&
         (this->arg_urs.isSet() == false) &&
-        (this->arg_automatic.isSet() == false)
+        (this->arg_automatic.isSet() == false) &&
+        (this->get_app_version.isSet() == false) &&
+        (this->get_fw_version.isSet() == false)
     )
     {
         // commit update
@@ -539,7 +567,9 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
         (this->arg_fw.isSet() == false) &&
         (this->arg_commit_update.isSet() == false) &&
         (this->arg_urs.isSet() == true) &&
-        (this->arg_automatic.isSet() == false)
+        (this->arg_automatic.isSet() == false) &&
+        (this->get_app_version.isSet() == false) &&
+        (this->get_fw_version.isSet() == false)
     )
     {
         // print update reboot state
@@ -551,7 +581,9 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
         (this->arg_fw.isSet() == false) &&
         (this->arg_commit_update.isSet() == false) &&
         (this->arg_urs.isSet() == false) &&
-        (this->arg_automatic.isSet() == true)
+        (this->arg_automatic.isSet() == true) &&
+        (this->get_app_version.isSet() == false) &&
+        (this->get_fw_version.isSet() == false)
     )
     {
         const char *update_stick_env            = std::getenv("UPDATE_STICK");
@@ -630,13 +662,39 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
             this->return_code = 5;
             return;
         }
-    }    
+    }
     else if(
         (this->arg_app.isSet() == false) &&
         (this->arg_fw.isSet() == false) &&
         (this->arg_commit_update.isSet() == false) &&
         (this->arg_urs.isSet() == false) &&
-        (this->arg_automatic.isSet() == false)
+        (this->arg_automatic.isSet() == false) &&
+        (this->get_app_version.isSet() == true) &&
+        (this->get_fw_version.isSet() == false)
+    )
+    {
+        this->print_current_application_version();
+    }
+    else if(
+        (this->arg_app.isSet() == false) &&
+        (this->arg_fw.isSet() == false) &&
+        (this->arg_commit_update.isSet() == false) &&
+        (this->arg_urs.isSet() == false) &&
+        (this->arg_automatic.isSet() == false) &&
+        (this->get_app_version.isSet() == false) &&
+        (this->get_fw_version.isSet() == true)
+    )
+    {
+        this->print_current_firmware_version();
+    }
+    else if(
+        (this->arg_app.isSet() == false) &&
+        (this->arg_fw.isSet() == false) &&
+        (this->arg_commit_update.isSet() == false) &&
+        (this->arg_urs.isSet() == false) &&
+        (this->arg_automatic.isSet() == false) &&
+        (this->get_app_version.isSet() == false) &&
+        (this->get_fw_version.isSet() == false)
     )
     {
         std::cerr << "No argument given, nothing done. Use --help to get all commands." << std::endl;

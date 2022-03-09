@@ -34,6 +34,8 @@ namespace cli
             TCLAP::SwitchArg arg_urs;
             TCLAP::SwitchArg arg_automatic;
             TCLAP::SwitchArg arg_debug;
+            TCLAP::SwitchArg get_fw_version;
+            TCLAP::SwitchArg get_app_version;
 
             std::unique_ptr<fs::FSUpdate> update_handler;
             std::shared_ptr<SynchronizedSerial> serial_cout;
@@ -69,6 +71,16 @@ namespace cli
              * Internal function which map the update state to a string.
              */
             void print_update_reboot_state();
+
+            /**
+             * Print current installed firmware version.
+             */
+            void print_current_firmware_version();
+
+            /**
+             * Print current installed application version.
+             */
+            void print_current_application_version();
 
             /**
              * Internal function which will test against the current version of firmware and run update.
