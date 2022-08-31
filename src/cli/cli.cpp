@@ -18,6 +18,10 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
         "",
         "absolute filesystem path"
     ),
+    arg_rollback_fw("",
+        "rollback_firmware",
+        "run after update your firmware, but befor you have commited"
+    ),
     arg_commit_update("", 
         "commit_update", 
         "run after boot and waits for application response"
@@ -47,6 +51,7 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
     std::cout << "F&S Update Framework CLI Version: " << VERSION << " build at: " <<  __DATE__ << ", " << __TIME__  << "." << std::endl;
     this->cmd.add(arg_app);
     this->cmd.add(arg_fw);
+    this->cmd.add(arg_rollback_fw);
     this->cmd.add(arg_commit_update);
     this->cmd.add(arg_urs);
     this->cmd.add(arg_automatic);
@@ -427,6 +432,30 @@ void cli::fs_update_cli::commit_update()
     }
 }
 
+void cli::fs_update_cli::rollback_firmware()
+{
+    try
+    {
+        this->update_handler->rollback_firmware();
+        std::cout << "Rollback firmware successful" << std::endl;
+    }
+    catch(const fs::RollbackFirmware &e)
+    {
+        std::cerr << "Rollback firmware progress error: " << e.what() << std::endl;
+        this->return_code = 3;
+    }
+    catch(const fs::BaseFSUpdateException &e)
+    {
+        std::cerr << "Rollback firmware update error: " << e.what() << std::endl;
+        this->return_code = 2;
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << "Rollback firmware update system error: " << e.what() << std::endl;
+        this->return_code = 1;
+    }
+}
+
 void cli::fs_update_cli::print_update_reboot_state()
 {
     const update_definitions::UBootBootstateFlags update_reboot_state = this->update_handler->get_update_reboot_state();
@@ -460,6 +489,11 @@ void cli::fs_update_cli::print_update_reboot_state()
     {
         std::cout << "Incomplete application and firmware update" << std::endl;
         this->return_code = 100 + int(update_definitions::UBootBootstateFlags::INCOMPLETE_APP_FW_UPDATE);
+    }
+    else if (update_reboot_state == update_definitions::UBootBootstateFlags::ROLLBACK_FW_REBOOT_PENDING)
+    {
+        std::cout << "Missing reboot after rollback requested" << std::endl;
+        this->return_code = 100 + int(update_definitions::UBootBootstateFlags::ROLLBACK_FW_REBOOT_PENDING);
     }
     else
     {
@@ -514,6 +548,7 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
     if (
         (this->arg_app.isSet() == false) &&
         (this->arg_fw.isSet() == true) &&
+        (this->arg_rollback_fw.isSet() == false) &&
         (this->arg_commit_update.isSet() == false) &&
         (this->arg_urs.isSet() == false) &&
         (this->arg_automatic.isSet() == false) &&
@@ -526,6 +561,7 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
     else if (
         (this->arg_app.isSet() == true) &&
         (this->arg_fw.isSet() == false) &&
+        (this->arg_rollback_fw.isSet() == false) &&
         (this->arg_commit_update.isSet() == false) &&
         (this->arg_urs.isSet() == false) &&
         (this->arg_automatic.isSet() == false) &&
@@ -539,6 +575,7 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
     else if(
         (this->arg_app.isSet() == true) &&
         (this->arg_fw.isSet() == true) &&
+        (this->arg_rollback_fw.isSet() == false) &&
         (this->arg_commit_update.isSet() == false) &&
         (this->arg_urs.isSet() == false) &&
         (this->arg_automatic.isSet() == false) &&
@@ -552,6 +589,7 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
     else if(
         (this->arg_app.isSet() == false) &&
         (this->arg_fw.isSet() == false) &&
+        (this->arg_rollback_fw.isSet() == false) &&
         (this->arg_commit_update.isSet() == true) &&
         (this->arg_urs.isSet() == false) &&
         (this->arg_automatic.isSet() == false) &&
@@ -565,6 +603,7 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
     else if(
         (this->arg_app.isSet() == false) &&
         (this->arg_fw.isSet() == false) &&
+        (this->arg_rollback_fw.isSet() == false) &&
         (this->arg_commit_update.isSet() == false) &&
         (this->arg_urs.isSet() == true) &&
         (this->arg_automatic.isSet() == false) &&
@@ -579,6 +618,7 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
     else if(
         (this->arg_app.isSet() == false) &&
         (this->arg_fw.isSet() == false) &&
+        (this->arg_rollback_fw.isSet() == false) &&
         (this->arg_commit_update.isSet() == false) &&
         (this->arg_urs.isSet() == false) &&
         (this->arg_automatic.isSet() == true) &&
@@ -666,6 +706,7 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
     else if(
         (this->arg_app.isSet() == false) &&
         (this->arg_fw.isSet() == false) &&
+        (this->arg_rollback_fw.isSet() == false) &&
         (this->arg_commit_update.isSet() == false) &&
         (this->arg_urs.isSet() == false) &&
         (this->arg_automatic.isSet() == false) &&
@@ -678,6 +719,7 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
     else if(
         (this->arg_app.isSet() == false) &&
         (this->arg_fw.isSet() == false) &&
+        (this->arg_rollback_fw.isSet() == false) &&
         (this->arg_commit_update.isSet() == false) &&
         (this->arg_urs.isSet() == false) &&
         (this->arg_automatic.isSet() == false) &&
@@ -690,6 +732,20 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
     else if(
         (this->arg_app.isSet() == false) &&
         (this->arg_fw.isSet() == false) &&
+        (this->arg_rollback_fw.isSet() == true) &&
+        (this->arg_commit_update.isSet() == false) &&
+        (this->arg_urs.isSet() == false) &&
+        (this->arg_automatic.isSet() == false) &&
+        (this->get_app_version.isSet() == false) &&
+        (this->get_fw_version.isSet() == false)
+    )
+    {
+        this->rollback_firmware();
+    }
+    else if(
+        (this->arg_app.isSet() == false) &&
+        (this->arg_fw.isSet() == false) &&
+        (this->arg_rollback_fw.isSet() == false) &&
         (this->arg_commit_update.isSet() == false) &&
         (this->arg_urs.isSet() == false) &&
         (this->arg_automatic.isSet() == false) &&

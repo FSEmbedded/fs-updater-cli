@@ -30,6 +30,7 @@ namespace cli
             TCLAP::CmdLine cmd;
             TCLAP::ValueArg<std::string> arg_app;
             TCLAP::ValueArg<std::string> arg_fw;
+            TCLAP::SwitchArg arg_rollback_fw;
             TCLAP::SwitchArg arg_commit_update;
             TCLAP::SwitchArg arg_urs;
             TCLAP::SwitchArg arg_automatic;
@@ -132,6 +133,11 @@ namespace cli
              * Internal function to commit update and print a string of performed commit or not performed commit.
              */
             void commit_update();
+
+            /**
+             * Internal function to rollback the firmware of the current installation.
+             */
+            void rollback_firmware();
 
             /**
              * Parse input and run as described in commands.
