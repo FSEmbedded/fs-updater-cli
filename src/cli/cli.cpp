@@ -1,6 +1,7 @@
 #include "cli.h"
 #include <cstdlib>
 #include <iostream>
+#include "fs_updater_error.h"
 
 cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
     cmd("F&S Update Framework CLI", ' ', VERSION, false),
@@ -81,21 +82,22 @@ void cli::fs_update_cli::update_firmware_state()
         );
 
         std::cout << "Firmware update successful" << std::endl;
+        this->return_code = static_cast<int>(UPDATER_FIRMWARE_STATE::UPDATE_SUCCESSFUL);
     }
     catch(const fs::UpdateInProgress &e)
     {
         std::cerr << "Firmware update progress error: " << e.what() << std::endl;
-        this->return_code = 3;
+        this->return_code = static_cast<int>(UPDATER_FIRMWARE_STATE::UPDATE_PROGRESS_ERROR);
     }
     catch(const fs::BaseFSUpdateException &e)
     {
         std::cerr << "Firmware update error: " << e.what() << std::endl;
-        this->return_code = 2;
+        this->return_code = static_cast<int>(UPDATER_FIRMWARE_STATE::UPDATE_INTERNAL_ERROR);
     }
     catch (const std::exception &e)
     {
         std::cerr << "Firmware update system error: " << e.what() << std::endl;
-        this->return_code = 1;
+        this->return_code = static_cast<int>(UPDATER_FIRMWARE_STATE::UPDATE_SYSTEM_ERROR);
     }
 }
 
@@ -108,21 +110,22 @@ void cli::fs_update_cli::update_application_state()
         );
 
         std::cout << "Application update successful" << std::endl;
+        this->return_code = static_cast<int>(UPDATER_APPLICATION_STATE::UPDATE_SUCCESSFUL);
     }
     catch(const fs::UpdateInProgress &e)
     {
         std::cerr << "Application update progress error: " << e.what() << std::endl;
-        this->return_code = 3;
+        this->return_code = static_cast<int>(UPDATER_APPLICATION_STATE::UPDATE_PROGRESS_ERROR);
     }
     catch(const fs::BaseFSUpdateException &e)
     {
         std::cerr << "Application update error: " << e.what() << std::endl;
-        this->return_code = 2;
+        this->return_code = static_cast<int>(UPDATER_APPLICATION_STATE::UPDATE_INTERNAL_ERROR);
     }
     catch (const std::exception &e)
     {
         std::cerr << "Application update system error: " << e.what() << std::endl;
-        this->return_code = 1;
+        this->return_code = static_cast<int>(UPDATER_APPLICATION_STATE::UPDATE_SYSTEM_ERROR);
     }
 }
 
@@ -136,21 +139,22 @@ void cli::fs_update_cli::update_firmware_application_state()
         );
 
         std::cout << "Application & firmware update successful" << std::endl;
+        this->return_code = static_cast<int>(UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_SUCCESSFUL);
     }
     catch(const fs::UpdateInProgress &e)
     {
         std::cerr << "Application & firmware update progress error: " << e.what() << std::endl;
-        this->return_code = 3;
+        this->return_code = static_cast<int>(UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_PROGRESS_ERROR);
     }
     catch(const fs::BaseFSUpdateException &e)
     {
         std::cerr << "Application & firmware update error: " << e.what() << std::endl;
-        this->return_code = 2;
+        this->return_code = static_cast<int>(UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_INTERNAL_ERROR);
     }
     catch (const std::exception &e)
     {
         std::cerr << "Application & firmware update system error: " << e.what() << std::endl;
-        this->return_code = 1;
+        this->return_code = static_cast<int>(UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_SYSTEM_ERROR);
     }
 }
 
@@ -183,27 +187,28 @@ void cli::fs_update_cli::automatic_update_firmware_state(const char *firmware_fi
         std::stringstream out;
         out << "Automatic firmware update successful" << std::endl;
         this->serial_cout->write(out.str());
+        this->return_code = static_cast<int>(UPDATER_AUTOMATIC_UPDATE_FIRMWARE_STATE::UPDATE_SUCCESSFULL);
     }
     catch(const fs::UpdateInProgress &e)
     {
         std::stringstream error_msg;
         error_msg << "Automatic firmware update progress error: " << e.what() << std::endl;
         this->serial_cout->write(error_msg.str());
-        this->return_code = 1;
+        this->return_code = static_cast<int>(UPDATER_AUTOMATIC_UPDATE_FIRMWARE_STATE::UPDATE_PROGRESS_ERROR);
     }
     catch(const fs::BaseFSUpdateException &e)
     {
         std::stringstream error_msg;
         error_msg << "Automatic firmware update error: " << e.what() << std::endl;
         this->serial_cout->write(error_msg.str());
-        this->return_code = 2;
+        this->return_code = static_cast<int>(UPDATER_AUTOMATIC_UPDATE_FIRMWARE_STATE::UPDATE_INTERNAL_ERROR);
     }
     catch (const std::exception &e)
     {
         std::stringstream error_msg;
         error_msg << "Automatic firmware update system error: " << e.what() << std::endl;
         this->serial_cout->write(error_msg.str());
-        this->return_code = 3;
+        this->return_code = static_cast<int>(UPDATER_AUTOMATIC_UPDATE_FIRMWARE_STATE::UPDATE_SYSTEM_ERROR);
     }
 
 }
@@ -235,27 +240,28 @@ void cli::fs_update_cli::automatic_update_application_state(const char *applicat
         std::stringstream out;
         out << "Automatic application successful" << std::endl;
         this->serial_cout->write(out.str());
+        this->return_code = static_cast<int>(UPDATER_AUTOMATIC_UPDATE_APPLICATION_STATE::UPDATE_SUCCESSFULL);
     }
     catch(const fs::UpdateInProgress &e)
     {
         std::stringstream error_msg;
         error_msg << "Automatic application update progress error: " << e.what() << std::endl;
         this->serial_cout->write(error_msg.str());
-        this->return_code = 1;
+        this->return_code = static_cast<int>(UPDATER_AUTOMATIC_UPDATE_APPLICATION_STATE::UPDATE_PROGRESS_ERROR);
     }
     catch(const fs::BaseFSUpdateException &e)
     {
         std::stringstream error_msg;
         error_msg << "Automatic application update error: " << e.what() << std::endl;
         this->serial_cout->write(error_msg.str());
-        this->return_code = 2;
+        this->return_code = static_cast<int>(UPDATER_AUTOMATIC_UPDATE_APPLICATION_STATE::UPDATE_INTERNAL_ERROR);
     }
     catch (const std::exception &e)
     {
         std::stringstream error_msg;
         error_msg << "Automatic application update system error: " << e.what() << std::endl;
         this->serial_cout->write(error_msg.str());
-        this->return_code = 3;
+        this->return_code = static_cast<int>(UPDATER_AUTOMATIC_UPDATE_APPLICATION_STATE::UPDATE_SYSTEM_ERROR);
     }
 }
 
@@ -301,27 +307,28 @@ void cli::fs_update_cli::automatic_firmware_application_state(const char *applic
         std::stringstream out;
         out << "Automatic firmware & application successful" << std::endl;
         this->serial_cout->write(out.str());
+        this->return_code = static_cast<int>(UPDATER_AUTOMATIC_UPDATE_FIRMWARE_AND_APPLICATION_STATE::UPDATE_SUCCESSFULL);
     }
     catch(const fs::UpdateInProgress &e)
     {
         std::stringstream error_msg;
         error_msg << "Automatic firmware & application update progress error: " << e.what() << std::endl;
         this->serial_cout->write(error_msg.str());
-        this->return_code = 1;
+        this->return_code = static_cast<int>(UPDATER_AUTOMATIC_UPDATE_FIRMWARE_AND_APPLICATION_STATE::UPDATE_PROGRESS_ERROR);
     }
     catch(const fs::BaseFSUpdateException &e)
     {
         std::stringstream error_msg;
         error_msg << "Automatic firmware & application update error: " << e.what() << std::endl;
         this->serial_cout->write(error_msg.str());
-        this->return_code = 2;
+        this->return_code = static_cast<int>(UPDATER_AUTOMATIC_UPDATE_FIRMWARE_AND_APPLICATION_STATE::UPDATE_INTERNAL_ERROR);
     }
     catch (const std::exception &e)
     {
         std::stringstream error_msg;
         error_msg << "Automatic firmware & application update system error: " << e.what() << std::endl;
         this->serial_cout->write(error_msg.str());
-        this->return_code = 3;
+        this->return_code = static_cast<int>(UPDATER_AUTOMATIC_UPDATE_FIRMWARE_AND_APPLICATION_STATE::UPDATE_SYSTEM_ERROR);
     }
 }
 
@@ -335,7 +342,7 @@ bool cli::fs_update_cli::allow_automatic_update()
         std::stringstream error_msg;
         error_msg << "A former application update process failed! \n Re-Plug USB-Drive to start update process" << std::endl;
         this->serial_cout->write(error_msg.str());
-        this->return_code = 10;
+        this->return_code = static_cast<int>(UPDATER_ALLOW_AUTOMATIC_UPDATE_STATE::FORMER_APPLICATION_UPDATE_FAILED);
         if (this->update_handler->commit_update() == false)
         {
             throw(std::logic_error("This state is not allowed not be reached when a commit is necessary"));
@@ -346,7 +353,7 @@ bool cli::fs_update_cli::allow_automatic_update()
         std::stringstream error_msg;
         error_msg << "A former firmware update process failed! \n Re-Plug USB-Drive to start update process" << std::endl;
         this->serial_cout->write(error_msg.str());
-        this->return_code = 11;
+        this->return_code = static_cast<int>(UPDATER_ALLOW_AUTOMATIC_UPDATE_STATE::FORMER_FIRMWARE_UPDATE_FAILED);
         if (this->update_handler->commit_update() == false)
         {
             throw(std::logic_error("This state is not allowed not be reached when a commit is necessary"));
@@ -357,7 +364,7 @@ bool cli::fs_update_cli::allow_automatic_update()
         std::stringstream error_msg;
         error_msg << "A former firmware reboot into update failed! \n Re-Plug USB-Drive to start update process" << std::endl;
         this->serial_cout->write(error_msg.str());
-        this->return_code = 12;
+        this->return_code = static_cast<int>(UPDATER_ALLOW_AUTOMATIC_UPDATE_STATE::FORMER_FIRMWARE_REBOOT_FAILED);
         if (this->update_handler->commit_update() == false)
         {
             throw(std::logic_error("This state is not allowed not be reached when a commit is necessary"));
@@ -417,23 +424,23 @@ void cli::fs_update_cli::commit_update()
         if (this->update_handler->commit_update() == true)
         {
             std::cout << "Commit update" << std::endl;
-            this->return_code = 110;
+            this->return_code = static_cast<int>(UPDATER_COMMIT_STATE::SUCCESSFUL);
         }
         else
         {
             std::cout << "Commit update not needed" << std::endl;
-            this->return_code = 111;
+            this->return_code = static_cast<int>(UPDATER_COMMIT_STATE::UPDATE_NOT_NEEDED);
         }
     }
     catch(const fs::NotAllowedUpdateState &e)
     {
         std::cerr << "Not allowed update state in UBoot" << std::endl;
-        this->return_code = 1;
+        this->return_code = static_cast<int>(UPDATER_COMMIT_STATE::UPDATE_NOT_ALLOWED_UBOOT_STATE);
     }  
     catch(const std::exception &e)
     {
         std::cerr << "FS updater cli error: " << e.what() << std::endl;
-        this->return_code = 2;
+        this->return_code = static_cast<int>(UPDATER_COMMIT_STATE::UPDATE_SYSTEM_ERROR);
     }
 }
 
@@ -492,47 +499,47 @@ void cli::fs_update_cli::print_update_reboot_state()
     if (update_reboot_state == update_definitions::UBootBootstateFlags::FAILED_APP_UPDATE)
     {
         std::cout << "Application update failed" << std::endl;
-        this->return_code = 100 + int(update_definitions::UBootBootstateFlags::FAILED_APP_UPDATE);
+        this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::FAILED_APP_UPDATE);
     }
     else if (update_reboot_state == update_definitions::UBootBootstateFlags::FAILED_FW_UPDATE)
     {
         std::cout << "Firmware update failed" << std::endl;
-        this->return_code = 100 + int(update_definitions::UBootBootstateFlags::FAILED_FW_UPDATE);
+        this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::FAILED_FW_UPDATE);
     }
     else if (update_reboot_state == update_definitions::UBootBootstateFlags::FW_UPDATE_REBOOT_FAILED)
     {
         std::cout << "Firmware reboot update failed" << std::endl;
-        this->return_code = 100 + int(update_definitions::UBootBootstateFlags::FW_UPDATE_REBOOT_FAILED);
+        this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::FW_UPDATE_REBOOT_FAILED);
     }
     else if (update_reboot_state == update_definitions::UBootBootstateFlags::INCOMPLETE_FW_UPDATE)
     {
         std::cout << "Incomplete firmware update" << std::endl;
-        this->return_code = 100 + int(update_definitions::UBootBootstateFlags::INCOMPLETE_FW_UPDATE);
+        this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_FW_UPDATE);
     }
     else if (update_reboot_state == update_definitions::UBootBootstateFlags::INCOMPLETE_APP_UPDATE)
     {
         std::cout << "Incomplete application update" << std::endl;
-        this->return_code = 100 + int(update_definitions::UBootBootstateFlags::INCOMPLETE_APP_UPDATE);
+        this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_UPDATE);
     }
     else if (update_reboot_state == update_definitions::UBootBootstateFlags::INCOMPLETE_APP_FW_UPDATE)
     {
         std::cout << "Incomplete application and firmware update" << std::endl;
-        this->return_code = 100 + int(update_definitions::UBootBootstateFlags::INCOMPLETE_APP_FW_UPDATE);
+        this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_FW_UPDATE);
     }
     else if (update_reboot_state == update_definitions::UBootBootstateFlags::ROLLBACK_FW_REBOOT_PENDING)
     {
         std::cout << "Missing reboot after firmware rollback requested" << std::endl;
-        this->return_code = 100 + int(update_definitions::UBootBootstateFlags::ROLLBACK_FW_REBOOT_PENDING);
+        this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::ROLLBACK_FW_REBOOT_PENDING);
     }
     else if (update_reboot_state == update_definitions::UBootBootstateFlags::ROLLBACK_APP_REBOOT_PENDING)
     {
         std::cout << "Missing reboot after application rollback requested" << std::endl;
-        this->return_code = 100 + int(update_definitions::UBootBootstateFlags::ROLLBACK_APP_REBOOT_PENDING);
+        this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::ROLLBACK_APP_REBOOT_PENDING);
     }
     else
     {
         std::cout << "No update pending" << std::endl;
-        this->return_code = 100 + int(update_definitions::UBootBootstateFlags::NO_UPDATE_REBOOT_PENDING);
+        this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::NO_UPDATE_REBOOT_PENDING);
     }
 }
 

@@ -7,11 +7,17 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 #set(CMAKE_CXX_FLAGS "-Wall -Wextra -Os -s")
 #set(CMAKE_CXX_FLAGS "-Wall -Wextra -O -g1 -ggdb3")
 
+include(GNUInstallDirs)
+
 set(SOURCES
     "src/main.cpp"
     "src/cli/cli.cpp"
     "src/cli/SynchronizedSerial.cpp"
     "src/logger/LoggerSinkSerial.cpp"
+)
+
+set(HEADERS
+    "src/cli/fs_updater_error.h"
 )
 
 find_library(inicpp_lib NAMES libinicpp.a libinicpp.so)
@@ -45,3 +51,4 @@ target_link_libraries(fs_updater_cli
 
 set_target_properties(fs_updater_cli PROPERTIES OUTPUT_NAME "fs-updater")
 install(TARGETS fs_updater_cli RUNTIME DESTINATION ${CMAKE_INSTALL_SBINDIR})
+install(FILES ${HEADERS} DESTINATION ${CMAKE_INSTALL_FULL_INCLUDEDIR})
