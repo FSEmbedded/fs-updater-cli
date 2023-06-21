@@ -454,21 +454,22 @@ void cli::fs_update_cli::rollback_firmware()
     {
         this->update_handler->rollback_firmware();
         std::cout << "Rollback firmware successful" << std::endl;
+        this->return_code = static_cast<int>(UPDATER_FIRMWARE_STATE::ROLLBACK_SUCCESSFUL);
     }
     catch(const fs::RollbackFirmware &e)
     {
         std::cerr << "Rollback firmware progress error: " << e.what() << std::endl;
-        this->return_code = 3;
+        this->return_code = static_cast<int>(UPDATER_FIRMWARE_STATE::ROLLBACK_PROGRESS_ERROR);
     }
     catch(const fs::BaseFSUpdateException &e)
     {
         std::cerr << "Rollback firmware update error: " << e.what() << std::endl;
-        this->return_code = 2;
+        this->return_code = static_cast<int>(UPDATER_FIRMWARE_STATE::ROLLBACK_INTERNAL_ERROR);
     }
     catch (const std::exception &e)
     {
         std::cerr << "Rollback firmware update system error: " << e.what() << std::endl;
-        this->return_code = 1;
+        this->return_code = static_cast<int>(UPDATER_FIRMWARE_STATE::ROLLBACK_SYSTEM_ERROR);
     }
 }
 
@@ -478,21 +479,22 @@ void cli::fs_update_cli::rollback_application()
     {
         this->update_handler->rollback_application();
         std::cout << "Rollback application successful" << std::endl;
+        this->return_code = static_cast<int>(UPDATER_APPLICATION_STATE::ROLLBACK_SUCCESSFUL);
     }
     catch(const fs::RollbackApplication &e)
     {
         std::cerr << "Rollback application progress error: " << e.what() << std::endl;
-        this->return_code = 3;
+        this->return_code = static_cast<int>(UPDATER_APPLICATION_STATE::ROLLBACK_PROGRESS_ERROR);
     }
     catch(const fs::BaseFSUpdateException &e)
     {
         std::cerr << "Rollback application update error: " << e.what() << std::endl;
-        this->return_code = 2;
+        this->return_code = static_cast<int>(UPDATER_APPLICATION_STATE::ROLLBACK_INTERNAL_ERROR);
     }
     catch (const std::exception &e)
     {
         std::cerr << "Rollback application update system error: " << e.what() << std::endl;
-        this->return_code = 1;
+        this->return_code = static_cast<int>(UPDATER_APPLICATION_STATE::ROLLBACK_SYSTEM_ERROR);
     }
 }
 
