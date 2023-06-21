@@ -51,9 +51,12 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
         "application_version",
         "print current application version"
     ),
+    get_version("",
+        "version",
+        "print cli version"
+    ),
     return_code(0)
 {
-    std::cout << "F&S Update Framework CLI Version: " << VERSION << " build at: " <<  __DATE__ << ", " << __TIME__  << "." << std::endl;
     this->cmd.add(arg_app);
     this->cmd.add(arg_fw);
     this->cmd.add(arg_rollback_fw);
@@ -64,6 +67,7 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
     this->cmd.add(arg_debug);
     this->cmd.add(get_fw_version);
     this->cmd.add(get_app_version);
+    this->cmd.add(get_version);
 
     this->parse_input(argc, argv);
 }
@@ -815,10 +819,26 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
         (this->arg_urs.isSet() == false) &&
         (this->arg_automatic.isSet() == false) &&
         (this->get_app_version.isSet() == false) &&
+        (this->get_fw_version.isSet() == false) &&
+        (this->get_version.isSet() == true)
+    )
+    {
+        std::cout << "F&S Update Framework CLI Version: " << VERSION << " build at: " <<  __DATE__ << ", " << __TIME__  << "." << std::endl;
+    }
+    else if(
+        (this->arg_app.isSet() == false) &&
+        (this->arg_fw.isSet() == false) &&
+        (this->arg_rollback_fw.isSet() == false) &&
+        (this->arg_rollback_app.isSet() == false) &&
+        (this->arg_commit_update.isSet() == false) &&
+        (this->arg_urs.isSet() == false) &&
+        (this->arg_automatic.isSet() == false) &&
+        (this->get_app_version.isSet() == false) &&
         (this->get_fw_version.isSet() == false)
     )
     {
-        std::cerr << "No argument given, nothing done. Use --help to get all commands." << std::endl;
+        std::cout << "F&S Update Framework CLI Version: " << VERSION << " build at: " <<  __DATE__ << ", " << __TIME__  << "." << std::endl;
+        std::cout << "No argument given, nothing done. Use --help to get all commands." << std::endl;
     }
     else
     {

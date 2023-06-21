@@ -38,6 +38,7 @@ namespace cli
             TCLAP::SwitchArg arg_debug;
             TCLAP::SwitchArg get_fw_version;
             TCLAP::SwitchArg get_app_version;
+            TCLAP::SwitchArg get_version;
 
             std::unique_ptr<fs::FSUpdate> update_handler;
             std::shared_ptr<SynchronizedSerial> serial_cout;
