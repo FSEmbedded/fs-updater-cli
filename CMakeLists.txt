@@ -20,6 +20,17 @@ set(HEADERS
     "src/cli/fs_updater_error.h"
 )
 
+set(update_version_type "uint64" CACHE STRING "data type fw, app version")
+
+
+if("${update_version_type}" STREQUAL "string")
+        add_definitions (-DUPDATE_VERSION_TYPE_STRING)
+endif ()
+
+if("${update_version_type}" STREQUAL "uint64")
+        add_definitions (-DUPDATE_VERSION_TYPE_UINT64)
+endif ()
+
 find_library(inicpp_lib NAMES libinicpp.a libinicpp.so)
 find_library(ubootenv_lib NAMES libubootenv.so)
 find_library(z_lib NAMES libz.so)

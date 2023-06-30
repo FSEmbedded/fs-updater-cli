@@ -46,6 +46,10 @@ namespace cli
 		TCLAP::SwitchArg download_progress;
 		TCLAP::SwitchArg download_application_update;
 		TCLAP::SwitchArg install_application_update;
+		TCLAP::ValueArg<char> set_app_state_bad;
+		TCLAP::ValueArg<char> is_app_state_bad;
+		TCLAP::ValueArg<char> set_fw_state_bad;
+		TCLAP::ValueArg<char> is_fw_state_bad;
 
 		std::unique_ptr<fs::FSUpdate> update_handler;
 		std::shared_ptr<SynchronizedSerial> serial_cout;
@@ -152,6 +156,28 @@ namespace cli
 		 * Internal function to rollback the application of the current installation.
 		 */
 		void rollback_application();
+
+		/**
+		 * Internal function to mark application state bad.
+		 * Rollback to this state is not available.
+		 */
+		void set_application_state_bad(const char & state);
+
+		/**
+		 * .
+		 */
+		void is_application_state_bad(const char & state);
+
+		/**
+		 * Internal function to mark firmware state bad.
+		 * Rollback to this state is not available.
+		 */
+		void set_firmware_state_bad(const char & state);
+
+		/**
+		 * Print current installed application version.
+		 */
+		void is_firmware_state_bad(const char & state);
 
 		/**
 		 * Parse input and run as described in commands.
