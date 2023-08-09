@@ -633,13 +633,30 @@ void cli::fs_update_cli::print_update_reboot_state()
 	}
 	else if (update_reboot_state == update_definitions::UBootBootstateFlags::ROLLBACK_FW_REBOOT_PENDING)
 	{
-		std::cout << "Missing reboot after firmware rollback requested" << std::endl;
-		this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::ROLLBACK_FW_REBOOT_PENDING);
+		if(this->update_handler->is_reboot_complete(true))
+		{
+			//this->update_handler->update_reboot_state(update_definitions::UBootBootstateFlags::INCOMPLETE_FW_UPDATE);
+			std::cout << "Incomplete firwmware rollback. Commit requested." << std::endl;
+			this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_FW_ROLLBACK);
+		} else
+		{
+			std::cout << "Missing reboot after firmware rollback requested" << std::endl;
+			this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::ROLLBACK_FW_REBOOT_PENDING);
+		}
 	}
 	else if (update_reboot_state == update_definitions::UBootBootstateFlags::ROLLBACK_APP_REBOOT_PENDING)
 	{
-		std::cout << "Missing reboot after application rollback requested" << std::endl;
-		this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::ROLLBACK_APP_REBOOT_PENDING);
+		/* TODO: to implement function.*/
+		if(this->update_handler->is_reboot_complete(false))
+		{
+			//fsthis->update_handler->update_reboot_state(update_definitions::UBootBootstateFlags::INCOMPLETE_APP_UPDATE);
+			std::cout << "Incomplete application rollback. Commit requested." << std::endl;
+			this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_ROLLBACK);
+		} else
+		{
+			std::cout << "Missing reboot after application rollback requested" << std::endl;
+			this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::ROLLBACK_APP_REBOOT_PENDING);
+		}
 	}
 	else
 	{

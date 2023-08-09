@@ -160,22 +160,32 @@ namespace cli
 		/**
 		 * Internal function to mark application state bad.
 		 * Rollback to this state is not available.
+		 * @param state Application state A or B.
 		 */
 		void set_application_state_bad(const char & state);
 
 		/**
-		 * .
+		 * Get application state
+		 * @param state Application state A or B.
+		 * "X" - wrong parameter
+		 * 1 (true) - bad
+		 * 0 (false) - not bad
 		 */
 		void is_application_state_bad(const char & state);
 
 		/**
 		 * Internal function to mark firmware state bad.
 		 * Rollback to this state is not available.
+		 * @param state Firmware state A or B.
 		 */
 		void set_firmware_state_bad(const char & state);
 
 		/**
-		 * Print current installed application version.
+		 * Get firmware state
+		 * @param state Firmware state A or B.
+		 * "X" - wrong parameter
+		 * 1 (true) - bad
+		 * 0 (false) - not bad
 		 */
 		void is_firmware_state_bad(const char & state);
 
