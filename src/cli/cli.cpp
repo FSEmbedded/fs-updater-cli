@@ -618,13 +618,27 @@ void cli::fs_update_cli::print_update_reboot_state()
 	}
 	else if (update_reboot_state == update_definitions::UBootBootstateFlags::INCOMPLETE_FW_UPDATE)
 	{
-		std::cout << "Incomplete firmware update" << std::endl;
-		this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_FW_UPDATE);
+		if(this->update_handler->is_reboot_complete(true))
+		{
+			std::cout << "Incomplete firmware update. Commit required." << std::endl;
+			this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_FW_UPDATE);
+		} else
+		{
+			std::cout << "Missing reboot after firmware update requested" << std::endl;
+			this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::FW_REBOOT_PENDING);
+		}
 	}
 	else if (update_reboot_state == update_definitions::UBootBootstateFlags::INCOMPLETE_APP_UPDATE)
 	{
-		std::cout << "Incomplete application update" << std::endl;
-		this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_UPDATE);
+		if(this->update_handler->is_reboot_complete(true))
+		{
+			std::cout << "Incomplete application update" << std::endl;
+			this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_UPDATE);
+		} else
+		{
+			std::cout << "Missing reboot after application update requested" << std::endl;
+			this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::APP_REBOOT_PENDING);
+		}
 	}
 	else if (update_reboot_state == update_definitions::UBootBootstateFlags::INCOMPLETE_APP_FW_UPDATE)
 	{
