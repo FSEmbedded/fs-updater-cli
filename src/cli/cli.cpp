@@ -1225,25 +1225,46 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->set_fw_state_bad.isSet() == false) &&
 		(this->is_fw_state_bad.isSet() == false)
 		)
-	{
-		if(access("/tmp/adu/.work/firmware_location", F_OK) < 0)
-		{
-			this->return_code = static_cast<int>(UPDATER_INSTALL_FIRMWARE_UPDATE_STATE::NO_INSTALLATION_QUEUED);
-		}
-		else if(access("/tmp/adu/.work/installFirmware", F_OK) == 0)
-		{
-			this->return_code = static_cast<int>(UPDATER_INSTALL_FIRMWARE_UPDATE_STATE::FIRMWARE_INSTALLATION_IN_PROGRESS);
-		}
-		else if(fopen("/tmp/adu/.work/installFirmware", "a") < 0) {
-			this->return_code = static_cast<int>(UPDATER_INSTALL_FIRMWARE_UPDATE_STATE::FIRMWARE_INSTALLATION_FAILED);
-			printf("Could not initiate Installation...\n");
-		}
-		else
-		{
-			this->return_code = static_cast<int>(UPDATER_INSTALL_FIRMWARE_UPDATE_STATE::FIRMWARE_INSTALLATION_IN_PROGRESS);
-		}
-	}
-	else if(
+          {
+            std::ifstream installed_state;
+            /* check if file firmwareInstalled available */
+            installed_state.open ("/tmp/adu/.work/firmwareInstalled");
+            if (installed_state)
+              {
+                this->return_code = static_cast<int> (
+                    UPDATER_INSTALL_FIRMWARE_UPDATE_STATE::
+                        FIRMWARE_INSTALLATION_FINISHED);
+              }
+            else
+              {
+                if (access ("/tmp/adu/.work/firmware_location", F_OK) < 0)
+                  {
+                    this->return_code = static_cast<int> (
+                        UPDATER_INSTALL_FIRMWARE_UPDATE_STATE::
+                            NO_INSTALLATION_QUEUED);
+                  }
+                else if (access ("/tmp/adu/.work/installFirmware", F_OK) == 0)
+                  {
+                    this->return_code = static_cast<int> (
+                        UPDATER_INSTALL_FIRMWARE_UPDATE_STATE::
+                            FIRMWARE_INSTALLATION_IN_PROGRESS);
+                  }
+                else if (fopen ("/tmp/adu/.work/installFirmware", "a") < 0)
+                  {
+                    this->return_code = static_cast<int> (
+                        UPDATER_INSTALL_FIRMWARE_UPDATE_STATE::
+                            FIRMWARE_INSTALLATION_FAILED);
+                    printf ("Could not initiate Installation...\n");
+                  }
+                else
+                  {
+                    this->return_code = static_cast<int> (
+                        UPDATER_INSTALL_FIRMWARE_UPDATE_STATE::
+                            FIRMWARE_INSTALLATION_IN_PROGRESS);
+                  }
+              }
+          }
+        else if(
 		(this->arg_app.isSet() == false) &&
 		(this->arg_fw.isSet() == false) &&
 		(this->arg_rollback_fw.isSet() == false) &&
@@ -1265,25 +1286,47 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->set_fw_state_bad.isSet() == false) &&
 		(this->is_fw_state_bad.isSet() == false)
 		)
-	{
-		if(access("/tmp/adu/.work/application_location", F_OK) < 0)
-		{
-			this->return_code = static_cast<int>(UPDATER_INSTALL_APPLICATION_UPDATE_STATE::NO_INSTALLATION_QUEUED);
-		}
-		else if(access("/tmp/adu/.work/installApplication", F_OK) == 0)
-		{
-			this->return_code = static_cast<int>(UPDATER_INSTALL_APPLICATION_UPDATE_STATE::APPLICATION_INSTALLATION_IN_PROGRESS);
-		}
-		else if(fopen("/tmp/adu/.work/installApplication", "a") < 0) {
-			this->return_code = static_cast<int>(UPDATER_INSTALL_APPLICATION_UPDATE_STATE::APPLICATION_INSTALLATION_FAILED);
-			printf("Could not initiate Installation...\n");
-		}
-		else
-		{
-			this->return_code = static_cast<int>(UPDATER_INSTALL_APPLICATION_UPDATE_STATE::APPLICATION_INSTALLATION_IN_PROGRESS);
-		}
-	}
-	else if(
+          {
+            std::ifstream installed_state;
+            /* check if file applicationInstalled available */
+            installed_state.open ("/tmp/adu/.work/applicationInstalled");
+            if (installed_state)
+              {
+				this->return_code = static_cast<int> (
+                        UPDATER_INSTALL_APPLICATION_UPDATE_STATE::
+                            APPLICATION_INSTALLATION_FINISHED);
+              }
+            else
+              {
+                if (access ("/tmp/adu/.work/application_location", F_OK) < 0)
+                  {
+                    this->return_code = static_cast<int> (
+                        UPDATER_INSTALL_APPLICATION_UPDATE_STATE::
+                            NO_INSTALLATION_QUEUED);
+                  }
+                else if (access ("/tmp/adu/.work/installApplication", F_OK)
+                         == 0)
+                  {
+                    this->return_code = static_cast<int> (
+                        UPDATER_INSTALL_APPLICATION_UPDATE_STATE::
+                            APPLICATION_INSTALLATION_IN_PROGRESS);
+                  }
+                else if (fopen ("/tmp/adu/.work/installApplication", "a") < 0)
+                  {
+                    this->return_code = static_cast<int> (
+                        UPDATER_INSTALL_APPLICATION_UPDATE_STATE::
+                            APPLICATION_INSTALLATION_FAILED);
+                    printf ("Could not initiate Installation...\n");
+                  }
+                else
+                  {
+                    this->return_code = static_cast<int> (
+                        UPDATER_INSTALL_APPLICATION_UPDATE_STATE::
+                            APPLICATION_INSTALLATION_IN_PROGRESS);
+                  }
+              }
+          }
+        else if(
 		(this->arg_app.isSet() == false) &&
 		(this->arg_fw.isSet() == false) &&
 		(this->arg_rollback_fw.isSet() == false) &&
@@ -1305,16 +1348,50 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->set_fw_state_bad.isSet() == false) &&
 		(this->is_fw_state_bad.isSet() == false)
 		)
-	{
-		if(access("/tmp/adu/.work/applyFirmware", F_OK) < 0)
-		{
-			this->return_code = this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_FAILED);
-		}
-		if(fopen("/tmp/adu/.work/applyFirmware", "a") < 0)
-			printf("Could not initiate apply...\n");
-		this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFULL);
-	}
-	else if(
+          {
+            std::ifstream installed_state;
+            /* check if file firmwareInstalled available */
+            installed_state.open ("/tmp/adu/.work/firmwareInstalled");
+            if (installed_state)
+              {
+                /* firmware installed successful */
+                if (access ("/tmp/adu/.work/applyFirmware", F_OK) < 0)
+                  {
+                    this->return_code = this->return_code = static_cast<int> (
+                        UPDATER_APPLY_UPDATE_STATE::APPLY_FAILED);
+                  }
+                if (fopen ("/tmp/adu/.work/applyFirmware", "a") < 0)
+                  printf ("Could not initiate apply...\n");
+                this->return_code = static_cast<int> (
+                    UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFULL);
+              }
+            else
+              {
+                /* check if file applicationInstalled available */
+                installed_state.open ("/tmp/adu/.work/applicationInstalled");
+                if (installed_state)
+                  {
+                    /* firmware installed successful */
+                    if (access ("/tmp/adu/.work/applyApplication", F_OK) < 0)
+                      {
+                        this->return_code = this->return_code
+                            = static_cast<int> (
+                                UPDATER_APPLY_UPDATE_STATE::APPLY_FAILED);
+                      }
+                    if (fopen ("/tmp/adu/.work/applyApplication", "a") < 0)
+                      printf ("Could not initiate apply...\n");
+                    this->return_code = static_cast<int> (
+                        UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFULL);
+                  }
+                else
+                  {
+					printf("Nothing to apply...\n");
+					this->return_code = static_cast<int> (
+                        UPDATER_APPLY_UPDATE_STATE::APPLY_FAILED);
+                  }
+              }
+          }
+        else if(
 		(this->arg_app.isSet() == false) &&
 		(this->arg_fw.isSet() == false) &&
 		(this->arg_rollback_fw.isSet() == false) &&
