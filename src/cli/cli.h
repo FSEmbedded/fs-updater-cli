@@ -18,6 +18,8 @@
 #include <fstream>
 
 #define VERSION "1.0.0"
+/* This define enables old update process */
+//#define USE_OLD_UPDATE_TYPE
 
 /**
  * Namespace contain all CLI related classes of functionality
@@ -28,8 +30,11 @@ namespace cli
 	{
         private:
 		TCLAP::CmdLine cmd;
+#ifdef USE_OLD_UPDATE_TYPE
 		TCLAP::ValueArg<std::string> arg_app;
 		TCLAP::ValueArg<std::string> arg_fw;
+#endif
+		TCLAP::ValueArg<std::string> arg_update;
 		TCLAP::SwitchArg arg_rollback_fw;
 		TCLAP::SwitchArg arg_rollback_app;
 		TCLAP::SwitchArg arg_commit_update;
@@ -46,6 +51,8 @@ namespace cli
 		TCLAP::SwitchArg download_progress;
 		TCLAP::SwitchArg download_application_update;
 		TCLAP::SwitchArg install_application_update;
+		TCLAP::SwitchArg download_update;
+		TCLAP::SwitchArg install_update;
 		TCLAP::ValueArg<char> set_app_state_bad;
 		TCLAP::ValueArg<char> is_app_state_bad;
 		TCLAP::ValueArg<char> set_fw_state_bad;
@@ -57,6 +64,7 @@ namespace cli
 		std::shared_ptr<logger::LoggerHandler> logger_handler;
 
 		int return_code;
+#ifdef USE_OLD_UPDATE_TYPE
 		/**
 		 * Internal function to run update and handle errors as return_value:
 		 * Firmware update progress error: 3
@@ -80,6 +88,15 @@ namespace cli
 		 * Application & firmware update system error: 1
 		 */
 		void update_firmware_application_state();
+#endif
+
+		/**
+		 * Internal function to run update and handle errors as return_value:
+		 * @param update_file_env Zero terminated char array of update package
+		 * @param update_stick Path to update stick directory
+		 * @param use_arg true - uses arg_update, false - use passing parameter
+		 */
+		void update_image_state(const char *update_file_env, const std::string &update_stick, bool use_arg);
 
 		/**
 		 * Internal function which map the update state to a string.

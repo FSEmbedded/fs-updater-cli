@@ -13,6 +13,7 @@
 
 cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
 		cmd("F&S Update Framework CLI", ' ', VERSION, false),
+#ifdef USE_OLD_UPDATE_TYPE
 		arg_app("",
 			"application_file",
 			"path to application",
@@ -23,6 +24,14 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
 		arg_fw("",
 		       "firmware_file",
 		       "path to RAUC update package",
+		       false,
+		       "",
+		       "absolute filesystem path"
+		       ),
+#endif
+		arg_update("",
+		       "update_file",
+		       "path to update package",
 		       false,
 		       "",
 		       "absolute filesystem path"
@@ -87,6 +96,14 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
 					   "install_application_update",
 					   "install downloaded application update"
 					   ),
+		download_update("",
+					    "download_update",
+					    "download the available update"
+					    ),
+		install_update("",
+					   "install_update",
+					   "install downloaded update"
+					   ),
 		get_version("",
 			    "version",
 			    "print cli version"
@@ -121,8 +138,11 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
 			    ),
 		return_code(0)
 {
+#ifdef USE_OLD_UPDATE_TYPE
 	this->cmd.add(arg_app);
 	this->cmd.add(arg_fw);
+#endif
+	this->cmd.add(arg_update);
 	this->cmd.add(arg_rollback_fw);
 	this->cmd.add(arg_rollback_app);
 	this->cmd.add(arg_commit_update);
@@ -135,9 +155,11 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
 	this->cmd.add(apply_update);
 	this->cmd.add(install_application_update);
 	this->cmd.add(install_firmware_update);
+	this->cmd.add(install_update);
 	this->cmd.add(download_progress);
 	this->cmd.add(download_application_update);
 	this->cmd.add(download_firmware_update);
+	this->cmd.add(download_update);
 	this->cmd.add(notice_update_available);
 	this->cmd.add(set_app_state_bad);
 	this->cmd.add(is_app_state_bad);
@@ -152,6 +174,7 @@ cli::fs_update_cli::~fs_update_cli()
 
 }
 
+#ifdef USE_OLD_UPDATE_TYPE
 void cli::fs_update_cli::update_firmware_state()
 {
 	try
@@ -233,6 +256,50 @@ void cli::fs_update_cli::update_firmware_application_state()
 	catch (const std::exception &e)
 	{
 		std::cerr << "Application & firmware update system error: " << e.what() << std::endl;
+		this->return_code = static_cast<int>(UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_SYSTEM_ERROR);
+	}
+}
+#endif
+
+void cli::fs_update_cli::update_image_state(const char *update_file_env, const std::string &update_stick, bool use_arg)
+{
+	std::cout << __func__ << std::endl;
+	try
+	{
+		if(use_arg == true)
+		{
+			this->update_handler->update_image(
+			this->arg_update.getValue());
+		}
+		else
+		{
+			std::string update_file(update_stick);
+
+			if (update_stick.back() != '/')
+			{
+				update_file += std::string("/");
+			}
+
+			update_file += std::string(update_file_env);
+			this->update_handler->update_image(update_file);
+		}
+
+		std::cout << "Image update successful" << std::endl;
+		this->return_code = static_cast<int>(UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_SUCCESSFUL);
+	}
+	catch(const fs::UpdateInProgress &e)
+	{
+		std::cerr << "Image update progress error: " << e.what() << std::endl;
+		this->return_code = static_cast<int>(UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_PROGRESS_ERROR);
+	}
+	catch(const fs::BaseFSUpdateException &e)
+	{
+		std::cerr << "Image update error: " << e.what() << std::endl;
+		this->return_code = static_cast<int>(UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_INTERNAL_ERROR);
+	}
+	catch (const std::exception &e)
+	{
+		std::cerr << "Image update system error: " << e.what() << std::endl;
 		this->return_code = static_cast<int>(UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_SYSTEM_ERROR);
 	}
 }
@@ -760,6 +827,7 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 
 	// Manual mode
 	if (
+#ifdef USE_OLD_UPDATE_TYPE
 		(this->arg_app.isSet() == false) &&
 		(this->arg_fw.isSet() == true) &&
 		(this->arg_rollback_fw.isSet() == false) &&
@@ -839,6 +907,40 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 	else if(
 		(this->arg_app.isSet() == false) &&
 		(this->arg_fw.isSet() == false) &&
+#endif
+		(this->arg_update.isSet() == true) &&
+		(this->arg_rollback_fw.isSet() == false) &&
+		(this->arg_rollback_app.isSet() == false) &&
+		(this->arg_commit_update.isSet() == false) &&
+		(this->arg_urs.isSet() == false) &&
+		(this->arg_automatic.isSet() == false) &&
+		(this->get_app_version.isSet() == false) &&
+		(this->get_fw_version.isSet() == false) &&
+		(this->notice_update_available.isSet() == false) &&
+		(this->download_firmware_update.isSet() == false) &&
+		(this->download_application_update.isSet() == false) &&
+		(this->download_update.isSet() == false) &&
+		(this->download_progress.isSet() == false) &&
+		(this->install_firmware_update.isSet() == false) &&
+		(this->install_application_update.isSet() == false) &&
+		(this->install_update.isSet() == false) &&
+		(this->apply_update.isSet() == false) &&
+		(this->set_app_state_bad.isSet() == false) &&
+		(this->is_app_state_bad.isSet() == false) &&
+		(this->set_fw_state_bad.isSet() == false) &&
+		(this->is_fw_state_bad.isSet() == false)
+		)
+	{
+		// update firmware, application or both
+		// use path from argument
+		this->update_image_state("", nullptr, true);
+	}
+	else if(
+#ifdef USE_OLD_UPDATE_TYPE
+		(this->arg_app.isSet() == false) &&
+		(this->arg_fw.isSet() == false) &&
+#endif
+		(this->arg_update.isSet() == false) &&
 		(this->arg_rollback_fw.isSet() == false) &&
 		(this->arg_rollback_app.isSet() == false) &&
 		(this->arg_commit_update.isSet() == true) &&
@@ -850,8 +952,10 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->download_firmware_update.isSet() == false) &&
 		(this->download_application_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
+		(this->download_update.isSet() == false) &&
 		(this->install_firmware_update.isSet() == false) &&
 		(this->install_application_update.isSet() == false) &&
+		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false) &&
 		(this->set_app_state_bad.isSet() == false) &&
 		(this->is_app_state_bad.isSet() == false) &&
@@ -863,8 +967,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		this->commit_update();
 	}
 	else if(
+#ifdef USE_OLD_UPDATE_TYPE
 		(this->arg_app.isSet() == false) &&
 		(this->arg_fw.isSet() == false) &&
+#endif
+		(this->arg_update.isSet() == false) &&
 		(this->arg_rollback_fw.isSet() == false) &&
 		(this->arg_rollback_app.isSet() == false) &&
 		(this->arg_commit_update.isSet() == false) &&
@@ -875,9 +982,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->notice_update_available.isSet() == false) &&
 		(this->download_firmware_update.isSet() == false) &&
 		(this->download_application_update.isSet() == false) &&
+		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
 		(this->install_firmware_update.isSet() == false) &&
 		(this->install_application_update.isSet() == false) &&
+		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false) &&
 		(this->set_app_state_bad.isSet() == false) &&
 		(this->is_app_state_bad.isSet() == false) &&
@@ -890,8 +999,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 	}
 	// Automatic mode
 	else if(
+#ifdef USE_OLD_UPDATE_TYPE
 		(this->arg_app.isSet() == false) &&
 		(this->arg_fw.isSet() == false) &&
+#endif
+        (this->arg_update.isSet() == false) &&
 		(this->arg_rollback_fw.isSet() == false) &&
 		(this->arg_rollback_app.isSet() == false) &&
 		(this->arg_commit_update.isSet() == false) &&
@@ -902,9 +1014,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->notice_update_available.isSet() == false) &&
 		(this->download_firmware_update.isSet() == false) &&
 		(this->download_application_update.isSet() == false) &&
+		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
 		(this->install_firmware_update.isSet() == false) &&
 		(this->install_application_update.isSet() == false) &&
+		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false) &&
 		(this->set_app_state_bad.isSet() == false) &&
 		(this->is_app_state_bad.isSet() == false) &&
@@ -912,6 +1026,7 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->is_fw_state_bad.isSet() == false)
 		)
 	{
+#ifdef USE_OLD_UPDATE_TYPE
 		const char *update_stick_env            = std::getenv("UPDATE_STICK");
 		const char *application_file_env        = std::getenv("APPLICATION_FILE");
 		const char *firmware_file_env           = std::getenv("FIRMWARE_FILE");
@@ -988,10 +1103,44 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 			this->return_code = 5;
 			return;
 		}
+#else
+		const char *update_stick_env = std::getenv("UPDATE_STICK");
+		const char *update_file_env = std::getenv("UPDATE_FILE");
+
+		if (update_stick_env == nullptr)
+		{
+			std::stringstream out;
+			out << "Environment variable \"UPDATE_STICK\" is no set" << std::endl;
+			this->serial_cout->write(out.str());
+			this->return_code = 2;
+			return;
+		}
+		const std::string update_stick(update_stick_env);
+		if (update_file_env != nullptr)
+		{
+			this->update_image_state(update_file_env, update_stick, false);
+		}
+		else
+		{
+			std::stringstream out;
+			out << "Not correct UPDATE_FILE system variables set" << std::endl;
+			if (update_file_env == nullptr)
+			{
+				out << "\"UPDATE_FILE\" env variable -- not set" << std::endl;
+			}
+			this->serial_cout->write(out.str());
+			this->return_code = 5;
+			return;
+
+		}
+#endif
 	}
 	else if(
+#ifdef USE_OLD_UPDATE_TYPE
 		(this->arg_app.isSet() == false) &&
 		(this->arg_fw.isSet() == false) &&
+#endif
+		(this->arg_update.isSet() == false) &&
 		(this->arg_rollback_fw.isSet() == false) &&
 		(this->arg_rollback_app.isSet() == false) &&
 		(this->arg_commit_update.isSet() == false) &&
@@ -1002,9 +1151,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->notice_update_available.isSet() == false) &&
 		(this->download_firmware_update.isSet() == false) &&
 		(this->download_application_update.isSet() == false) &&
+		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
 		(this->install_firmware_update.isSet() == false) &&
 		(this->install_application_update.isSet() == false) &&
+		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false) &&
 		(this->set_app_state_bad.isSet() == false) &&
 		(this->is_app_state_bad.isSet() == false) &&
@@ -1015,8 +1166,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		this->print_current_application_version();
 	}
 	else if(
+#ifdef USE_OLD_UPDATE_TYPE
 		(this->arg_app.isSet() == false) &&
 		(this->arg_fw.isSet() == false) &&
+#endif
+		(this->arg_update.isSet() == false) &&
 		(this->arg_rollback_fw.isSet() == false) &&
 		(this->arg_rollback_app.isSet() == false) &&
 		(this->arg_commit_update.isSet() == false) &&
@@ -1027,9 +1181,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->notice_update_available.isSet() == true) &&
 		(this->download_firmware_update.isSet() == false) &&
 		(this->download_application_update.isSet() == false) &&
+		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
 		(this->install_firmware_update.isSet() == false) &&
 		(this->install_application_update.isSet() == false) &&
+		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false) &&
 		(this->set_app_state_bad.isSet() == false) &&
 		(this->is_app_state_bad.isSet() == false) &&
@@ -1122,8 +1278,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		}
 	}
 	else if(
+#ifdef USE_OLD_UPDATE_TYPE
 		(this->arg_app.isSet() == false) &&
 		(this->arg_fw.isSet() == false) &&
+#endif
+		(this->arg_update.isSet() == false) &&
 		(this->arg_rollback_fw.isSet() == false) &&
 		(this->arg_rollback_app.isSet() == false) &&
 		(this->arg_commit_update.isSet() == false) &&
@@ -1134,9 +1293,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->notice_update_available.isSet() == false) &&
 		(this->download_firmware_update.isSet() == true) &&
 		(this->download_application_update.isSet() == false) &&
+		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
 		(this->install_firmware_update.isSet() == false) &&
 		(this->install_application_update.isSet() == false) &&
+		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false) &&
 		(this->set_app_state_bad.isSet() == false) &&
 		(this->is_app_state_bad.isSet() == false) &&
@@ -1163,8 +1324,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		}
 	}
 	else if(
+#ifdef USE_OLD_UPDATE_TYPE
 		(this->arg_app.isSet() == false) &&
 		(this->arg_fw.isSet() == false) &&
+#endif
+		(this->arg_update.isSet() == false) &&
 		(this->arg_rollback_fw.isSet() == false) &&
 		(this->arg_rollback_app.isSet() == false) &&
 		(this->arg_commit_update.isSet() == false) &&
@@ -1175,9 +1339,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->notice_update_available.isSet() == false) &&
 		(this->download_firmware_update.isSet() == false) &&
 		(this->download_application_update.isSet() == true) &&
+		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
 		(this->install_firmware_update.isSet() == false) &&
 		(this->install_application_update.isSet() == false) &&
+		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false) &&
 		(this->set_app_state_bad.isSet() == false) &&
 		(this->is_app_state_bad.isSet() == false) &&
@@ -1204,8 +1370,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		}
 	}
 	else if(
+#ifdef USE_OLD_UPDATE_TYPE
 		(this->arg_app.isSet() == false) &&
 		(this->arg_fw.isSet() == false) &&
+#endif
+		(this->arg_update.isSet() == false) &&
 		(this->arg_rollback_fw.isSet() == false) &&
 		(this->arg_rollback_app.isSet() == false) &&
 		(this->arg_commit_update.isSet() == false) &&
@@ -1216,9 +1385,58 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->notice_update_available.isSet() == false) &&
 		(this->download_firmware_update.isSet() == false) &&
 		(this->download_application_update.isSet() == false) &&
+		(this->download_update.isSet() == true) &&
+		(this->download_progress.isSet() == false) &&
+		(this->install_firmware_update.isSet() == false) &&
+		(this->install_application_update.isSet() == false) &&
+		(this->install_update.isSet() == false) &&
+		(this->apply_update.isSet() == false) &&
+		(this->set_app_state_bad.isSet() == false) &&
+		(this->is_app_state_bad.isSet() == false) &&
+		(this->set_fw_state_bad.isSet() == false) &&
+		(this->is_fw_state_bad.isSet() == false)
+		)
+	{
+		// TODO::
+		if(access("/tmp/adu/.work/update_type", F_OK) != 0 ||
+		   access("/tmp/adu/.work/update_version", F_OK) != 0 ||
+		   access("/tmp/adu/.work/update_size", F_OK) != 0)
+		{
+			this->return_code = static_cast<int>(UPDATER_DOWNLOAD_APPLICATION_UPDATE_STATE::NO_DOWNLOAD_QUEUED);
+		}
+		else if(access("/tmp/adu/.work/downloadUpdate", F_OK) == 0)
+		{
+			this->return_code = static_cast<int>(UPDATER_DOWNLOAD_APPLICATION_UPDATE_STATE::APPLICATION_DOWNLOAD_STARTED_BEFORE);
+		}
+		else
+		{
+			if(fopen("/tmp/adu/.work/downloadUpdate", "a") < 0)
+				printf("Could not initiate update download...\n");
+
+			this->return_code = static_cast<int>(UPDATER_DOWNLOAD_APPLICATION_UPDATE_STATE::APPLICATION_DOWNLOAD_STARTED);
+		}
+	}
+	else if(
+#ifdef USE_OLD_UPDATE_TYPE
+		(this->arg_app.isSet() == false) &&
+		(this->arg_fw.isSet() == false) &&
+#endif
+		(this->arg_update.isSet() == false) &&
+		(this->arg_rollback_fw.isSet() == false) &&
+		(this->arg_rollback_app.isSet() == false) &&
+		(this->arg_commit_update.isSet() == false) &&
+		(this->arg_urs.isSet() == false) &&
+		(this->arg_automatic.isSet() == false) &&
+		(this->get_app_version.isSet() == false) &&
+		(this->get_fw_version.isSet() == false) &&
+		(this->notice_update_available.isSet() == false) &&
+		(this->download_firmware_update.isSet() == false) &&
+		(this->download_application_update.isSet() == false) &&
+		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
 		(this->install_firmware_update.isSet() == true) &&
 		(this->install_application_update.isSet() == false) &&
+		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false) &&
 		(this->set_app_state_bad.isSet() == false) &&
 		(this->is_app_state_bad.isSet() == false) &&
@@ -1265,8 +1483,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
               }
           }
         else if(
+#ifdef USE_OLD_UPDATE_TYPE
 		(this->arg_app.isSet() == false) &&
 		(this->arg_fw.isSet() == false) &&
+#endif
+		(this->arg_update.isSet() == false) &&
 		(this->arg_rollback_fw.isSet() == false) &&
 		(this->arg_rollback_app.isSet() == false) &&
 		(this->arg_commit_update.isSet() == false) &&
@@ -1277,9 +1498,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->notice_update_available.isSet() == false) &&
 		(this->download_firmware_update.isSet() == false) &&
 		(this->download_application_update.isSet() == false) &&
+		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
 		(this->install_firmware_update.isSet() == false) &&
 		(this->install_application_update.isSet() == true) &&
+		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false) &&
 		(this->set_app_state_bad.isSet() == false) &&
 		(this->is_app_state_bad.isSet() == false) &&
@@ -1326,9 +1549,12 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
                   }
               }
           }
-        else if(
+		else if(
+#ifdef USE_OLD_UPDATE_TYPE
 		(this->arg_app.isSet() == false) &&
 		(this->arg_fw.isSet() == false) &&
+#endif
+		(this->arg_update.isSet() == false) &&
 		(this->arg_rollback_fw.isSet() == false) &&
 		(this->arg_rollback_app.isSet() == false) &&
 		(this->arg_commit_update.isSet() == false) &&
@@ -1339,9 +1565,78 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->notice_update_available.isSet() == false) &&
 		(this->download_firmware_update.isSet() == false) &&
 		(this->download_application_update.isSet() == false) &&
+		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
 		(this->install_firmware_update.isSet() == false) &&
 		(this->install_application_update.isSet() == false) &&
+		(this->install_update.isSet() == true) &&
+		(this->apply_update.isSet() == false) &&
+		(this->set_app_state_bad.isSet() == false) &&
+		(this->is_app_state_bad.isSet() == false) &&
+		(this->set_fw_state_bad.isSet() == false) &&
+		(this->is_fw_state_bad.isSet() == false)
+		)
+          {
+            std::ifstream installed_state;
+            /* check if file applicationInstalled available */
+            installed_state.open ("/tmp/adu/.work/updateInstalled");
+            if (installed_state)
+              {
+				this->return_code = static_cast<int> (
+                        UPDATER_INSTALL_APPLICATION_UPDATE_STATE::
+                            APPLICATION_INSTALLATION_FINISHED);
+              }
+            else
+              {
+                if (access ("/tmp/adu/.work/update_location", F_OK) < 0)
+                  {
+                    this->return_code = static_cast<int> (
+                        UPDATER_INSTALL_APPLICATION_UPDATE_STATE::
+                            NO_INSTALLATION_QUEUED);
+                  }
+                else if (access ("/tmp/adu/.work/installUpdate", F_OK)
+                         == 0)
+                  {
+                    this->return_code = static_cast<int> (
+                        UPDATER_INSTALL_APPLICATION_UPDATE_STATE::
+                            APPLICATION_INSTALLATION_IN_PROGRESS);
+                  }
+                else if (fopen ("/tmp/adu/.work/installUpdate", "a") < 0)
+                  {
+                    this->return_code = static_cast<int> (
+                        UPDATER_INSTALL_APPLICATION_UPDATE_STATE::
+                            APPLICATION_INSTALLATION_FAILED);
+                    printf ("Could not initiate Installation...\n");
+                  }
+                else
+                  {
+                    this->return_code = static_cast<int> (
+                        UPDATER_INSTALL_APPLICATION_UPDATE_STATE::
+                            APPLICATION_INSTALLATION_IN_PROGRESS);
+                  }
+              }
+          }
+        else if (
+#ifdef USE_OLD_UPDATE_TYPE
+		(this->arg_app.isSet() == false) &&
+		(this->arg_fw.isSet() == false) &&
+#endif
+		(this->arg_update.isSet() == false) &&
+		(this->arg_rollback_fw.isSet() == false) &&
+		(this->arg_rollback_app.isSet() == false) &&
+		(this->arg_commit_update.isSet() == false) &&
+		(this->arg_urs.isSet() == false) &&
+		(this->arg_automatic.isSet() == false) &&
+		(this->get_app_version.isSet() == false) &&
+		(this->get_fw_version.isSet() == false) &&
+		(this->notice_update_available.isSet() == false) &&
+		(this->download_firmware_update.isSet() == false) &&
+		(this->download_application_update.isSet() == false) &&
+		(this->download_update.isSet() == false) &&
+		(this->download_progress.isSet() == false) &&
+		(this->install_firmware_update.isSet() == false) &&
+		(this->install_application_update.isSet() == false) &&
+		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == true) &&
 		(this->set_app_state_bad.isSet() == false) &&
 		(this->is_app_state_bad.isSet() == false) &&
@@ -1356,14 +1651,25 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
               {
                 /* firmware installed successful */
                 if (access ("/tmp/adu/.work/applyFirmware", F_OK) < 0)
-                  {
-                    this->return_code = this->return_code = static_cast<int> (
-                        UPDATER_APPLY_UPDATE_STATE::APPLY_FAILED);
-                  }
+				{
+					if(access("/tmp/adu/.work/downloadFirmware", F_OK) < 0)
+					{
+						/* Local installation process. Force reboot immediately.
+						*/
+						const int ret = ::system("/sbin/reboot --reboot --no-wall");
+					}
+				}
                 if (fopen ("/tmp/adu/.work/applyFirmware", "a") < 0)
-                  printf ("Could not initiate apply...\n");
-                this->return_code = static_cast<int> (
-                    UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFULL);
+				{
+					printf ("Could not initiate apply...\n");
+					this->return_code = this->return_code = static_cast<int> (
+                        UPDATER_APPLY_UPDATE_STATE::APPLY_FAILED);
+				}
+				else
+				{
+					this->return_code = static_cast<int> (
+						UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFULL);
+				}
               }
             else
               {
@@ -1373,13 +1679,21 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
                   {
                     /* firmware installed successful */
                     if (access ("/tmp/adu/.work/applyApplication", F_OK) < 0)
-                      {
-                        this->return_code = this->return_code
+					{
+						if(access("/tmp/adu/.work/downloadApplication", F_OK) < 0)
+						{
+							/* Local installation process. Force reboot immediately.
+							*/
+						     const int ret = ::system("/sbin/reboot --reboot --no-wall");
+						}
+                    }
+                    if (fopen ("/tmp/adu/.work/applyApplication", "a") < 0)
+					{
+						printf ("Could not initiate apply...\n");
+						this->return_code = this->return_code
                             = static_cast<int> (
                                 UPDATER_APPLY_UPDATE_STATE::APPLY_FAILED);
-                      }
-                    if (fopen ("/tmp/adu/.work/applyApplication", "a") < 0)
-                      printf ("Could not initiate apply...\n");
+					} else
                     this->return_code = static_cast<int> (
                         UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFULL);
                   }
@@ -1392,8 +1706,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
               }
           }
         else if(
+#ifdef USE_OLD_UPDATE_TYPE
 		(this->arg_app.isSet() == false) &&
 		(this->arg_fw.isSet() == false) &&
+#endif
+		(this->arg_update.isSet() == false) &&
 		(this->arg_rollback_fw.isSet() == false) &&
 		(this->arg_rollback_app.isSet() == false) &&
 		(this->arg_commit_update.isSet() == false) &&
@@ -1404,9 +1721,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->notice_update_available.isSet() == false) &&
 		(this->download_firmware_update.isSet() == false) &&
 		(this->download_application_update.isSet() == false) &&
+		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == true) &&
 		(this->install_firmware_update.isSet() == false) &&
 		(this->install_application_update.isSet() == false) &&
+		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false) &&
 		(this->set_app_state_bad.isSet() == false) &&
 		(this->is_app_state_bad.isSet() == false) &&
@@ -1566,8 +1885,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		}
 	}
 	else if(
+#ifdef USE_OLD_UPDATE_TYPE
 		(this->arg_app.isSet() == false) &&
 		(this->arg_fw.isSet() == false) &&
+#endif
+		(this->arg_update.isSet() == false) &&
 		(this->arg_rollback_fw.isSet() == false) &&
 		(this->arg_rollback_app.isSet() == false) &&
 		(this->arg_commit_update.isSet() == false) &&
@@ -1578,9 +1900,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->notice_update_available.isSet() == false) &&
 		(this->download_firmware_update.isSet() == false) &&
 		(this->download_application_update.isSet() == false) &&
+		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
 		(this->install_firmware_update.isSet() == false) &&
 		(this->install_application_update.isSet() == false) &&
+		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false) &&
 		(this->set_app_state_bad.isSet() == false) &&
 		(this->is_app_state_bad.isSet() == false) &&
@@ -1591,8 +1915,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		this->print_current_firmware_version();
 	}
 	else if(
+#ifdef USE_OLD_UPDATE_TYPE
 		(this->arg_app.isSet() == false) &&
 		(this->arg_fw.isSet() == false) &&
+#endif
+		(this->arg_update.isSet() == false) &&
 		(this->arg_rollback_fw.isSet() == true) &&
 		(this->arg_rollback_app.isSet() == false) &&
 		(this->arg_commit_update.isSet() == false) &&
@@ -1603,9 +1930,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->notice_update_available.isSet() == false) &&
 		(this->download_firmware_update.isSet() == false) &&
 		(this->download_application_update.isSet() == false) &&
+		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
 		(this->install_firmware_update.isSet() == false) &&
 		(this->install_application_update.isSet() == false) &&
+		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false)  &&
 		(this->set_app_state_bad.isSet() == false) &&
 		(this->is_app_state_bad.isSet() == false) &&
@@ -1616,8 +1945,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		this->rollback_firmware();
 	}
 	else if(
+#ifdef USE_OLD_UPDATE_TYPE
 		(this->arg_app.isSet() == false) &&
 		(this->arg_fw.isSet() == false) &&
+#endif
+		(this->arg_update.isSet() == false) &&
 		(this->arg_rollback_fw.isSet() == false) &&
 		(this->arg_rollback_app.isSet() == true) &&
 		(this->arg_commit_update.isSet() == false) &&
@@ -1628,9 +1960,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->notice_update_available.isSet() == false) &&
 		(this->download_firmware_update.isSet() == false) &&
 		(this->download_application_update.isSet() == false) &&
+		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
 		(this->install_firmware_update.isSet() == false) &&
 		(this->install_application_update.isSet() == false) &&
+		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false) &&
 		(this->set_app_state_bad.isSet() == false) &&
 		(this->is_app_state_bad.isSet() == false) &&
@@ -1641,8 +1975,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		this->rollback_application();
 	}
 	else if(
+#ifdef USE_OLD_UPDATE_TYPE
 		(this->arg_app.isSet() == false) &&
 		(this->arg_fw.isSet() == false) &&
+#endif
+		(this->arg_update.isSet() == false) &&
 		(this->arg_rollback_fw.isSet() == false) &&
 		(this->arg_rollback_app.isSet() == false) &&
 		(this->arg_commit_update.isSet() == false) &&
@@ -1653,9 +1990,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->notice_update_available.isSet() == false) &&
 		(this->download_firmware_update.isSet() == false) &&
 		(this->download_application_update.isSet() == false) &&
+		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
 		(this->install_firmware_update.isSet() == false) &&
 		(this->install_application_update.isSet() == false) &&
+		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false) &&
 		(this->get_version.isSet() == true)  &&
 		(this->set_app_state_bad.isSet() == false) &&
@@ -1667,8 +2006,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		std::cout << "F&S Update Framework CLI Version: " << VERSION << " build at: " <<  __DATE__ << ", " << __TIME__  << "." << std::endl;
 	}
 	else if(
+#ifdef USE_OLD_UPDATE_TYPE
 		(this->arg_app.isSet() == false) &&
 		(this->arg_fw.isSet() == false) &&
+#endif
+		(this->arg_update.isSet() == false) &&
 		(this->arg_rollback_fw.isSet() == false) &&
 		(this->arg_rollback_app.isSet() == false) &&
 		(this->arg_commit_update.isSet() == false) &&
@@ -1679,9 +2021,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->notice_update_available.isSet() == false) &&
 		(this->download_firmware_update.isSet() == false) &&
 		(this->download_application_update.isSet() == false) &&
+		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
 		(this->install_firmware_update.isSet() == false) &&
 		(this->install_application_update.isSet() == false) &&
+		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false) &&
 		(this->get_version.isSet() == false)  &&
 		(this->set_app_state_bad.isSet() == true) &&
@@ -1693,8 +2037,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		this->set_application_state_bad(this->set_app_state_bad.getValue());
 	}
 	else if(
+#ifdef USE_OLD_UPDATE_TYPE
 		(this->arg_app.isSet() == false) &&
 		(this->arg_fw.isSet() == false) &&
+#endif
+		(this->arg_update.isSet() == false) &&
 		(this->arg_rollback_fw.isSet() == false) &&
 		(this->arg_rollback_app.isSet() == false) &&
 		(this->arg_commit_update.isSet() == false) &&
@@ -1705,9 +2052,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->notice_update_available.isSet() == false) &&
 		(this->download_firmware_update.isSet() == false) &&
 		(this->download_application_update.isSet() == false) &&
+		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
 		(this->install_firmware_update.isSet() == false) &&
 		(this->install_application_update.isSet() == false) &&
+		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false) &&
 		(this->get_version.isSet() == false) &&
 		(this->set_app_state_bad.isSet() == false) &&
@@ -1719,8 +2068,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		this->is_application_state_bad(this->is_app_state_bad.getValue());
 	}
 	else if(
+#ifdef USE_OLD_UPDATE_TYPE
 		(this->arg_app.isSet() == false) &&
 		(this->arg_fw.isSet() == false) &&
+#endif
+		(this->arg_update.isSet() == false) &&
 		(this->arg_rollback_fw.isSet() == false) &&
 		(this->arg_rollback_app.isSet() == false) &&
 		(this->arg_commit_update.isSet() == false) &&
@@ -1731,9 +2083,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->notice_update_available.isSet() == false) &&
 		(this->download_firmware_update.isSet() == false) &&
 		(this->download_application_update.isSet() == false) &&
+		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
 		(this->install_firmware_update.isSet() == false) &&
 		(this->install_application_update.isSet() == false) &&
+		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false) &&
 		(this->get_version.isSet() == false)  &&
 		(this->set_app_state_bad.isSet() == false) &&
@@ -1745,8 +2099,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		this->set_firmware_state_bad(this->set_fw_state_bad.getValue());
 	}
 	else if(
+#ifdef USE_OLD_UPDATE_TYPE
 		(this->arg_app.isSet() == false) &&
 		(this->arg_fw.isSet() == false) &&
+#endif
+		(this->arg_update.isSet() == false) &&
 		(this->arg_rollback_fw.isSet() == false) &&
 		(this->arg_rollback_app.isSet() == false) &&
 		(this->arg_commit_update.isSet() == false) &&
@@ -1757,9 +2114,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->notice_update_available.isSet() == false) &&
 		(this->download_firmware_update.isSet() == false) &&
 		(this->download_application_update.isSet() == false) &&
+		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
 		(this->install_firmware_update.isSet() == false) &&
 		(this->install_application_update.isSet() == false) &&
+		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false) &&
 		(this->get_version.isSet() == false) &&
 		(this->set_app_state_bad.isSet() == false) &&
@@ -1771,8 +2130,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		this->is_firmware_state_bad(this->is_fw_state_bad.getValue());
 	}
 	else if(
+#ifdef USE_OLD_UPDATE_TYPE
 		(this->arg_app.isSet() == false) &&
 		(this->arg_fw.isSet() == false) &&
+#endif
+		(this->arg_update.isSet() == false) &&
 		(this->arg_rollback_fw.isSet() == false) &&
 		(this->arg_rollback_app.isSet() == false) &&
 		(this->arg_commit_update.isSet() == false) &&
@@ -1783,9 +2145,11 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->notice_update_available.isSet() == false) &&
 		(this->download_firmware_update.isSet() == false) &&
 		(this->download_application_update.isSet() == false) &&
+		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
 		(this->install_firmware_update.isSet() == false) &&
 		(this->install_application_update.isSet() == false) &&
+		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false) &&
 		(this->get_version.isSet() == false)  &&
 		(this->set_app_state_bad.isSet() == false) &&
