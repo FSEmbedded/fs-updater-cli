@@ -933,7 +933,7 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 	{
 		// update firmware, application or both
 		// use path from argument
-		this->update_image_state("", nullptr, true);
+		this->update_image_state("", "", true);
 	}
 	else if(
 #ifdef USE_OLD_UPDATE_TYPE
@@ -1193,6 +1193,7 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->is_fw_state_bad.isSet() == false)
 		)
 	{
+#if USE_OLD_UPDATE_TYPE
 		char version[100];
 		char type[100];
 		char size[100];
@@ -1276,6 +1277,47 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 			printf("No updates have been found\n");
 			this->return_code = static_cast<int>(UPDATER_IS_UPDATE_AVAILABLE_STATE::NO_UPDATE_AVAILABLE);
 		}
+#else
+		char version[100];
+		char type[100];
+		char size[100];
+		int readBytes = 0;
+		int type_fd, version_fd, size_fd;
+		bool update_available;
+
+		//initialize arrays as 0
+		for(int i = 0; i < 100; i++)
+			version[i] = type[i] = size[i] = 0;
+
+		//check for firmware update
+		update_available = true;
+		type_fd = open("/tmp/adu/.work/update_type", O_RDONLY);
+		version_fd = open("/tmp/adu/.work/update_version", O_RDONLY);
+		size_fd = open("/tmp/adu/.work/update_size", O_RDONLY);
+		if(type_fd < 0 || version_fd < 0 || size_fd < 0)
+			update_available = false;
+
+		if(readBytes = read(type_fd, type, 100) < 0)
+			memcpy(type, "unknown\0", 9);
+		if(read(version_fd, version, 100) < 0)
+			memcpy(version, "unknown\0", 9);
+		if(read(size_fd, size, 100) < 0)
+			memcpy(size, "unknown\0", 9);
+
+		close(type_fd);
+		close(version_fd);
+		close(size_fd);
+
+		if(strcmp("fus/update:1", type) == 0)
+			strcpy(type, "update\0");
+
+		if(update_available == true)
+		{
+			printf("An new update is available on the server\n");
+			printf("Type: %s\nVersion: %s\nSize: %s\n", type, version, size);
+			this->return_code = static_cast<int>(UPDATER_IS_UPDATE_AVAILABLE_STATE::FIRMWARE_AND_APPLICATION_UPDATE_AVAILABLE);
+		}
+#endif
 	}
 	else if(
 #ifdef USE_OLD_UPDATE_TYPE
@@ -1733,6 +1775,7 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->is_fw_state_bad.isSet() == false)
 		)
 	{
+#if USE_OLD_UPDATE_TYPE
 		int is = 0;
 		int should = 0;
 
@@ -1883,6 +1926,76 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		{
 			this->return_code = static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::NO_DOWNLOAD_STARTED);
 		}
+#else
+		int is = 0;
+		int should = 0;
+
+		bool update_dl = false;
+		bool update_done = false;
+
+		//check if any download was requested
+		if(access("/tmp/adu/.work/downloadUpdate", F_OK) == 0)
+		{
+			update_dl = true;
+		}
+
+		//get the progress
+		if(update_dl == true)
+		{
+			int should_file = open("/tmp/adu/.work/update_size", O_RDONLY);
+			char should_string[100];
+			read(should_file, should_string, 100);
+			should = atoi(should_string);
+
+			int fd = open("/tmp/adu/.work/update_location", O_RDONLY);
+			char download_location[100];
+			read(fd, download_location, 100);
+			close(fd);
+
+			struct stat is_file;
+			if(stat(download_location, &is_file) >= 0)
+				is = is_file.st_size;
+
+			if(should == 0 || is == 0)
+			{
+				update_dl = false;
+			}
+			else
+			{
+				float is_f = (float)is;
+				float should_f = (float)should;
+				float ratio = is_f/should_f;
+				int percent = (int)(ratio*100);
+				printf("%d/%d -- %d\%\n", is, should, percent);
+
+				if(percent < 100)
+				{
+					update_done = false;
+				}
+				else if(percent == 100)
+				{
+					update_done = true;
+				}
+			}
+		}
+
+		//set return values
+		if(update_dl == true )
+		{
+			if(update_done == true)
+			{
+				this->return_code = static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::ALL_REQUESTED_DOWNLOADS_FINISHED);
+			}
+			else
+			{
+				this->return_code = static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::FIRMWARE_AND_APPLICATION_DOWNLOAD_IN_PROGRESS);
+			}
+		}
+		else
+		{
+			this->return_code = static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::NO_DOWNLOAD_STARTED);
+		}
+#endif
 	}
 	else if(
 #ifdef USE_OLD_UPDATE_TYPE
