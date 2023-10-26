@@ -72,14 +72,6 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
 					"is_update_available",
 					"checks if an update is available on the server"
 					),
-		download_firmware_update("",
-					 "download_firmware_update",
-					 "download the available firmware update"
-					 ),
-		install_firmware_update("",
-					"install_firmware_update",
-					"install downloaded firmware update"
-					),
 		apply_update("",
 			     "apply_update",
 			     "do a reboot into the updated partition (do not forget to commit afterwards)"
@@ -88,14 +80,6 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
 				  "download_progress",
 				  "show the progress of the current update"
 				  ),
-		download_application_update("",
-					    "download_application_update",
-					    "download the available application update"
-					    ),
-		install_application_update("",
-					   "install_application_update",
-					   "install downloaded application update"
-					   ),
 		download_update("",
 					    "download_update",
 					    "download the available update"
@@ -153,12 +137,8 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
 	this->cmd.add(get_app_version);
 	this->cmd.add(get_version);
 	this->cmd.add(apply_update);
-	this->cmd.add(install_application_update);
-	this->cmd.add(install_firmware_update);
 	this->cmd.add(install_update);
 	this->cmd.add(download_progress);
-	this->cmd.add(download_application_update);
-	this->cmd.add(download_firmware_update);
 	this->cmd.add(download_update);
 	this->cmd.add(notice_update_available);
 	this->cmd.add(set_app_state_bad);
@@ -167,6 +147,7 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
 	this->cmd.add(is_fw_state_bad);
 
 	this->parse_input(argc, argv);
+	proceeded_update_type = UPDATE_UNKNOWN;
 }
 
 cli::fs_update_cli::~fs_update_cli()
@@ -697,7 +678,7 @@ void cli::fs_update_cli::print_update_reboot_state()
 	}
 	else if (update_reboot_state == update_definitions::UBootBootstateFlags::INCOMPLETE_APP_UPDATE)
 	{
-		if(this->update_handler->is_reboot_complete(true))
+		if(this->update_handler->is_reboot_complete(false))
 		{
 			std::cout << "Incomplete application update" << std::endl;
 			this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_UPDATE);
@@ -727,7 +708,6 @@ void cli::fs_update_cli::print_update_reboot_state()
 	}
 	else if (update_reboot_state == update_definitions::UBootBootstateFlags::ROLLBACK_APP_REBOOT_PENDING)
 	{
-		/* TODO: to implement function.*/
 		if(this->update_handler->is_reboot_complete(false))
 		{
 			//fsthis->update_handler->update_reboot_state(update_definitions::UBootBootstateFlags::INCOMPLETE_APP_UPDATE);
@@ -838,8 +818,6 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->get_app_version.isSet() == false) &&
 		(this->get_fw_version.isSet() == false) &&
 		(this->notice_update_available.isSet() == false) &&
-		(this->download_firmware_update.isSet() == false) &&
-		(this->download_application_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
 		(this->install_firmware_update.isSet() == false) &&
 		(this->install_application_update.isSet() == false) &&
@@ -917,12 +895,8 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->get_app_version.isSet() == false) &&
 		(this->get_fw_version.isSet() == false) &&
 		(this->notice_update_available.isSet() == false) &&
-		(this->download_firmware_update.isSet() == false) &&
-		(this->download_application_update.isSet() == false) &&
 		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
-		(this->install_firmware_update.isSet() == false) &&
-		(this->install_application_update.isSet() == false) &&
 		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false) &&
 		(this->set_app_state_bad.isSet() == false) &&
@@ -949,12 +923,8 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->get_app_version.isSet() == false) &&
 		(this->get_fw_version.isSet() == false) &&
 		(this->notice_update_available.isSet() == false) &&
-		(this->download_firmware_update.isSet() == false) &&
-		(this->download_application_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
 		(this->download_update.isSet() == false) &&
-		(this->install_firmware_update.isSet() == false) &&
-		(this->install_application_update.isSet() == false) &&
 		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false) &&
 		(this->set_app_state_bad.isSet() == false) &&
@@ -980,12 +950,8 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->get_app_version.isSet() == false) &&
 		(this->get_fw_version.isSet() == false) &&
 		(this->notice_update_available.isSet() == false) &&
-		(this->download_firmware_update.isSet() == false) &&
-		(this->download_application_update.isSet() == false) &&
 		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
-		(this->install_firmware_update.isSet() == false) &&
-		(this->install_application_update.isSet() == false) &&
 		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false) &&
 		(this->set_app_state_bad.isSet() == false) &&
@@ -1012,12 +978,8 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->get_app_version.isSet() == false) &&
 		(this->get_fw_version.isSet() == false) &&
 		(this->notice_update_available.isSet() == false) &&
-		(this->download_firmware_update.isSet() == false) &&
-		(this->download_application_update.isSet() == false) &&
 		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
-		(this->install_firmware_update.isSet() == false) &&
-		(this->install_application_update.isSet() == false) &&
 		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false) &&
 		(this->set_app_state_bad.isSet() == false) &&
@@ -1149,12 +1111,8 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->get_app_version.isSet() == true) &&
 		(this->get_fw_version.isSet() == false) &&
 		(this->notice_update_available.isSet() == false) &&
-		(this->download_firmware_update.isSet() == false) &&
-		(this->download_application_update.isSet() == false) &&
 		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
-		(this->install_firmware_update.isSet() == false) &&
-		(this->install_application_update.isSet() == false) &&
 		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false) &&
 		(this->set_app_state_bad.isSet() == false) &&
@@ -1179,12 +1137,8 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->get_app_version.isSet() == false) &&
 		(this->get_fw_version.isSet() == false) &&
 		(this->notice_update_available.isSet() == true) &&
-		(this->download_firmware_update.isSet() == false) &&
-		(this->download_application_update.isSet() == false) &&
 		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
-		(this->install_firmware_update.isSet() == false) &&
-		(this->install_application_update.isSet() == false) &&
 		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false) &&
 		(this->set_app_state_bad.isSet() == false) &&
@@ -1193,91 +1147,6 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->is_fw_state_bad.isSet() == false)
 		)
 	{
-#if USE_OLD_UPDATE_TYPE
-		char version[100];
-		char type[100];
-		char size[100];
-		int readBytes = 0;
-		int type_fd, version_fd, size_fd;
-		bool fw_available, app_available;
-
-		//initialize arrays as 0
-		for(int i = 0; i < 100; i++)
-			version[i] = type[i] = size[i] = 0;
-
-		//check for firmware update
-		fw_available = true;
-		type_fd = open("/tmp/adu/.work/firmware_type", O_RDONLY);
-		version_fd = open("/tmp/adu/.work/firmware_version", O_RDONLY);
-		size_fd = open("/tmp/adu/.work/firmware_size", O_RDONLY);
-		if(type_fd < 0 || version_fd < 0 || size_fd < 0)
-			fw_available = false;
-
-		if(readBytes = read(type_fd, type, 100) < 0)
-			memcpy(type, "unknown\0", 9);
-		if(read(version_fd, version, 100) < 0)
-			memcpy(version, "unknown\0", 9);
-		if(read(size_fd, size, 100) < 0)
-			memcpy(size, "unknown\0", 9);
-
-		close(type_fd);
-		close(version_fd);
-		close(size_fd);
-
-		if(strcmp("fus/firmware:1", type) == 0)
-			strcpy(type, "firmware\0");
-
-		if(fw_available == true)
-		{
-			printf("An new firmware update is available on the server\n");
-			printf("Type: %s\nVersion: %s\nSize: %s\n", type, version, size);
-			this->return_code = static_cast<int>(UPDATER_IS_UPDATE_AVAILABLE_STATE::FIRMWARE_UPDATE_AVAILABLE);
-		}
-
-		//check for application update
-		app_available = true;
-		type_fd = open("/tmp/adu/.work/application_type", O_RDONLY);
-		version_fd = open("/tmp/adu/.work/application_version", O_RDONLY);
-		size_fd = open("/tmp/adu/.work/application_size", O_RDONLY);
-		if(type_fd < 0 || version_fd < 0 || size_fd < 0)
-			app_available = false;
-
-		if(readBytes = read(type_fd, type, 100) < 0)
-			memcpy(type, "unknown\0", 9);
-		if(read(version_fd, version, 100) < 0)
-			memcpy(version, "unknown\0", 9);
-		if(read(size_fd, size, 100) < 0)
-			memcpy(size, "unknown\0", 9);
-
-		close(type_fd);
-		close(version_fd);
-		close(size_fd);
-
-		if(strcmp("fus/application:1", type) == 0)
-			strcpy(type, "application\0");
-
-		if(app_available == true)
-		{
-			printf("An new application update is available on the server\n");
-			printf("Type: %s\nVersion: %s\nSize: %s\n", type, version, size);
-			this->return_code = static_cast<int>(UPDATER_IS_UPDATE_AVAILABLE_STATE::APPLICATION_UPDATE_AVAILABLE);
-		}
-
-		//set return codes
-		if(fw_available == true && app_available == true)
-		{
-			this->return_code = static_cast<int>(UPDATER_IS_UPDATE_AVAILABLE_STATE::FIRMWARE_AND_APPLICATION_UPDATE_AVAILABLE);
-		}
-		else if(fw_available == true || app_available == true)
-		{
-			//do nothing return code already set
-		}
-		else
-		{
-			printf("No updates have been found\n");
-			this->return_code = static_cast<int>(UPDATER_IS_UPDATE_AVAILABLE_STATE::NO_UPDATE_AVAILABLE);
-		}
-#else
 		char version[100];
 		char type[100];
 		char size[100];
@@ -1308,61 +1177,28 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		close(version_fd);
 		close(size_fd);
 
-		if(strcmp("fus/update:1", type) == 0)
-			strcpy(type, "update\0");
-
 		if(update_available == true)
 		{
 			printf("An new update is available on the server\n");
 			printf("Type: %s\nVersion: %s\nSize: %s\n", type, version, size);
-			this->return_code = static_cast<int>(UPDATER_IS_UPDATE_AVAILABLE_STATE::FIRMWARE_AND_APPLICATION_UPDATE_AVAILABLE);
-		}
-#endif
-	}
-	else if(
-#ifdef USE_OLD_UPDATE_TYPE
-		(this->arg_app.isSet() == false) &&
-		(this->arg_fw.isSet() == false) &&
-#endif
-		(this->arg_update.isSet() == false) &&
-		(this->arg_rollback_fw.isSet() == false) &&
-		(this->arg_rollback_app.isSet() == false) &&
-		(this->arg_commit_update.isSet() == false) &&
-		(this->arg_urs.isSet() == false) &&
-		(this->arg_automatic.isSet() == false) &&
-		(this->get_app_version.isSet() == false) &&
-		(this->get_fw_version.isSet() == false) &&
-		(this->notice_update_available.isSet() == false) &&
-		(this->download_firmware_update.isSet() == true) &&
-		(this->download_application_update.isSet() == false) &&
-		(this->download_update.isSet() == false) &&
-		(this->download_progress.isSet() == false) &&
-		(this->install_firmware_update.isSet() == false) &&
-		(this->install_application_update.isSet() == false) &&
-		(this->install_update.isSet() == false) &&
-		(this->apply_update.isSet() == false) &&
-		(this->set_app_state_bad.isSet() == false) &&
-		(this->is_app_state_bad.isSet() == false) &&
-		(this->set_fw_state_bad.isSet() == false) &&
-		(this->is_fw_state_bad.isSet() == false)
-		)
-	{
-		if(access("/tmp/adu/.work/firmware_type", F_OK) != 0 ||
-		   access("/tmp/adu/.work/firmware_version", F_OK) != 0 ||
-		   access("/tmp/adu/.work/firmware_size", F_OK) != 0)
-		{
-			this->return_code = static_cast<int>(UPDATER_DOWNLOAD_FIRMWARE_UPDATE_STATE::NO_DOWNLOAD_QUEUED);
-		}
-		else if(access("/tmp/adu/.work/downloadFirmware", F_OK) == 0)
-		{
-			this->return_code = static_cast<int>(UPDATER_DOWNLOAD_FIRMWARE_UPDATE_STATE::FIRMWARE_DOWNLOAD_STARTED_BEFORE);
-		}
-		else
-		{
-			if(fopen("/tmp/adu/.work/downloadFirmware", "a") < 0)
-				printf("Could not initiate Download...\n");
-
-			this->return_code = static_cast<int>(UPDATER_DOWNLOAD_FIRMWARE_UPDATE_STATE::FIRMWARE_DOWNLOAD_STARTED);
+			if(strcmp("firmware", type) == 0)
+			{
+				this->proceeded_update_type = UPDATE_FIRMWARE;
+				this->return_code = static_cast<int>(UPDATER_IS_UPDATE_AVAILABLE_STATE::FIRMWARE_UPDATE_AVAILABLE);
+			}
+			else if(strcmp("application", type) == 0)
+			{
+				this->proceeded_update_type = UPDATE_APPLICATION;
+				this->return_code = static_cast<int>(UPDATER_IS_UPDATE_AVAILABLE_STATE::APPLICATION_UPDATE_AVAILABLE);
+			}
+			else
+			{
+				this->proceeded_update_type = UPDATE_COMMON;
+				this->return_code = static_cast<int>(UPDATER_IS_UPDATE_AVAILABLE_STATE::FIRMWARE_AND_APPLICATION_UPDATE_AVAILABLE);
+			}
+		} else {
+			printf("No updates have been found\n");
+			this->return_code = static_cast<int>(UPDATER_IS_UPDATE_AVAILABLE_STATE::NO_UPDATE_AVAILABLE);
 		}
 	}
 	else if(
@@ -1379,58 +1215,8 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->get_app_version.isSet() == false) &&
 		(this->get_fw_version.isSet() == false) &&
 		(this->notice_update_available.isSet() == false) &&
-		(this->download_firmware_update.isSet() == false) &&
-		(this->download_application_update.isSet() == true) &&
-		(this->download_update.isSet() == false) &&
-		(this->download_progress.isSet() == false) &&
-		(this->install_firmware_update.isSet() == false) &&
-		(this->install_application_update.isSet() == false) &&
-		(this->install_update.isSet() == false) &&
-		(this->apply_update.isSet() == false) &&
-		(this->set_app_state_bad.isSet() == false) &&
-		(this->is_app_state_bad.isSet() == false) &&
-		(this->set_fw_state_bad.isSet() == false) &&
-		(this->is_fw_state_bad.isSet() == false)
-		)
-	{
-		if(access("/tmp/adu/.work/application_type", F_OK) != 0 ||
-		   access("/tmp/adu/.work/application_version", F_OK) != 0 ||
-		   access("/tmp/adu/.work/application_size", F_OK) != 0)
-		{
-			this->return_code = static_cast<int>(UPDATER_DOWNLOAD_APPLICATION_UPDATE_STATE::NO_DOWNLOAD_QUEUED);
-		}
-		else if(access("/tmp/adu/.work/downloadApplication", F_OK) == 0)
-		{
-			this->return_code = static_cast<int>(UPDATER_DOWNLOAD_APPLICATION_UPDATE_STATE::APPLICATION_DOWNLOAD_STARTED_BEFORE);
-		}
-		else
-		{
-			if(fopen("/tmp/adu/.work/downloadApplication", "a") < 0)
-				printf("Could not initiate Download...\n");
-
-			this->return_code = static_cast<int>(UPDATER_DOWNLOAD_APPLICATION_UPDATE_STATE::APPLICATION_DOWNLOAD_STARTED);
-		}
-	}
-	else if(
-#ifdef USE_OLD_UPDATE_TYPE
-		(this->arg_app.isSet() == false) &&
-		(this->arg_fw.isSet() == false) &&
-#endif
-		(this->arg_update.isSet() == false) &&
-		(this->arg_rollback_fw.isSet() == false) &&
-		(this->arg_rollback_app.isSet() == false) &&
-		(this->arg_commit_update.isSet() == false) &&
-		(this->arg_urs.isSet() == false) &&
-		(this->arg_automatic.isSet() == false) &&
-		(this->get_app_version.isSet() == false) &&
-		(this->get_fw_version.isSet() == false) &&
-		(this->notice_update_available.isSet() == false) &&
-		(this->download_firmware_update.isSet() == false) &&
-		(this->download_application_update.isSet() == false) &&
 		(this->download_update.isSet() == true) &&
 		(this->download_progress.isSet() == false) &&
-		(this->install_firmware_update.isSet() == false) &&
-		(this->install_application_update.isSet() == false) &&
 		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false) &&
 		(this->set_app_state_bad.isSet() == false) &&
@@ -1444,18 +1230,18 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		   access("/tmp/adu/.work/update_version", F_OK) != 0 ||
 		   access("/tmp/adu/.work/update_size", F_OK) != 0)
 		{
-			this->return_code = static_cast<int>(UPDATER_DOWNLOAD_APPLICATION_UPDATE_STATE::NO_DOWNLOAD_QUEUED);
+			this->return_code = static_cast<int>(UPDATER_DOWNLOAD_UPDATE_STATE::NO_DOWNLOAD_QUEUED);
 		}
 		else if(access("/tmp/adu/.work/downloadUpdate", F_OK) == 0)
 		{
-			this->return_code = static_cast<int>(UPDATER_DOWNLOAD_APPLICATION_UPDATE_STATE::APPLICATION_DOWNLOAD_STARTED_BEFORE);
+			this->return_code = static_cast<int>(UPDATER_DOWNLOAD_UPDATE_STATE::UPDATE_DOWNLOAD_STARTED_BEFORE);
 		}
 		else
 		{
 			if(fopen("/tmp/adu/.work/downloadUpdate", "a") < 0)
 				printf("Could not initiate update download...\n");
 
-			this->return_code = static_cast<int>(UPDATER_DOWNLOAD_APPLICATION_UPDATE_STATE::APPLICATION_DOWNLOAD_STARTED);
+			this->return_code = static_cast<int>(UPDATER_DOWNLOAD_UPDATE_STATE::UPDATE_DOWNLOAD_STARTED);
 		}
 	}
 	else if(
@@ -1472,145 +1258,8 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->get_app_version.isSet() == false) &&
 		(this->get_fw_version.isSet() == false) &&
 		(this->notice_update_available.isSet() == false) &&
-		(this->download_firmware_update.isSet() == false) &&
-		(this->download_application_update.isSet() == false) &&
 		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
-		(this->install_firmware_update.isSet() == true) &&
-		(this->install_application_update.isSet() == false) &&
-		(this->install_update.isSet() == false) &&
-		(this->apply_update.isSet() == false) &&
-		(this->set_app_state_bad.isSet() == false) &&
-		(this->is_app_state_bad.isSet() == false) &&
-		(this->set_fw_state_bad.isSet() == false) &&
-		(this->is_fw_state_bad.isSet() == false)
-		)
-          {
-            std::ifstream installed_state;
-            /* check if file firmwareInstalled available */
-            installed_state.open ("/tmp/adu/.work/firmwareInstalled");
-            if (installed_state)
-              {
-                this->return_code = static_cast<int> (
-                    UPDATER_INSTALL_FIRMWARE_UPDATE_STATE::
-                        FIRMWARE_INSTALLATION_FINISHED);
-              }
-            else
-              {
-                if (access ("/tmp/adu/.work/firmware_location", F_OK) < 0)
-                  {
-                    this->return_code = static_cast<int> (
-                        UPDATER_INSTALL_FIRMWARE_UPDATE_STATE::
-                            NO_INSTALLATION_QUEUED);
-                  }
-                else if (access ("/tmp/adu/.work/installFirmware", F_OK) == 0)
-                  {
-                    this->return_code = static_cast<int> (
-                        UPDATER_INSTALL_FIRMWARE_UPDATE_STATE::
-                            FIRMWARE_INSTALLATION_IN_PROGRESS);
-                  }
-                else if (fopen ("/tmp/adu/.work/installFirmware", "a") < 0)
-                  {
-                    this->return_code = static_cast<int> (
-                        UPDATER_INSTALL_FIRMWARE_UPDATE_STATE::
-                            FIRMWARE_INSTALLATION_FAILED);
-                    printf ("Could not initiate Installation...\n");
-                  }
-                else
-                  {
-                    this->return_code = static_cast<int> (
-                        UPDATER_INSTALL_FIRMWARE_UPDATE_STATE::
-                            FIRMWARE_INSTALLATION_IN_PROGRESS);
-                  }
-              }
-          }
-        else if(
-#ifdef USE_OLD_UPDATE_TYPE
-		(this->arg_app.isSet() == false) &&
-		(this->arg_fw.isSet() == false) &&
-#endif
-		(this->arg_update.isSet() == false) &&
-		(this->arg_rollback_fw.isSet() == false) &&
-		(this->arg_rollback_app.isSet() == false) &&
-		(this->arg_commit_update.isSet() == false) &&
-		(this->arg_urs.isSet() == false) &&
-		(this->arg_automatic.isSet() == false) &&
-		(this->get_app_version.isSet() == false) &&
-		(this->get_fw_version.isSet() == false) &&
-		(this->notice_update_available.isSet() == false) &&
-		(this->download_firmware_update.isSet() == false) &&
-		(this->download_application_update.isSet() == false) &&
-		(this->download_update.isSet() == false) &&
-		(this->download_progress.isSet() == false) &&
-		(this->install_firmware_update.isSet() == false) &&
-		(this->install_application_update.isSet() == true) &&
-		(this->install_update.isSet() == false) &&
-		(this->apply_update.isSet() == false) &&
-		(this->set_app_state_bad.isSet() == false) &&
-		(this->is_app_state_bad.isSet() == false) &&
-		(this->set_fw_state_bad.isSet() == false) &&
-		(this->is_fw_state_bad.isSet() == false)
-		)
-          {
-            std::ifstream installed_state;
-            /* check if file applicationInstalled available */
-            installed_state.open ("/tmp/adu/.work/applicationInstalled");
-            if (installed_state)
-              {
-				this->return_code = static_cast<int> (
-                        UPDATER_INSTALL_APPLICATION_UPDATE_STATE::
-                            APPLICATION_INSTALLATION_FINISHED);
-              }
-            else
-              {
-                if (access ("/tmp/adu/.work/application_location", F_OK) < 0)
-                  {
-                    this->return_code = static_cast<int> (
-                        UPDATER_INSTALL_APPLICATION_UPDATE_STATE::
-                            NO_INSTALLATION_QUEUED);
-                  }
-                else if (access ("/tmp/adu/.work/installApplication", F_OK)
-                         == 0)
-                  {
-                    this->return_code = static_cast<int> (
-                        UPDATER_INSTALL_APPLICATION_UPDATE_STATE::
-                            APPLICATION_INSTALLATION_IN_PROGRESS);
-                  }
-                else if (fopen ("/tmp/adu/.work/installApplication", "a") < 0)
-                  {
-                    this->return_code = static_cast<int> (
-                        UPDATER_INSTALL_APPLICATION_UPDATE_STATE::
-                            APPLICATION_INSTALLATION_FAILED);
-                    printf ("Could not initiate Installation...\n");
-                  }
-                else
-                  {
-                    this->return_code = static_cast<int> (
-                        UPDATER_INSTALL_APPLICATION_UPDATE_STATE::
-                            APPLICATION_INSTALLATION_IN_PROGRESS);
-                  }
-              }
-          }
-		else if(
-#ifdef USE_OLD_UPDATE_TYPE
-		(this->arg_app.isSet() == false) &&
-		(this->arg_fw.isSet() == false) &&
-#endif
-		(this->arg_update.isSet() == false) &&
-		(this->arg_rollback_fw.isSet() == false) &&
-		(this->arg_rollback_app.isSet() == false) &&
-		(this->arg_commit_update.isSet() == false) &&
-		(this->arg_urs.isSet() == false) &&
-		(this->arg_automatic.isSet() == false) &&
-		(this->get_app_version.isSet() == false) &&
-		(this->get_fw_version.isSet() == false) &&
-		(this->notice_update_available.isSet() == false) &&
-		(this->download_firmware_update.isSet() == false) &&
-		(this->download_application_update.isSet() == false) &&
-		(this->download_update.isSet() == false) &&
-		(this->download_progress.isSet() == false) &&
-		(this->install_firmware_update.isSet() == false) &&
-		(this->install_application_update.isSet() == false) &&
 		(this->install_update.isSet() == true) &&
 		(this->apply_update.isSet() == false) &&
 		(this->set_app_state_bad.isSet() == false) &&
@@ -1618,47 +1267,43 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->set_fw_state_bad.isSet() == false) &&
 		(this->is_fw_state_bad.isSet() == false)
 		)
-          {
-            std::ifstream installed_state;
-            /* check if file applicationInstalled available */
-            installed_state.open ("/tmp/adu/.work/updateInstalled");
-            if (installed_state)
-              {
-				this->return_code = static_cast<int> (
-                        UPDATER_INSTALL_APPLICATION_UPDATE_STATE::
-                            APPLICATION_INSTALLATION_FINISHED);
-              }
-            else
-              {
-                if (access ("/tmp/adu/.work/update_location", F_OK) < 0)
-                  {
-                    this->return_code = static_cast<int> (
-                        UPDATER_INSTALL_APPLICATION_UPDATE_STATE::
-                            NO_INSTALLATION_QUEUED);
-                  }
-                else if (access ("/tmp/adu/.work/installUpdate", F_OK)
-                         == 0)
-                  {
-                    this->return_code = static_cast<int> (
-                        UPDATER_INSTALL_APPLICATION_UPDATE_STATE::
-                            APPLICATION_INSTALLATION_IN_PROGRESS);
-                  }
-                else if (fopen ("/tmp/adu/.work/installUpdate", "a") < 0)
-                  {
-                    this->return_code = static_cast<int> (
-                        UPDATER_INSTALL_APPLICATION_UPDATE_STATE::
-                            APPLICATION_INSTALLATION_FAILED);
-                    printf ("Could not initiate Installation...\n");
-                  }
-                else
-                  {
-                    this->return_code = static_cast<int> (
-                        UPDATER_INSTALL_APPLICATION_UPDATE_STATE::
-                            APPLICATION_INSTALLATION_IN_PROGRESS);
-                  }
-              }
-          }
-        else if (
+    {
+      std::ifstream installed_state;
+      /* check if file applicationInstalled available */
+      installed_state.open ("/tmp/adu/.work/updateInstalled");
+      if (installed_state)
+        {
+          this->return_code = static_cast<int> (
+              UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FINISHED);
+        }
+      else
+        {
+          if (access ("/tmp/adu/.work/update_location", F_OK) < 0)
+            {
+              this->return_code = static_cast<int> (
+                  UPDATER_INSTALL_UPDATE_STATE::NO_INSTALLATION_QUEUED);
+            }
+          else if (access ("/tmp/adu/.work/installUpdate", F_OK) == 0)
+            {
+              this->return_code
+                  = static_cast<int> (UPDATER_INSTALL_UPDATE_STATE::
+                                          UPDATE_INSTALLATION_IN_PROGRESS);
+            }
+          else if (fopen ("/tmp/adu/.work/installUpdate", "a") < 0)
+            {
+              this->return_code = static_cast<int> (
+                  UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FAILED);
+              printf ("Could not initiate Installation...\n");
+            }
+          else
+            {
+              this->return_code
+                  = static_cast<int> (UPDATER_INSTALL_UPDATE_STATE::
+                                          UPDATE_INSTALLATION_IN_PROGRESS);
+            }
+        }
+    }
+    else if (
 #ifdef USE_OLD_UPDATE_TYPE
 		(this->arg_app.isSet() == false) &&
 		(this->arg_fw.isSet() == false) &&
@@ -1672,12 +1317,8 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->get_app_version.isSet() == false) &&
 		(this->get_fw_version.isSet() == false) &&
 		(this->notice_update_available.isSet() == false) &&
-		(this->download_firmware_update.isSet() == false) &&
-		(this->download_application_update.isSet() == false) &&
 		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
-		(this->install_firmware_update.isSet() == false) &&
-		(this->install_application_update.isSet() == false) &&
 		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == true) &&
 		(this->set_app_state_bad.isSet() == false) &&
@@ -1685,69 +1326,43 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->set_fw_state_bad.isSet() == false) &&
 		(this->is_fw_state_bad.isSet() == false)
 		)
+      {
+        std::ifstream installed_state;
+        /* check if file updateInstalled available */
+        installed_state.open ("/tmp/adu/.work/updateInstalled");
+        if (installed_state)
           {
-            std::ifstream installed_state;
-            /* check if file firmwareInstalled available */
-            installed_state.open ("/tmp/adu/.work/firmwareInstalled");
-            if (installed_state)
+            /* firmware installed successful */
+            if (access ("/tmp/adu/.work/applyUpdate", F_OK) < 0)
               {
-                /* firmware installed successful */
-                if (access ("/tmp/adu/.work/applyFirmware", F_OK) < 0)
-				{
-					if(access("/tmp/adu/.work/downloadFirmware", F_OK) < 0)
-					{
-						/* Local installation process. Force reboot immediately.
-						*/
-						const int ret = ::system("/sbin/reboot --reboot --no-wall");
-					}
-				}
-                if (fopen ("/tmp/adu/.work/applyFirmware", "a") < 0)
-				{
-					printf ("Could not initiate apply...\n");
-					this->return_code = this->return_code = static_cast<int> (
-                        UPDATER_APPLY_UPDATE_STATE::APPLY_FAILED);
-				}
-				else
-				{
-					this->return_code = static_cast<int> (
-						UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFULL);
-				}
+                if (access ("/tmp/adu/.work/downloadUpdate", F_OK) < 0)
+                  {
+                    /* Local installation process. Force reboot immediately.
+                     */
+                    const int ret
+                        = ::system ("/sbin/reboot --reboot --no-wall");
+                  }
+              }
+            if (fopen ("/tmp/adu/.work/applyUpdate", "a") < 0)
+              {
+                printf ("Could not initiate apply...\n");
+                this->return_code = this->return_code = static_cast<int> (
+                    UPDATER_APPLY_UPDATE_STATE::APPLY_FAILED);
               }
             else
               {
-                /* check if file applicationInstalled available */
-                installed_state.open ("/tmp/adu/.work/applicationInstalled");
-                if (installed_state)
-                  {
-                    /* firmware installed successful */
-                    if (access ("/tmp/adu/.work/applyApplication", F_OK) < 0)
-					{
-						if(access("/tmp/adu/.work/downloadApplication", F_OK) < 0)
-						{
-							/* Local installation process. Force reboot immediately.
-							*/
-						     const int ret = ::system("/sbin/reboot --reboot --no-wall");
-						}
-                    }
-                    if (fopen ("/tmp/adu/.work/applyApplication", "a") < 0)
-					{
-						printf ("Could not initiate apply...\n");
-						this->return_code = this->return_code
-                            = static_cast<int> (
-                                UPDATER_APPLY_UPDATE_STATE::APPLY_FAILED);
-					} else
-                    this->return_code = static_cast<int> (
-                        UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFULL);
-                  }
-                else
-                  {
-					printf("Nothing to apply...\n");
-					this->return_code = static_cast<int> (
-                        UPDATER_APPLY_UPDATE_STATE::APPLY_FAILED);
-                  }
+                this->return_code = static_cast<int> (
+                    UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFULL);
               }
           }
-        else if(
+        else
+          {
+            printf ("Nothing to apply...\n");
+            this->return_code
+                = static_cast<int> (UPDATER_APPLY_UPDATE_STATE::APPLY_FAILED);
+          }
+      }
+    else if(
 #ifdef USE_OLD_UPDATE_TYPE
 		(this->arg_app.isSet() == false) &&
 		(this->arg_fw.isSet() == false) &&
@@ -1761,12 +1376,8 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->get_app_version.isSet() == false) &&
 		(this->get_fw_version.isSet() == false) &&
 		(this->notice_update_available.isSet() == false) &&
-		(this->download_firmware_update.isSet() == false) &&
-		(this->download_application_update.isSet() == false) &&
 		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == true) &&
-		(this->install_firmware_update.isSet() == false) &&
-		(this->install_application_update.isSet() == false) &&
 		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false) &&
 		(this->set_app_state_bad.isSet() == false) &&
@@ -1774,230 +1385,96 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->set_fw_state_bad.isSet() == false) &&
 		(this->is_fw_state_bad.isSet() == false)
 		)
-	{
-#if USE_OLD_UPDATE_TYPE
-		int is = 0;
-		int should = 0;
+      {
+        // check if any download was requested
+        if (access ("/tmp/adu/.work/downloadUpdate", F_OK) == 0)
+          {
+            char *dynamic_buffer;
+            long int dynamic_buffer_size, loaded_update_size, update_size;
 
-		bool fw_dl, app_dl;
-		bool fw_done = false;
-		bool app_done = false;
+			dynamic_buffer_size = loaded_update_size = update_size = 0;
 
-		//check if any download was requested
-		if(access("/tmp/adu/.work/downloadFirmware", F_OK) == 0 && access("/tmp/adu/.work/downloadApplication", F_OK) == 0)
-		{
-			fw_dl = app_dl = true;
-		}
-		else if(access("/tmp/adu/.work/downloadFirmware", F_OK) == 0)
-		{
-			fw_dl = true;
-			app_dl = false;
-		}
-		else if(access("/tmp/adu/.work/downloadApplication", F_OK) == 0)
-		{
-			fw_dl = false;
-			app_dl = true;
-		}
-		else
-		{
-			fw_dl = app_dl = false;
-		}
+            /* get update size */
+            FILE *file_descriptor = fopen ("/tmp/adu/.work/update_size", "r");
+            /* go end of file */
+            fseek (file_descriptor, 0L, SEEK_END);
+            /* get file size */
+            dynamic_buffer_size = ftell (file_descriptor);
+            dynamic_buffer = static_cast<char *> (
+                malloc (sizeof (char) * (dynamic_buffer_size)));
+            /* go to file begin */
+            fseek (file_descriptor, 0L, SEEK_SET);
+            /* read update size as string */
+            fread (dynamic_buffer, sizeof (char), dynamic_buffer_size,
+                   file_descriptor);
+            update_size = atol (dynamic_buffer);
+            fclose (file_descriptor);
+            /* free allocated memory because not needed. */
+            free (dynamic_buffer);
 
-		//get the progress
-		if(fw_dl == true)
-		{
-			int should_file = open("/tmp/adu/.work/firmware_size", O_RDONLY);
-			char should_string[100];
-			read(should_file, should_string, 100);
-			should = atoi(should_string);
+            printf ("Update_Size : %ld...\n", update_size);
 
-			int fd = open("/tmp/adu/.work/firmware_location", O_RDONLY);
-			char download_location[100];
-			read(fd, download_location, 100);
-			close(fd);
+            file_descriptor = fopen ("/tmp/adu/.work/update_location", "r");
+            /* go end of file */
+            fseek (file_descriptor, 0L, SEEK_END);
+            /* get file size */
+            dynamic_buffer_size = ftell (file_descriptor);
+            /* add one byte more for end of string character*/
+            dynamic_buffer = static_cast<char *> (
+                malloc (sizeof (char) * (dynamic_buffer_size + 1)));
+            /* go to begin of file */
+            fseek (file_descriptor, 0L, SEEK_SET);
+            /* read update location */
+            fread (dynamic_buffer, sizeof (char), dynamic_buffer_size,
+                   file_descriptor);
+            fclose (file_descriptor);
+            /* set end of string */
+            dynamic_buffer[dynamic_buffer_size] = '\0';
 
-			struct stat is_file;
-			if(stat(download_location, &is_file) >= 0)
-				is = is_file.st_size;
+            printf ("download_location : %s ...\n", dynamic_buffer);
 
-			if(should == 0 || is == 0)
-			{
-				fw_dl = false;
-			}
-			else
-			{
-				float is_f = (float)is;
-				float should_f = (float)should;
-				float ratio = is_f/should_f;
-				int percent = (int)(ratio*100);
-				printf("%d/%d -- %d\%\n", is, should, percent);
+            struct stat is_file;
+            if (stat (dynamic_buffer, &is_file) == 0)
+              {
+                loaded_update_size = is_file.st_size;
+                printf ("Size of loaded update: %ld...\n", loaded_update_size);
+              }
+            /* free allocated memory because not needed. */
+            free (dynamic_buffer);
 
-				if(percent < 100)
-				{
-					fw_done = false;
-				}
-				else if(percent == 100)
-				{
-					fw_done = true;
-				}
-			}
-		}
-		if(app_dl == true)
-		{
-			int should_file = open("/tmp/adu/.work/application_size", O_RDONLY);
-			char should_string[100];
-			read(should_file, should_string, 100);
-			should = atoi(should_string);
+            if (update_size == 0 || loaded_update_size == 0)
+              {
+                this->return_code = static_cast<int> (
+                    UPDATER_DOWNLOAD_PROGRESS_STATE::NO_DOWNLOAD_STARTED);
+              }
+            else
+              {
+                float is_f = (float)loaded_update_size;
+                float should_f = (float)update_size;
+                float ratio = is_f / should_f;
+                int percent = (int)(ratio * 100);
+                printf ("%d/%d -- %d\%\n", loaded_update_size, update_size,
+                        percent);
 
-			int fd = open("/tmp/adu/.work/application_location", O_RDONLY);
-			char download_location[100];
-			read(fd, download_location, 100);
-			close(fd);
-
-			struct stat is_file;
-			if(stat(download_location, &is_file) >= 0)
-				is = is_file.st_size;
-
-			if(should == 0 || is == 0){
-				app_dl = false;
-			}
-			else
-			{
-				float is_f = (float)is;
-				float should_f = (float)should;
-				float ratio = is_f/should_f;
-				int percent = (int)(ratio*100);
-				printf("%d/%d -- %d\%\n", is, should, percent);
-
-				if(percent < 100)
-				{
-					app_done = false;
-				}
-				else if(percent == 100)
-				{
-					app_done = true;
-				}
-			}
-		}
-
-		//set return values
-		if(fw_dl == true && app_dl == true)
-		{
-			if(fw_done == true && app_done == true)
-			{
-				this->return_code = static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::ALL_REQUESTED_DOWNLOADS_FINISHED);
-			}
-			else if(fw_done == true)
-			{
-				this->return_code = static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::APPLICATION_DOWNLOAD_IN_PROGRESS);
-			}
-			else if(app_done == true)
-			{
-				this->return_code = static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::FIRMWARE_DOWNLOAD_IN_PROGRESS);
-			}
-			else
-			{
-				this->return_code = static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::FIRMWARE_AND_APPLICATION_DOWNLOAD_IN_PROGRESS);
-			}
-		}
-		else if(fw_dl == true)
-		{
-			if(fw_done == true)
-			{
-				this->return_code = static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::ALL_REQUESTED_DOWNLOADS_FINISHED);
-			}
-			else
-			{
-				this->return_code = static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::FIRMWARE_DOWNLOAD_IN_PROGRESS);
-			}
-		}
-		else if(app_dl == true)
-		{
-			if(app_done == true)
-			{
-				this->return_code = static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::ALL_REQUESTED_DOWNLOADS_FINISHED);
-			}
-			else
-			{
-				this->return_code = static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::APPLICATION_DOWNLOAD_IN_PROGRESS);
-			}
-		}
-		else
-		{
-			this->return_code = static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::NO_DOWNLOAD_STARTED);
-		}
-#else
-		int is = 0;
-		int should = 0;
-
-		bool update_dl = false;
-		bool update_done = false;
-
-		//check if any download was requested
-		if(access("/tmp/adu/.work/downloadUpdate", F_OK) == 0)
-		{
-			update_dl = true;
-		}
-
-		//get the progress
-		if(update_dl == true)
-		{
-			int should_file = open("/tmp/adu/.work/update_size", O_RDONLY);
-			char should_string[100];
-			read(should_file, should_string, 100);
-			should = atoi(should_string);
-
-			int fd = open("/tmp/adu/.work/update_location", O_RDONLY);
-			char download_location[100];
-			read(fd, download_location, 100);
-			close(fd);
-
-			struct stat is_file;
-			if(stat(download_location, &is_file) >= 0)
-				is = is_file.st_size;
-
-			if(should == 0 || is == 0)
-			{
-				update_dl = false;
-			}
-			else
-			{
-				float is_f = (float)is;
-				float should_f = (float)should;
-				float ratio = is_f/should_f;
-				int percent = (int)(ratio*100);
-				printf("%d/%d -- %d\%\n", is, should, percent);
-
-				if(percent < 100)
-				{
-					update_done = false;
-				}
-				else if(percent == 100)
-				{
-					update_done = true;
-				}
-			}
-		}
-
-		//set return values
-		if(update_dl == true )
-		{
-			if(update_done == true)
-			{
-				this->return_code = static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::ALL_REQUESTED_DOWNLOADS_FINISHED);
-			}
-			else
-			{
-				this->return_code = static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::FIRMWARE_AND_APPLICATION_DOWNLOAD_IN_PROGRESS);
-			}
-		}
-		else
-		{
-			this->return_code = static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::NO_DOWNLOAD_STARTED);
-		}
-#endif
-	}
-	else if(
+                if (percent < 100)
+                  {
+                    this->return_code = static_cast<int> (
+                        UPDATER_DOWNLOAD_PROGRESS_STATE::
+                            UPDATE_DOWNLOAD_IN_PROGRESS);
+                  }
+                else if (percent == 100)
+                  {
+                    this->return_code = static_cast<int> (
+                        UPDATER_DOWNLOAD_PROGRESS_STATE::
+                            UPDATE_DOWNLOAD_FINISHED);
+                  }
+              }
+          }
+        else
+          this->return_code = static_cast<int> (
+              UPDATER_DOWNLOAD_PROGRESS_STATE::NO_DOWNLOAD_STARTED);
+      }
+    else if(
 #ifdef USE_OLD_UPDATE_TYPE
 		(this->arg_app.isSet() == false) &&
 		(this->arg_fw.isSet() == false) &&
@@ -2011,12 +1488,8 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->get_app_version.isSet() == false) &&
 		(this->get_fw_version.isSet() == true) &&
 		(this->notice_update_available.isSet() == false) &&
-		(this->download_firmware_update.isSet() == false) &&
-		(this->download_application_update.isSet() == false) &&
 		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
-		(this->install_firmware_update.isSet() == false) &&
-		(this->install_application_update.isSet() == false) &&
 		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false) &&
 		(this->set_app_state_bad.isSet() == false) &&
@@ -2041,12 +1514,8 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->get_app_version.isSet() == false) &&
 		(this->get_fw_version.isSet() == false) &&
 		(this->notice_update_available.isSet() == false) &&
-		(this->download_firmware_update.isSet() == false) &&
-		(this->download_application_update.isSet() == false) &&
 		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
-		(this->install_firmware_update.isSet() == false) &&
-		(this->install_application_update.isSet() == false) &&
 		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false)  &&
 		(this->set_app_state_bad.isSet() == false) &&
@@ -2071,12 +1540,8 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->get_app_version.isSet() == false) &&
 		(this->get_fw_version.isSet() == false) &&
 		(this->notice_update_available.isSet() == false) &&
-		(this->download_firmware_update.isSet() == false) &&
-		(this->download_application_update.isSet() == false) &&
 		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
-		(this->install_firmware_update.isSet() == false) &&
-		(this->install_application_update.isSet() == false) &&
 		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false) &&
 		(this->set_app_state_bad.isSet() == false) &&
@@ -2101,12 +1566,8 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->get_app_version.isSet() == false) &&
 		(this->get_fw_version.isSet() == false) &&
 		(this->notice_update_available.isSet() == false) &&
-		(this->download_firmware_update.isSet() == false) &&
-		(this->download_application_update.isSet() == false) &&
 		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
-		(this->install_firmware_update.isSet() == false) &&
-		(this->install_application_update.isSet() == false) &&
 		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false) &&
 		(this->get_version.isSet() == true)  &&
@@ -2132,12 +1593,8 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->get_app_version.isSet() == false) &&
 		(this->get_fw_version.isSet() == false) &&
 		(this->notice_update_available.isSet() == false) &&
-		(this->download_firmware_update.isSet() == false) &&
-		(this->download_application_update.isSet() == false) &&
 		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
-		(this->install_firmware_update.isSet() == false) &&
-		(this->install_application_update.isSet() == false) &&
 		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false) &&
 		(this->get_version.isSet() == false)  &&
@@ -2163,12 +1620,8 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->get_app_version.isSet() == false) &&
 		(this->get_fw_version.isSet() == false) &&
 		(this->notice_update_available.isSet() == false) &&
-		(this->download_firmware_update.isSet() == false) &&
-		(this->download_application_update.isSet() == false) &&
 		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
-		(this->install_firmware_update.isSet() == false) &&
-		(this->install_application_update.isSet() == false) &&
 		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false) &&
 		(this->get_version.isSet() == false) &&
@@ -2194,12 +1647,8 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->get_app_version.isSet() == false) &&
 		(this->get_fw_version.isSet() == false) &&
 		(this->notice_update_available.isSet() == false) &&
-		(this->download_firmware_update.isSet() == false) &&
-		(this->download_application_update.isSet() == false) &&
 		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
-		(this->install_firmware_update.isSet() == false) &&
-		(this->install_application_update.isSet() == false) &&
 		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false) &&
 		(this->get_version.isSet() == false)  &&
@@ -2225,12 +1674,8 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->get_app_version.isSet() == false) &&
 		(this->get_fw_version.isSet() == false) &&
 		(this->notice_update_available.isSet() == false) &&
-		(this->download_firmware_update.isSet() == false) &&
-		(this->download_application_update.isSet() == false) &&
 		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
-		(this->install_firmware_update.isSet() == false) &&
-		(this->install_application_update.isSet() == false) &&
 		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false) &&
 		(this->get_version.isSet() == false) &&
@@ -2256,12 +1701,8 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		(this->get_app_version.isSet() == false) &&
 		(this->get_fw_version.isSet() == false) &&
 		(this->notice_update_available.isSet() == false) &&
-		(this->download_firmware_update.isSet() == false) &&
-		(this->download_application_update.isSet() == false) &&
 		(this->download_update.isSet() == false) &&
 		(this->download_progress.isSet() == false) &&
-		(this->install_firmware_update.isSet() == false) &&
-		(this->install_application_update.isSet() == false) &&
 		(this->install_update.isSet() == false) &&
 		(this->apply_update.isSet() == false) &&
 		(this->get_version.isSet() == false)  &&

@@ -21,6 +21,13 @@
 /* This define enables old update process */
 //#define USE_OLD_UPDATE_TYPE
 
+	typedef enum UpdateTypeT {
+		UPDATE_FIRMWARE = 0,
+		UPDATE_APPLICATION,
+		UPDATE_COMMON,
+		UPDATE_UNKNOWN = -1,
+	} update_type_t;
+
 /**
  * Namespace contain all CLI related classes of functionality
  */
@@ -45,12 +52,8 @@ namespace cli
 		TCLAP::SwitchArg get_app_version;
 		TCLAP::SwitchArg get_version;
 		TCLAP::SwitchArg notice_update_available;
-		TCLAP::SwitchArg download_firmware_update;
-		TCLAP::SwitchArg install_firmware_update;
 		TCLAP::SwitchArg apply_update;
 		TCLAP::SwitchArg download_progress;
-		TCLAP::SwitchArg download_application_update;
-		TCLAP::SwitchArg install_application_update;
 		TCLAP::SwitchArg download_update;
 		TCLAP::SwitchArg install_update;
 		TCLAP::ValueArg<char> set_app_state_bad;
@@ -64,6 +67,7 @@ namespace cli
 		std::shared_ptr<logger::LoggerHandler> logger_handler;
 
 		int return_code;
+		update_type_t proceeded_update_type;
 #ifdef USE_OLD_UPDATE_TYPE
 		/**
 		 * Internal function to run update and handle errors as return_value:
