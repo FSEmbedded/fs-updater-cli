@@ -145,9 +145,9 @@ cli::fs_update_cli::~fs_update_cli()
 
 void cli::fs_update_cli::update_image_state(const char *update_file_env, const string &update_stick, bool use_arg)
 {
-	cout << __func__ << endl;
 	try
 	{
+		cout << "Update started." << endl;
 		if(use_arg == true)
 		{
 			this->update_handler->update_image(
@@ -166,13 +166,18 @@ void cli::fs_update_cli::update_image_state(const char *update_file_env, const s
 			this->update_handler->update_image(update_file);
 		}
 
-		cout << "Image update successful" << endl;
+		cout << "Image update successful." << endl;
 		this->return_code = static_cast<int>(UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_SUCCESSFUL);
 	}
 	catch(const fs::UpdateInProgress &e)
 	{
 		cerr << "Image update progress error: " << e.what() << endl;
 		this->return_code = static_cast<int>(UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_PROGRESS_ERROR);
+	}
+	catch(const fs::GenericException &e)
+	{
+		cerr << e.what() << endl;
+		this->return_code = static_cast<int>(e.errorno);
 	}
 	catch(const fs::BaseFSUpdateException &e)
 	{
@@ -491,7 +496,7 @@ void cli::fs_update_cli::rollback_firmware()
 		cout << "Rollback firmware successful" << endl;
 		this->return_code = static_cast<int>(UPDATER_FIRMWARE_STATE::ROLLBACK_SUCCESSFUL);
 	}
-	catch(const fs::RollbackFirmware &e)
+	catch(const fs::GenericException &e)
 	{
 		cerr << "Rollback firmware progress error: " << e.what() << endl;
 		this->return_code = static_cast<int>(UPDATER_FIRMWARE_STATE::ROLLBACK_PROGRESS_ERROR);
@@ -516,7 +521,7 @@ void cli::fs_update_cli::rollback_application()
 		cout << "Rollback application successful" << endl;
 		this->return_code = static_cast<int>(UPDATER_APPLICATION_STATE::ROLLBACK_SUCCESSFUL);
 	}
-	catch(const fs::RollbackApplication &e)
+	catch(const fs::GenericException &e)
 	{
 		cerr << "Rollback application progress error: " << e.what() << endl;
 
@@ -1020,7 +1025,7 @@ void cli::fs_update_cli::parse_input(int argc, const char ** argv)
 		)
     {
       std::ifstream installed_state;
-      /* check if file applicationInstalled available */
+      /* check if file updateInstalled available */
       installed_state.open ("/tmp/adu/.work/updateInstalled");
       if (installed_state)
         {
