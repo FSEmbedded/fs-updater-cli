@@ -586,7 +586,7 @@ void cli::fs_update_cli::print_update_reboot_state()
 	{
 		if(this->update_handler->is_reboot_complete(false))
 		{
-			cout << "Incomplete application update" << endl;
+			cout << "Incomplete application update. Commit required." << endl;
 			this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_UPDATE);
 		} else
 		{
