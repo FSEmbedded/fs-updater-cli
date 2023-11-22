@@ -836,6 +836,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
         }
         else if (std::filesystem::exists(work_dir / "downloadUpdate") == true)
         {
+            cout << "Download in progress..." << endl;
             this->return_code = static_cast<int>(UPDATER_DOWNLOAD_UPDATE_STATE::UPDATE_DOWNLOAD_STARTED_BEFORE);
         }
         else
@@ -849,6 +850,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
             else
             {
                 download_update_stream.close();
+                cout << "Download started..." << endl;
                 this->return_code = static_cast<int>(UPDATER_DOWNLOAD_UPDATE_STATE::UPDATE_DOWNLOAD_STARTED);
             }
         }
@@ -868,6 +870,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
         ifstream installed_state(work_dir / "updateInstalled");
         if (installed_state)
         {
+            cout << "Update installation finished." << endl;
             this->return_code = static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FINISHED);
         }
         else
@@ -880,6 +883,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
             }
             else if (std::filesystem::exists(work_dir / "installUpdate") == true)
             {
+                cout << "Update installation in progress." << endl;
                 this->return_code = static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_IN_PROGRESS);
             }
             else
@@ -896,6 +900,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
                 else
                 {
                     install_update_stream.close();
+                    cout << "Update installation started." << endl;
                     this->return_code = static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_IN_PROGRESS);
                 }
             }
@@ -932,6 +937,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
             if (std::filesystem::exists(work_dir / "applyUpdate") == false &&
                 std::filesystem::exists(work_dir / "downloadUpdate") == false)
             {
+                cout << "Apply update..." << endl;
                 /* Local installation process. Force reboot immediately.
                  */
                 const int ret = ::system("/sbin/reboot --reboot --no-wall");
@@ -969,6 +975,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
                 else
                 {
                     apply_update_stream.close();
+                    cout << "Apply update..." << endl;
                     this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFULL);
                 }
             }
@@ -1005,6 +1012,8 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
                     this->update_handler->update_reboot_state(
                         update_definitions::UBootBootstateFlags::INCOMPLETE_APP_ROLLBACK);
                 }
+
+                cout << "Apply rollback update..." << endl;
 
                 /* Local installation process. Force reboot immediately. */
                 const int ret = ::system("/sbin/reboot --reboot --no-wall");
