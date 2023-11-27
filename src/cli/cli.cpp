@@ -203,11 +203,18 @@ void cli::fs_update_cli::update_image_state(const char *update_file_env, const s
     }
     catch (const fs::GenericException &e)
     {
-        cerr << e.what() << endl;
-        this->return_code = static_cast<int>(e.errorno);
+        cerr << e.what() << "errno: " << e.errorno << endl;
+        this->return_code = static_cast<int>(UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_PROGRESS_ERROR);
     }
     catch (const fs::BaseFSUpdateException &e)
     {
+        /* Remove tmp.app in case the file tmp.app is available
+         * This is the application update temporary file before rename to
+         * updated application image. In case update fails old version should be
+         * removed.
+         */
+        std::filesystem::path tmp_app = this->update_handler->getTempAppPath();
+        std::filesystem::remove(tmp_app);
         cerr << "Image update error: " << e.what() << endl;
         this->return_code = static_cast<int>(UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_INTERNAL_ERROR);
     }
@@ -302,8 +309,8 @@ void cli::fs_update_cli::rollback_update()
     }
     catch (const fs::GenericException &e)
     {
-        cerr << "Rollback update progress error: " << e.what() << endl;
-        this->return_code = e.errorno;
+        cerr << "Rollback update progress error: " << e.what() << "errno: " << e.errorno << endl;
+        this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_PROGRESS_ERROR);
     }
     catch (const fs::BaseFSUpdateException &e)
     {
@@ -353,7 +360,7 @@ void cli::fs_update_cli::switch_firmware_slot()
     }
     catch (const fs::GenericException &e)
     {
-        cerr << "Rollback firmware progress error: " << e.what() << endl;
+        cerr << "Rollback firmware progress error: " << e.what()  << "errno : " << e.errorno << endl;
         this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_PROGRESS_ERROR);
     }
     catch (const fs::BaseFSUpdateException &e)
@@ -404,7 +411,7 @@ void cli::fs_update_cli::switch_application_slot()
     }
     catch (const fs::GenericException &e)
     {
-        cerr << "Rollback application progress error: " << e.what() << endl;
+        cerr << "Rollback application progress error: " << e.what() << "errno : " << e.errorno << endl;
 
         switch (e.errorno)
         {
