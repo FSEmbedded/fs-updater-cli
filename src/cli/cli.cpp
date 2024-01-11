@@ -1082,6 +1082,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
             }
             /* get file size */
             update_size_stream >> update_size;
+            update_size_stream.close();
             /* check for zero */
             if (update_size == 0)
             {
@@ -1130,7 +1131,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
                     /* Is update file exits */
                     if (!std::filesystem::exists(update_file_path))
                     {
-                        cout << "Update file: " << update_file_path << "does not exists." << endl;
+                        cerr << "Update file: " << update_file_path << "does not exists." << endl;
                         this->return_code =
                             static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::UPDATE_DOWNLOAD_WAITING_TO_START);
                     }
