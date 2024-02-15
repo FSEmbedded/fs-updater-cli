@@ -31,6 +31,13 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
 		       "",
 		       "absolute filesystem path"
 		       ),
+		arg_update_type("",
+		       "update_type",
+		       "Update type firmware or application",
+		       false,
+		       "",
+		       "accepted values: fw or app"
+		),
 		arg_rollback_update("",
 				 "rollback_update",
 				 "Rollback of the last installed update "\
@@ -56,9 +63,9 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
 			"Get state of update"
 			),
 		arg_automatic("",
-			      "automatic",
-			      "Automatic update modus"
-			      ),
+			    "automatic",
+				"Automatic update modus"
+			    ),
 		arg_debug("",
 			  "debug",
 			  "Enable debug output"
@@ -127,6 +134,7 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
 		return_code(0)
 {
     this->cmd.add(arg_update);
+    this->cmd.add(arg_update_type);
     this->cmd.add(arg_rollback_update);
     this->cmd.add(arg_switch_fw_slot);
     this->cmd.add(arg_switch_app_slot);
@@ -162,22 +170,37 @@ void cli::fs_update_cli::update_image_state(const char *update_file_env, const s
         cout << "Update started" << endl;
         /* get update image type: fw, app or fw and app */
         uint8_t installed_update_type = 0;
+        string update_file;
+        /* update type in case second parameter for installation process */
+        string update_type;
+        bool isUpdateTypeAvailable = this->arg_update_type.isSet();
+        if (isUpdateTypeAvailable == true)
+        {
+            update_type = this->arg_update_type.getValue();
+            if ((update_type.compare("app") != 0) && (update_type.compare("fw") != 0))
+            {
+                cerr << "Update type: " << update_type << "does not exists." << endl;
+                this->return_code = EPERM;
+                return;
+            }
+        }
+        /* Build string for update file with full path.  */
         if (use_arg == true)
         {
-            this->update_handler->update_image(this->arg_update.getValue(), installed_update_type);
+            update_file = this->arg_update.getValue();
         }
         else
         {
-            string update_file(update_stick);
-
+            update_file = update_stick;
             if (update_stick.back() != '/')
             {
                 update_file += string("/");
             }
 
             update_file += string(update_file_env);
-            this->update_handler->update_image(update_file, installed_update_type);
         }
+        /* start update */
+        this->update_handler->update_image(update_file, update_type, installed_update_type);
 
         switch(installed_update_type)
         {
@@ -203,7 +226,7 @@ void cli::fs_update_cli::update_image_state(const char *update_file_env, const s
     }
     catch (const fs::GenericException &e)
     {
-        cerr << e.what() << "errno: " << e.errorno << endl;
+        cerr << e.what() << " errno: " << e.errorno << endl;
         this->return_code = static_cast<int>(UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_PROGRESS_ERROR);
     }
     catch (const fs::BaseFSUpdateException &e)
@@ -309,7 +332,7 @@ void cli::fs_update_cli::rollback_update()
     }
     catch (const fs::GenericException &e)
     {
-        cerr << "Rollback update progress error: " << e.what() << "errno: " << e.errorno << endl;
+        cerr << "Rollback update progress error: " << e.what() << " errno: " << e.errorno << endl;
         this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_PROGRESS_ERROR);
     }
     catch (const fs::BaseFSUpdateException &e)
@@ -360,7 +383,7 @@ void cli::fs_update_cli::switch_firmware_slot()
     }
     catch (const fs::GenericException &e)
     {
-        cerr << "Rollback firmware progress error: " << e.what()  << "errno : " << e.errorno << endl;
+        cerr << "Rollback firmware progress error: " << e.what()  << " errno : " << e.errorno << endl;
         this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_PROGRESS_ERROR);
     }
     catch (const fs::BaseFSUpdateException &e)
@@ -411,7 +434,7 @@ void cli::fs_update_cli::switch_application_slot()
     }
     catch (const fs::GenericException &e)
     {
-        cerr << "Rollback application progress error: " << e.what() << "errno : " << e.errorno << endl;
+        cerr << "Rollback application progress error: " << e.what() << " errno : " << e.errorno << endl;
 
         switch (e.errorno)
         {
@@ -653,6 +676,15 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
     {
         // update firmware, application or both
         // use path from argument
+        // check paramter
+        std::filesystem::path update_location = this->arg_update.getValue();
+
+        if (std::filesystem::exists(update_location) == false)
+        {
+            cerr << "Update file: " << update_location << "does not exists." << endl;
+            this->return_code = EPERM;
+            return;
+        }
         this->update_image_state("", "", true);
     }
     else if ((this->arg_update.isSet() == false) && (this->arg_rollback_update.isSet() == false) &&
@@ -663,7 +695,8 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
              (this->download_progress.isSet() == false) && (this->download_update.isSet() == false) &&
              (this->install_update.isSet() == false) && (this->apply_update.isSet() == false) &&
              (this->set_app_state_bad.isSet() == false) && (this->is_app_state_bad.isSet() == false) &&
-             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false))
+             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false) &&
+             (this->arg_update_type.isSet() == false))
     {
         // commit update
         this->commit_update();
@@ -676,7 +709,8 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
              (this->download_update.isSet() == false) && (this->download_progress.isSet() == false) &&
              (this->install_update.isSet() == false) && (this->apply_update.isSet() == false) &&
              (this->set_app_state_bad.isSet() == false) && (this->is_app_state_bad.isSet() == false) &&
-             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false))
+             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false) &&
+             (this->arg_update_type.isSet() == false))
     {
         // print update reboot state
         this->print_update_reboot_state();
@@ -685,12 +719,13 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
     else if ((this->arg_update.isSet() == false) && (this->arg_rollback_update.isSet() == false) &&
              (this->arg_switch_fw_slot.isSet() == false) && (this->arg_switch_app_slot.isSet() == false) &&
              (this->arg_commit_update.isSet() == false) && (this->arg_urs.isSet() == false) &&
-             (this->arg_automatic.isSet() == true) && (this->get_app_version.isSet() == false) &&
-             (this->get_fw_version.isSet() == false) && (this->notice_update_available.isSet() == false) &&
-             (this->download_update.isSet() == false) && (this->download_progress.isSet() == false) &&
-             (this->install_update.isSet() == false) && (this->apply_update.isSet() == false) &&
-             (this->set_app_state_bad.isSet() == false) && (this->is_app_state_bad.isSet() == false) &&
-             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false))
+             (this->arg_automatic.isSet() == true) &&
+             (this->get_app_version.isSet() == false) && (this->get_fw_version.isSet() == false) &&
+             (this->notice_update_available.isSet() == false) && (this->download_update.isSet() == false) &&
+             (this->download_progress.isSet() == false) && (this->install_update.isSet() == false) &&
+             (this->apply_update.isSet() == false) && (this->set_app_state_bad.isSet() == false) &&
+             (this->is_app_state_bad.isSet() == false) && (this->set_fw_state_bad.isSet() == false) &&
+             (this->is_fw_state_bad.isSet() == false))
     {
         const char *update_stick_env = std::getenv("UPDATE_STICK");
         const char *update_file_env = std::getenv("UPDATE_FILE");
@@ -729,7 +764,8 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
              (this->download_update.isSet() == false) && (this->download_progress.isSet() == false) &&
              (this->install_update.isSet() == false) && (this->apply_update.isSet() == false) &&
              (this->set_app_state_bad.isSet() == false) && (this->is_app_state_bad.isSet() == false) &&
-             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false))
+             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false) &&
+             (this->arg_update_type.isSet() == false))
     {
         this->print_current_application_version();
     }
@@ -741,7 +777,8 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
              (this->download_update.isSet() == false) && (this->download_progress.isSet() == false) &&
              (this->install_update.isSet() == false) && (this->apply_update.isSet() == false) &&
              (this->set_app_state_bad.isSet() == false) && (this->is_app_state_bad.isSet() == false) &&
-             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false))
+             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false) &&
+             (this->arg_update_type.isSet() == false))
     {
         std::filesystem::path work_dir = this->update_handler->get_work_dir();
         ifstream update_type_stream(work_dir / "update_type");
@@ -832,7 +869,8 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
              (this->download_update.isSet() == true) && (this->download_progress.isSet() == false) &&
              (this->install_update.isSet() == false) && (this->apply_update.isSet() == false) &&
              (this->set_app_state_bad.isSet() == false) && (this->is_app_state_bad.isSet() == false) &&
-             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false))
+             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false) &&
+             (this->arg_update_type.isSet() == false))
     {
         std::filesystem::path work_dir = this->update_handler->get_work_dir();
         if (std::filesystem::exists(work_dir / "update_type") == false ||
@@ -870,7 +908,8 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
              (this->download_update.isSet() == false) && (this->download_progress.isSet() == false) &&
              (this->install_update.isSet() == true) && (this->apply_update.isSet() == false) &&
              (this->set_app_state_bad.isSet() == false) && (this->is_app_state_bad.isSet() == false) &&
-             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false))
+             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false) &&
+             (this->arg_update_type.isSet() == false))
     {
         std::filesystem::path work_dir = this->update_handler->get_work_dir();
         /* check if file updateInstalled available */
@@ -921,7 +960,8 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
              (this->download_update.isSet() == false) && (this->download_progress.isSet() == false) &&
              (this->install_update.isSet() == false) && (this->apply_update.isSet() == true) &&
              (this->set_app_state_bad.isSet() == false) && (this->is_app_state_bad.isSet() == false) &&
-             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false))
+             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false) &&
+             (this->arg_update_type.isSet() == false))
     {
         /* The content handler have to create updateInstalled file
          * in the workflow state install. This means that overloaded class
@@ -1064,7 +1104,8 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
              (this->download_update.isSet() == false) && (this->download_progress.isSet() == true) &&
              (this->install_update.isSet() == false) && (this->apply_update.isSet() == false) &&
              (this->set_app_state_bad.isSet() == false) && (this->is_app_state_bad.isSet() == false) &&
-             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false))
+             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false) &&
+             (this->arg_update_type.isSet() == false))
     {
         std::filesystem::path work_dir = this->update_handler->get_work_dir();
         // check if any download was requested
@@ -1182,7 +1223,8 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
              (this->download_update.isSet() == false) && (this->download_progress.isSet() == false) &&
              (this->install_update.isSet() == false) && (this->apply_update.isSet() == false) &&
              (this->set_app_state_bad.isSet() == false) && (this->is_app_state_bad.isSet() == false) &&
-             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false))
+             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false) &&
+             (this->arg_update_type.isSet() == false))
     {
         this->print_current_firmware_version();
     }
@@ -1194,7 +1236,8 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
              (this->download_update.isSet() == false) && (this->download_progress.isSet() == false) &&
              (this->install_update.isSet() == false) && (this->apply_update.isSet() == false) &&
              (this->set_app_state_bad.isSet() == false) && (this->is_app_state_bad.isSet() == false) &&
-             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false))
+             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false) &&
+             (this->arg_update_type.isSet() == false))
     {
         this->rollback_update();
     }
@@ -1206,7 +1249,8 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
              (this->download_update.isSet() == false) && (this->download_progress.isSet() == false) &&
              (this->install_update.isSet() == false) && (this->apply_update.isSet() == false) &&
              (this->set_app_state_bad.isSet() == false) && (this->is_app_state_bad.isSet() == false) &&
-             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false))
+             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false) &&
+             (this->arg_update_type.isSet() == false))
     {
         this->switch_firmware_slot();
     }
@@ -1218,7 +1262,8 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
              (this->download_update.isSet() == false) && (this->download_progress.isSet() == false) &&
              (this->install_update.isSet() == false) && (this->apply_update.isSet() == false) &&
              (this->set_app_state_bad.isSet() == false) && (this->is_app_state_bad.isSet() == false) &&
-             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false))
+             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false) &&
+             (this->arg_update_type.isSet() == false))
     {
         this->switch_application_slot();
     }
@@ -1231,7 +1276,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
              (this->install_update.isSet() == false) && (this->apply_update.isSet() == false) &&
              (this->get_version.isSet() == true) && (this->set_app_state_bad.isSet() == false) &&
              (this->is_app_state_bad.isSet() == false) && (this->set_fw_state_bad.isSet() == false) &&
-             (this->is_fw_state_bad.isSet() == false))
+             (this->is_fw_state_bad.isSet() == false) && (this->arg_update_type.isSet() == false))
     {
         cout << "F&S Update Framework CLI Version: " << VERSION;
         cout << " build at: " << __DATE__ << ", " << __TIME__ << "." << endl;
@@ -1245,7 +1290,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
              (this->install_update.isSet() == false) && (this->apply_update.isSet() == false) &&
              (this->get_version.isSet() == false) && (this->set_app_state_bad.isSet() == true) &&
              (this->is_app_state_bad.isSet() == false) && (this->set_fw_state_bad.isSet() == false) &&
-             (this->is_fw_state_bad.isSet() == false))
+             (this->is_fw_state_bad.isSet() == false) && (this->arg_update_type.isSet() == false))
     {
         this->set_application_state_bad(this->set_app_state_bad.getValue());
     }
@@ -1258,7 +1303,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
              (this->install_update.isSet() == false) && (this->apply_update.isSet() == false) &&
              (this->get_version.isSet() == false) && (this->set_app_state_bad.isSet() == false) &&
              (this->is_app_state_bad.isSet() == true) && (this->set_fw_state_bad.isSet() == false) &&
-             (this->is_fw_state_bad.isSet() == false))
+             (this->is_fw_state_bad.isSet() == false) && (this->arg_update_type.isSet() == false))
     {
         this->is_application_state_bad(this->is_app_state_bad.getValue());
     }
@@ -1271,7 +1316,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
              (this->install_update.isSet() == false) && (this->apply_update.isSet() == false) &&
              (this->get_version.isSet() == false) && (this->set_app_state_bad.isSet() == false) &&
              (this->is_app_state_bad.isSet() == false) && (this->set_fw_state_bad.isSet() == true) &&
-             (this->is_fw_state_bad.isSet() == false))
+             (this->is_fw_state_bad.isSet() == false) && (this->arg_update_type.isSet() == false))
     {
         this->set_firmware_state_bad(this->set_fw_state_bad.getValue());
     }
@@ -1284,7 +1329,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
              (this->install_update.isSet() == false) && (this->apply_update.isSet() == false) &&
              (this->get_version.isSet() == false) && (this->set_app_state_bad.isSet() == false) &&
              (this->is_app_state_bad.isSet() == false) && (this->set_fw_state_bad.isSet() == false) &&
-             (this->is_fw_state_bad.isSet() == true))
+             (this->is_fw_state_bad.isSet() == true) && (this->arg_update_type.isSet() == false))
     {
         this->is_firmware_state_bad(this->is_fw_state_bad.getValue());
     }
@@ -1297,7 +1342,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
              (this->install_update.isSet() == false) && (this->apply_update.isSet() == false) &&
              (this->get_version.isSet() == false) && (this->set_app_state_bad.isSet() == false) &&
              (this->is_app_state_bad.isSet() == false) && (this->set_fw_state_bad.isSet() == false) &&
-             (this->is_fw_state_bad.isSet() == false))
+             (this->is_fw_state_bad.isSet() == false) && (this->arg_update_type.isSet() == false))
     {
         cout << "F&S Update Framework CLI Version: " << VERSION;
         cout << " build at: " << __DATE__ << ", " << __TIME__ << "." << endl;
@@ -1305,7 +1350,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
     }
     else
     {
-        cerr << "Wrong combination or set of variables. Pleas refer --help or manual" << endl;
+        cerr << "Wrong combination or set of variables. Please refer --help or manual" << endl;
     }
 }
 

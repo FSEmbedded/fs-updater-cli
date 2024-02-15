@@ -37,6 +37,7 @@ namespace cli
         private:
 		TCLAP::CmdLine cmd;
 		TCLAP::ValueArg<std::string> arg_update;
+		TCLAP::ValueArg<std::string> arg_update_type;
 		TCLAP::SwitchArg arg_switch_fw_slot;
 		TCLAP::SwitchArg arg_switch_app_slot;
 		TCLAP::SwitchArg arg_rollback_update;
