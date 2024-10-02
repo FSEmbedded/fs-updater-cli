@@ -150,6 +150,7 @@ namespace cli
 		 * @throw ErrorNotSystemVariable
 		 */
 		void parse_input(int argc, const char ** argv);
+		int reboot() const;
 
         public:
 		fs_update_cli(int argc, const char ** argv);

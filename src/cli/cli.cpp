@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <sys/reboot.h>
 
 constexpr char FSCLI_DOMAIN[] = "cli";
 
@@ -987,23 +988,11 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
                 cout << "Apply update..." << endl;
                 /* Local installation process. Force reboot immediately.
                  */
-                const int ret = ::system("/sbin/reboot --reboot --no-wall");
-                /* reboot command can fails*/
-                switch (ret)
-                {
-                case -1:
-                    cout << "Create process for command reboot fails. Manual "
-                            "reboot required."
-                         << endl;
+                if(this->reboot() != 0) {
+                    /* reboot command fails*/
+                    cerr << "Failed to reboot system: " << strerror(errno) << endl;
                     this->return_code = errno;
-                    break;
-                case -127:
-                    cout << "Execute command reboot fails. Manual reboot "
-                            "required."
-                         << endl;
-                    this->return_code = ret;
-                    break;
-                default:
+                } else {
                     this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFULL);
                 }
             }
@@ -1063,23 +1052,11 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
                 cout << "Apply rollback update..." << endl;
 
                 /* Local installation process. Force reboot immediately. */
-                const int ret = ::system("/sbin/reboot --reboot --no-wall");
-                /* reboot command can fails*/
-                switch (ret)
-                {
-                case -1:
-                    cout << "Create process for command reboot fails. Manual "
-                            "reboot required."
-                         << endl;
+                if(this->reboot() != 0) {
+                    /* reboot command fails*/
+                    cerr << "Failed to reboot system: " << strerror(errno) << endl;
                     this->return_code = errno;
-                    break;
-                case -127:
-                    cout << "Execute command reboot fails. Manual reboot "
-                            "required."
-                         << endl;
-                    this->return_code = ret;
-                    break;
-                default:
+                } else {
                     this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFULL);
                 }
 
@@ -1357,4 +1334,18 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
 int cli::fs_update_cli::getReturnCode() const
 {
     return this->return_code;
+}
+
+int cli::fs_update_cli::reboot() const
+{
+    /* TODO: Check if direct reboot without shell call
+     * would be better. Steps:
+     *  - sync filesystem buffers
+     *  - reboot per message RB_AUTOBOOT
+     */
+#if 0 // TODO:
+    sync();
+    return ::reboot(RB_AUTOBOOT);
+#endif
+    return ::system("/sbin/reboot --reboot --no-wall");
 }
