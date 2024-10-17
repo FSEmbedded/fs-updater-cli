@@ -39,11 +39,13 @@ find_library(botan_lib NAMES libbotan-2.so)
 find_library(pthread_lib NAMES libpthread.so)
 find_library(jsoncpp_lib NAMES libjsoncpp_static.a libjsoncpp.so)
 find_library(fs_updater_lib NAMES libfs_updater.a libfs_updater.so)
+find_library(archiv_lib NAMES libarchive.so)
 
 message("Path to library inicpp: ${inicpp_lib}")
 message("Path to library ubootenv: ${ubootenv_lib}")
 message("Path to library zlib: ${z_lib}")
 message("Path to library botan: ${botan_lib}")
+message("Path to library libarchiv: ${archiv_lib}")
 message("Path to library pthread: ${pthread_lib}")
 message("Path to library jsoncpp: ${jsoncpp_lib}")
 message("Path to library fs-updater: ${fs_updater_lib}")
@@ -58,6 +60,7 @@ target_link_libraries(fs_updater_cli
         ${pthread_lib}
         ${ubootenv_lib}
         ${z_lib}
+        ${archiv_lib}
       )
 
 set_target_properties(fs_updater_cli PROPERTIES OUTPUT_NAME "fs-updater")
