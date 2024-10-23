@@ -964,9 +964,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
              (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false) &&
              (this->arg_update_type.isSet() == false))
     {
-        /* The content handler have to create updateInstalled file
-         * in the workflow state install. This means that overloaded class
-         * member install(...) creates the file.
+        /* The updateInstalled file reflects successful installation state.
          */
         std::filesystem::path work_dir = this->update_handler->get_work_dir();
         ifstream installed_state(work_dir / "updateInstalled");
