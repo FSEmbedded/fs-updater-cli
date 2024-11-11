@@ -113,7 +113,7 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
 			    ),
 		is_app_state_bad("",
 			    "is_app_state_bad",
-				"Check applcition state for bad",
+				"Check application state for bad",
 				false,
 			    'a',
 				"accepted states: A or B"
