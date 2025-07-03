@@ -15,8 +15,10 @@ namespace logger
     class LoggerSinkSerial : public LoggerSinkBase
     {
         private:
-            logger::logLevel log_level;
-            std::shared_ptr<SynchronizedSerial> sink;
+            const logger::logLevel log_level;
+            std::shared_ptr<SynchronizedSerial> serial_port;
+            // Mutex to ensure thread-safe writes to the serial interface
+            static std::mutex serial_mutex;
 
         public:
             /**
@@ -24,14 +26,14 @@ namespace logger
              * @param level Set the expected log level which should be thrown
              * @param ptr Set the dynamic shared object for access the serial output.
              */
-            LoggerSinkSerial(logger::logLevel level, std::shared_ptr<SynchronizedSerial> &ptr);
+            LoggerSinkSerial(logger::logLevel level, std::shared_ptr<SynchronizedSerial> ptr);
 
-            ~LoggerSinkSerial() = default;
+            ~LoggerSinkSerial() override = default;
 
             /**
              * Override virtual function and define the specific setLogEntry function for serial output.
              * @param ptr Shared object of logger::LogEntry which should be log.
              */
-            virtual void setLogEntry(const std::shared_ptr<logger::LogEntry> &ptr) override;
+            void setLogEntry(const std::shared_ptr<logger::LogEntry>& entry) noexcept override;
     };
 }
