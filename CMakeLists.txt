@@ -4,10 +4,15 @@ project(fs_updater_cli)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-#set(CMAKE_CXX_FLAGS "-Wall -Wextra -Os -s")
-#set(CMAKE_CXX_FLAGS "-Wall -Wextra -O -g1 -ggdb3")
+set(CMAKE_CXX_FLAGS_DEBUG "-Wall -Wextra -O0 -g")
+set(CMAKE_CXX_FLAGS_RELEASE "-Wall -Wextra -O2")
 
 include(GNUInstallDirs)
+
+# This configuration is needed, because Botan means it is useaful to put every header file seperatly
+# include_directories(SYSTEM, "botan/botan-3/")
+SET(BOTAN2 CACHE STRING "Include path to the headers for botan-2")
+message("-- Add include directory for botan2: ${BOTAN2}")
 
 set(SOURCES
     "src/main.cpp"
@@ -20,18 +25,16 @@ set(HEADERS
     "src/cli/fs_updater_error.h"
 )
 
-set(update_version_type "uint64" CACHE STRING "data type fw, app version")
-
+# Set default type to string
+set(update_version_type "string" CACHE STRING "data type fw, app version")
 
 if("${update_version_type}" STREQUAL "string")
-        add_definitions (-DUPDATE_VERSION_TYPE_STRING)
-endif ()
+    add_definitions(-DUPDATE_VERSION_TYPE_STRING)
+elseif("${update_version_type}" STREQUAL "uint64")
+    add_definitions(-DUPDATE_VERSION_TYPE_UINT64)
+endif()
 
-if("${update_version_type}" STREQUAL "uint64")
-        add_definitions (-DUPDATE_VERSION_TYPE_UINT64)
-endif ()
 
-find_library(inicpp_lib NAMES libinicpp.a libinicpp.so)
 find_library(ubootenv_lib NAMES libubootenv.so)
 find_library(z_lib NAMES libz.so)
 find_library(botan_lib NAMES libbotan-2.so)
@@ -41,7 +44,6 @@ find_library(jsoncpp_lib NAMES libjsoncpp_static.a libjsoncpp.so)
 find_library(fs_updater_lib NAMES libfs_updater.a libfs_updater.so)
 find_library(archiv_lib NAMES libarchive.so)
 
-message("Path to library inicpp: ${inicpp_lib}")
 message("Path to library ubootenv: ${ubootenv_lib}")
 message("Path to library zlib: ${z_lib}")
 message("Path to library botan: ${botan_lib}")
@@ -52,16 +54,16 @@ message("Path to library fs-updater: ${fs_updater_lib}")
 
 
 add_executable(fs_updater_cli ${SOURCES})
+target_include_directories(fs_updater_cli SYSTEM PRIVATE ${BOTAN2})
 target_link_libraries(fs_updater_cli 
-        ${fs_updater_lib}
-        ${jsoncpp_lib}
-        ${inicpp_lib}
-        ${botan_lib}
-        ${pthread_lib}
-        ${ubootenv_lib}
-        ${z_lib}
-        ${archiv_lib}
-      )
+    ${fs_updater_lib}
+    ${jsoncpp_lib}
+    ${botan_lib}
+    ${pthread_lib}
+    ${ubootenv_lib}
+    ${z_lib}
+    ${archiv_lib}
+)
 
 set_target_properties(fs_updater_cli PROPERTIES OUTPUT_NAME "fs-updater")
 install(TARGETS fs_updater_cli RUNTIME DESTINATION ${CMAKE_INSTALL_SBINDIR})
