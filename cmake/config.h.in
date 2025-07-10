@@ -1,0 +1,30 @@
+#pragma once
+
+// Project information
+#define PROJECT_NAME "@PROJECT_NAME@"
+#define PROJECT_VERSION "@PROJECT_VERSION@"
+#define PROJECT_VERSION_MAJOR @PROJECT_VERSION_MAJOR@
+#define PROJECT_VERSION_MINOR @PROJECT_VERSION_MINOR@
+#define PROJECT_VERSION_PATCH @PROJECT_VERSION_PATCH@
+
+// Update version type configuration
+#cmakedefine01 UPDATE_VERSION_TYPE_STRING
+#cmakedefine01 UPDATE_VERSION_TYPE_UINT64
+
+// Conditional compilation
+#if UPDATE_VERSION_TYPE_STRING
+    #define UPDATE_VERSION_TYPE std::string
+    #define UPDATE_VERSION_DEFAULT ""
+#elif UPDATE_VERSION_TYPE_UINT64
+    #define UPDATE_VERSION_TYPE uint64_t
+    #define UPDATE_VERSION_DEFAULT 0ULL
+#else
+    #error "No valid update version type configured"
+#endif
+
+// Build type
+#ifdef NDEBUG
+    #define BUILD_TYPE "Release"
+#else
+    #define BUILD_TYPE "Debug"
+#endif
