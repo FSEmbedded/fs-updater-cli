@@ -316,7 +316,7 @@ void cli::fs_update_cli::rollback_update()
         else if (update_reboot_state == update_definitions::UBootBootstateFlags::INCOMPLETE_APP_UPDATE)
         {
             cout << "Rollback application start" << endl;
-            /* do rollback firmware */
+            /* do rollback application */
             this->update_handler->rollback_application();
             std::filesystem::path work_dir = this->update_handler->get_work_dir();
             ofstream rollback((work_dir / "rollbackUpdate"));
@@ -364,9 +364,6 @@ void cli::fs_update_cli::switch_firmware_slot()
         else
         {
             cout << "Start switch firmware slot" << endl;
-            /* get last update reboot state */
-            const update_definitions::UBootBootstateFlags update_reboot_state =
-                this->update_handler->get_update_reboot_state();
             /* Create directory if not exists.
              * GenericException is possible if directory does not exist and
              * can not be created.
@@ -408,16 +405,13 @@ void cli::fs_update_cli::switch_application_slot()
             this->update_handler->get_update_reboot_state();
         if (update_reboot_state != update_definitions::UBootBootstateFlags::NO_UPDATE_REBOOT_PENDING)
         {
-            cout << "Switch firmware slot is not allowed because update reboot state is wrong." << endl;
+            cout << "Switch application slot is not allowed because update reboot state is wrong." << endl;
             /* return_code would be setted by the function */
             this->print_update_reboot_state();
         }
         else
         {
             cout << "Start switch application slot" << endl;
-            /* get last update reboot state */
-            const update_definitions::UBootBootstateFlags update_reboot_state =
-                this->update_handler->get_update_reboot_state();
             /* Create directory if not exists.
              * GenericException is possible if directory does not exist and
              * can not be created.
