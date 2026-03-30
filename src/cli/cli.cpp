@@ -594,7 +594,7 @@ void cli::fs_update_cli::print_current_firmware_version()
 
 void cli::fs_update_cli::set_application_state_bad(const char &state)
 {
-    this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::GETSET_STATE_SUCCESSFULL);
+    this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::GETSET_STATE_SUCCESSFUL);
     if (this->update_handler->set_update_state_bad(state, APPLICATION_UPDATE_STATE) == EINVAL)
         this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::PASSING_PARAM_UPDATE_STATE_WRONG);
 }
@@ -614,7 +614,7 @@ void cli::fs_update_cli::is_application_state_bad(const char &state)
 
 void cli::fs_update_cli::set_firmware_state_bad(const char &state)
 {
-    this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::GETSET_STATE_SUCCESSFULL);
+    this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::GETSET_STATE_SUCCESSFUL);
     if (this->update_handler->set_update_state_bad(state, FIRMWARE_UPDATE_STATE) == EINVAL)
         this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::PASSING_PARAM_UPDATE_STATE_WRONG);
 }
@@ -991,7 +991,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
                     cerr << "Failed to reboot system: " << strerror(errno) << endl;
                     this->return_code = errno;
                 } else {
-                    this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFULL);
+                    this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFUL);
                 }
             }
             else
@@ -1010,7 +1010,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
                 {
                     apply_update_stream.close();
                     cout << "Apply update..." << endl;
-                    this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFULL);
+                    this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFUL);
                 }
             }
         }
@@ -1055,10 +1055,10 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
                     cerr << "Failed to reboot system: " << strerror(errno) << endl;
                     this->return_code = errno;
                 } else {
-                    this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFULL);
+                    this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFUL);
                 }
 
-                if (this->return_code != static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFULL))
+                if (this->return_code != static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFUL))
                 {
                     /* restore old state */
                     this->update_handler->update_reboot_state(update_reboot_state);
