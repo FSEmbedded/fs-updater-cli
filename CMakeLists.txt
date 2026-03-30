@@ -20,14 +20,19 @@ pkg_check_modules(LIBARCHIVE REQUIRED libarchive)
 # Configuration options
 set(update_version_type "string" CACHE STRING "Data type for fw/app version")
 
-# Validate version type
+# Validate version type and set variables for config.h
 if("${update_version_type}" STREQUAL "string")
-    add_definitions(-DUPDATE_VERSION_TYPE_STRING)
+    set(UPDATE_VERSION_TYPE_STRING 1)
+    set(UPDATE_VERSION_TYPE_UINT64 0)
 elseif("${update_version_type}" STREQUAL "uint64")
-    add_definitions(-DUPDATE_VERSION_TYPE_UINT64)
+    set(UPDATE_VERSION_TYPE_STRING 0)
+    set(UPDATE_VERSION_TYPE_UINT64 1)
 else()
     message(FATAL_ERROR "Invalid update_version_type: ${update_version_type}")
 endif()
+
+# Generate config.h from template
+configure_file(cmake/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config.h)
 
 # Sources
 set(SOURCES
@@ -53,6 +58,7 @@ target_compile_options(fs_updater_cli PRIVATE
 
 # Include directories (Yocto sysroot handles paths automatically)
 target_include_directories(fs_updater_cli PRIVATE
+    ${CMAKE_CURRENT_BINARY_DIR}
     src/cli
     ${BOTAN2_INCLUDE_DIRS}
     ${JSONCPP_INCLUDE_DIRS}

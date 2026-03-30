@@ -1,4 +1,5 @@
 #pragma once
+#include "config.h"
 
 #if UPDATE_VERSION_TYPE_UINT64 == 1
 typedef uint64_t version_t;

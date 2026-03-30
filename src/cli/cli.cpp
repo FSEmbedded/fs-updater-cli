@@ -24,7 +24,7 @@ using std::string;
 using std::stringstream;
 
 cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
-		cmd("F&S Update Framework CLI", ' ', VERSION, false),
+		cmd("F&S Update Framework CLI", ' ', PROJECT_VERSION, false),
 		arg_update("",
 		       "update_file",
 		       "Path to update package",
@@ -1253,7 +1253,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
              (this->is_app_state_bad.isSet() == false) && (this->set_fw_state_bad.isSet() == false) &&
              (this->is_fw_state_bad.isSet() == false) && (this->arg_update_type.isSet() == false))
     {
-        cout << "F&S Update Framework CLI Version: " << VERSION;
+        cout << "F&S Update Framework CLI Version: " << PROJECT_VERSION;
         cout << " build at: " << __DATE__ << ", " << __TIME__ << "." << endl;
     }
     else if ((this->arg_update.isSet() == false) && (this->arg_rollback_update.isSet() == false) &&
@@ -1319,7 +1319,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
              (this->is_app_state_bad.isSet() == false) && (this->set_fw_state_bad.isSet() == false) &&
              (this->is_fw_state_bad.isSet() == false) && (this->arg_update_type.isSet() == false))
     {
-        cout << "F&S Update Framework CLI Version: " << VERSION;
+        cout << "F&S Update Framework CLI Version: " << PROJECT_VERSION;
         cout << " build at: " << __DATE__ << ", " << __TIME__ << "." << endl;
         cout << "No argument given, nothing done. Use --help to get all commands." << endl;
     }

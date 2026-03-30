@@ -17,7 +17,7 @@
 #include <iostream>
 #include <fstream>
 
-#define VERSION "1.0.0"
+#include "config.h"
 
 typedef enum UpdateTypeT
 {
