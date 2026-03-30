@@ -803,46 +803,28 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
             return;
         }
         /* read update type */
-        std::filebuf *pbuf = update_type_stream.rdbuf();
-        std::size_t buf_size = pbuf->pubseekoff(0, update_type_stream.end, update_type_stream.in);
-        pbuf->pubseekpos(0, update_type_stream.in);
-        char *pchUpdateType = new char[buf_size + 1];
-        pbuf->sgetn(pchUpdateType, buf_size);
+        std::string updateType(std::istreambuf_iterator<char>(update_type_stream), {});
         update_type_stream.close();
-        pchUpdateType[buf_size] = '\0';
 
         /* read update version */
-        pbuf = update_version_stream.rdbuf();
-        buf_size = pbuf->pubseekoff(0, update_version_stream.end, update_version_stream.in);
-        pbuf->pubseekpos(0, update_version_stream.in);
-        char *pchUpdateVersion = new char[buf_size + 1];
-        pbuf->sgetn(pchUpdateVersion, buf_size);
+        std::string updateVersion(std::istreambuf_iterator<char>(update_version_stream), {});
         update_version_stream.close();
-        pchUpdateVersion[buf_size] = '\0';
 
         /* read update size */
-        pbuf = update_size_stream.rdbuf();
-        buf_size = pbuf->pubseekoff(0, update_size_stream.end, update_size_stream.in);
-        pbuf->pubseekpos(0, update_size_stream.in);
-        char *pchUpdateSize = new char[buf_size + 1];
-        pbuf->sgetn(pchUpdateSize, buf_size);
+        std::string updateSize(std::istreambuf_iterator<char>(update_size_stream), {});
         update_size_stream.close();
-        pchUpdateSize[buf_size] = '\0';
 
-        cout << "An new update is available on the server" << endl;
-        cout << "Type: " << pchUpdateType << endl;
-        cout << "Version: " << pchUpdateVersion << endl;
-        cout << "Size: " << pchUpdateSize << endl;
+        cout << "A new update is available on the server" << endl;
+        cout << "Type: " << updateType << endl;
+        cout << "Version: " << updateVersion << endl;
+        cout << "Size: " << updateSize << endl;
 
-        delete[] pchUpdateVersion;
-        delete[] pchUpdateSize;
-
-        if (strcmp("firmware", pchUpdateType) == 0)
+        if (updateType == "firmware")
         {
             this->proceeded_update_type = UPDATE_FIRMWARE;
             this->return_code = static_cast<int>(UPDATER_IS_UPDATE_AVAILABLE_STATE::FIRMWARE_UPDATE_AVAILABLE);
         }
-        else if (strcmp("application", pchUpdateType) == 0)
+        else if (updateType == "application")
         {
             this->proceeded_update_type = UPDATE_APPLICATION;
             this->return_code = static_cast<int>(UPDATER_IS_UPDATE_AVAILABLE_STATE::APPLICATION_UPDATE_AVAILABLE);
@@ -853,8 +835,6 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
             this->return_code =
                 static_cast<int>(UPDATER_IS_UPDATE_AVAILABLE_STATE::FIRMWARE_AND_APPLICATION_UPDATE_AVAILABLE);
         }
-
-        delete[] pchUpdateType;
     }
     else if ((this->arg_update.isSet() == false) && (this->arg_rollback_update.isSet() == false) &&
              (this->arg_switch_fw_slot.isSet() == false) && (this->arg_switch_app_slot.isSet() == false) &&
@@ -1100,32 +1080,11 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
             }
             else
             {
-                int tryAgain = 5;
                 std::filesystem::path update_location = work_dir / "update_location";
-                size_t filesize = 0;
-                /* Wait for 5 seconds because adu agent add path
-                 * path for update location.
-                 * TODO: Waiting for 5 seconds may be overworked...
-                 */
-                while (tryAgain--)
-                {
-                    /* First check for update location because it can be
-                     * empty.*/
-                    if (!std::filesystem::exists(update_location))
-                    {
-                        sleep(1);
-                        continue;
-                    }
-                    filesize = std::filesystem::file_size(update_location);
-                    /* smallest size 9 chars file update.fs */
-                    if (filesize > 9)
-                    {
-                        break;
-                    }
-                    sleep(1);
-                }
 
-                if (tryAgain == 0)
+                /* Check if ADU agent has written the update location file yet */
+                if (!std::filesystem::exists(update_location) ||
+                    std::filesystem::file_size(update_location) <= 9)
                 {
                     cout << "Waiting to start download." << endl;
                     this->return_code =
@@ -1138,7 +1097,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
                     /* get path to update file */
                     path_file_stream >> update_file_path;
                     path_file_stream.close();
-                    /* Is update file exits */
+                    /* Does update file exist */
                     if (!std::filesystem::exists(update_file_path))
                     {
                         cerr << "Update file: " << update_file_path << " does not exist." << endl;
@@ -1148,7 +1107,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
                     else
                     {
                         /* get current update file size */
-                        filesize = std::filesystem::file_size(update_file_path);
+                        size_t filesize = std::filesystem::file_size(update_file_path);
                         cout << "Size of loaded update: " << filesize << "..." << endl;
 
                         if (filesize == 0)
