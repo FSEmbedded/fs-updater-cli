@@ -127,7 +127,7 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
 			    ),
 		is_fw_state_bad("",
 			    "is_fw_state_bad",
-				"Check firwmare state for bad",
+				"Check firmware state for bad",
 				false,
 			    'a',
 				"accepted states: A or B"
@@ -180,7 +180,7 @@ void cli::fs_update_cli::update_image_state(const char *update_file_env, const s
             update_type = this->arg_update_type.getValue();
             if ((update_type.compare("app") != 0) && (update_type.compare("fw") != 0))
             {
-                cerr << "Update type: " << update_type << "does not exists." << endl;
+                cerr << "Update type: " << update_type << " does not exist." << endl;
                 this->return_code = EPERM;
                 return;
             }
@@ -368,7 +368,7 @@ void cli::fs_update_cli::switch_firmware_slot()
             const update_definitions::UBootBootstateFlags update_reboot_state =
                 this->update_handler->get_update_reboot_state();
             /* Create directory if not exists.
-             * GenericException is possible if directory does not exists and
+             * GenericException is possible if directory does not exist and
              * can not be created.
              */
             this->update_handler->create_work_dir();
@@ -419,7 +419,7 @@ void cli::fs_update_cli::switch_application_slot()
             const update_definitions::UBootBootstateFlags update_reboot_state =
                 this->update_handler->get_update_reboot_state();
             /* Create directory if not exists.
-             * GenericException is possible if directory does not exists and
+             * GenericException is possible if directory does not exist and
              * can not be created.
              */
             this->update_handler->create_work_dir();
@@ -530,7 +530,7 @@ void cli::fs_update_cli::print_update_reboot_state()
         }
         else
         {
-            cout << "Incomplete firwmware rollback. Commit requested." << endl;
+            cout << "Incomplete firmware rollback. Commit requested." << endl;
             this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_FW_ROLLBACK);
         }
     }
@@ -562,7 +562,7 @@ void cli::fs_update_cli::print_update_reboot_state()
     }
     else if (update_reboot_state == update_definitions::UBootBootstateFlags::INCOMPLETE_FW_ROLLBACK)
     {
-        cout << "Incomplete firwmware rollback. Commit requested." << endl;
+        cout << "Incomplete firmware rollback. Commit requested." << endl;
         this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_FW_ROLLBACK);
     }
     else if (update_reboot_state == update_definitions::UBootBootstateFlags::INCOMPLETE_APP_ROLLBACK)
@@ -682,7 +682,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
 
         if (std::filesystem::exists(update_location) == false)
         {
-            cerr << "Update file: " << update_location << "does not exists." << endl;
+            cerr << "Update file: " << update_location << " does not exist." << endl;
             this->return_code = EPERM;
             return;
         }
@@ -734,7 +734,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
         if (update_stick_env == nullptr)
         {
             stringstream out;
-            out << "Environment variable \"UPDATE_STICK\" is no set" << endl;
+            out << "Environment variable \"UPDATE_STICK\" is not set" << endl;
             this->serial_cout->write(out.str());
             this->return_code = EPERM;
             return;
@@ -1147,7 +1147,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
                     /* Is update file exits */
                     if (!std::filesystem::exists(update_file_path))
                     {
-                        cerr << "Update file: " << update_file_path << "does not exists." << endl;
+                        cerr << "Update file: " << update_file_path << " does not exist." << endl;
                         this->return_code =
                             static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::UPDATE_DOWNLOAD_WAITING_TO_START);
                     }
