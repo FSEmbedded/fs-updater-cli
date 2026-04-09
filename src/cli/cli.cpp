@@ -382,7 +382,20 @@ void cli::fs_update_cli::switch_firmware_slot()
     catch (const fs::GenericException &e)
     {
         cerr << "Rollback firmware progress error: " << e.what()  << " errno : " << e.errorno << endl;
-        this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_PROGRESS_ERROR);
+
+        switch (e.errorno)
+        {
+        case EPERM:
+            /* target firmware slot is marked bad */
+            this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_BAD);
+            break;
+        case ECANCELED:
+            /* target firmware slot is uncommitted */
+            this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_BAD);
+            break;
+        default:
+            this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_PROGRESS_ERROR);
+        }
     }
     catch (const fs::BaseFSUpdateException &e)
     {
@@ -438,8 +451,8 @@ void cli::fs_update_cli::switch_application_slot()
             this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_BAD);
             break;
         case ECANCELED:
-            /* application update is not commited */
-            this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_UPDATE);
+            /* target application slot is uncommitted */
+            this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_BAD);
             break;
         default:
             this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_PROGRESS_ERROR);
