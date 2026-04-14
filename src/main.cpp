@@ -1,5 +1,6 @@
 #include "cli/cli.h"
 #include "cli/cli_io.h"
+#include "cli/fs_updater_error.h"
 #include <fs_update_framework/BaseException.h>
 
 int main(int argc, const char ** argv)
@@ -15,6 +16,6 @@ int main(int argc, const char ** argv)
         msg.append(e.what());
         msg.append("\n");
         cli_io::write_stderr(msg);
-        return 124;
+        return static_cast<int>(UPDATER_FATAL::UNHANDLED_EXCEPTION);
     }
 }

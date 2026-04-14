@@ -216,7 +216,7 @@ void cli::fs_update_cli::update_image_state(const string &update_file)
             if ((update_type.compare("app") != 0) && (update_type.compare("fw") != 0))
             {
                 cli_io::write_stderr("Update type: " + update_type + " does not exist.\n");
-                this->return_code = EINVAL;
+                this->return_code = static_cast<int>(UPDATER_CLI_VALIDATION::INVALID_UPDATE_TYPE);
                 return;
             }
         }
@@ -651,7 +651,7 @@ void cli::fs_update_cli::handle_update_file()
     if (!posix_helpers::path_exists(update_location.c_str()))
     {
         cli_io::write_stderr("Update file: " + update_location + " does not exist.\n");
-        this->return_code = errno;
+        this->return_code = static_cast<int>(UPDATER_CLI_VALIDATION::UPDATE_FILE_NOT_FOUND);
         return;
     }
     this->update_image_state(update_location);
@@ -665,14 +665,14 @@ void cli::fs_update_cli::handle_automatic()
     if (update_stick_env == nullptr)
     {
         this->serial_cout->write("Environment variable \"UPDATE_STICK\" is not set\n");
-        this->return_code = EPERM;
+        this->return_code = static_cast<int>(UPDATER_CLI_VALIDATION::MISSING_ENV_UPDATE_STICK);
         return;
     }
 
     if (update_file_env == nullptr)
     {
         this->serial_cout->write("\"UPDATE_FILE\" env variable -- not set\n");
-        this->return_code = EPERM;
+        this->return_code = static_cast<int>(UPDATER_CLI_VALIDATION::MISSING_ENV_UPDATE_FILE);
         return;
     }
 
@@ -899,8 +899,9 @@ void cli::fs_update_cli::handle_apply_update()
         {
             cli_io::write_stdout("Apply update...\n");
             if(this->reboot() != 0) {
-                cli_io::write_stderr(string("Failed to reboot system: ") + strerror(errno) + "\n");
-                this->return_code = errno;
+                const int saved = errno;
+                cli_io::write_stderr(string("Failed to reboot system: ") + strerror(saved) + "\n");
+                this->return_code = static_cast<int>(UPDATER_SYSTEM::REBOOT_FAILED);
             } else {
                 this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFUL);
             }
@@ -910,6 +911,8 @@ void cli::fs_update_cli::handle_apply_update()
             const string apply_marker = posix_helpers::path_join(work_dir, "applyUpdate");
             if (!posix_helpers::create_marker_file(apply_marker.c_str()))
             {
+                // errno is clobbered by create_marker_file's internal close();
+                // reading it here would be meaningless.
                 cli_io::write_stdout("Initiate of update apply fails...\n");
                 this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_FAILED);
             }
@@ -944,8 +947,9 @@ void cli::fs_update_cli::handle_apply_update()
         cli_io::write_stdout("Apply rollback update...\n");
 
         if(this->reboot() != 0) {
-            cli_io::write_stderr(string("Failed to reboot system: ") + strerror(errno) + "\n");
-            this->return_code = errno;
+            const int saved = errno;
+            cli_io::write_stderr(string("Failed to reboot system: ") + strerror(saved) + "\n");
+            this->return_code = static_cast<int>(UPDATER_SYSTEM::REBOOT_FAILED);
         } else {
             this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFUL);
         }
@@ -1039,7 +1043,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
     if (this->arg_update_type.isSet() && !this->arg_update.isSet())
     {
         cli_io::write_stderr("--update_type can only be used with --update_file\n");
-        this->return_code = EPERM;
+        this->return_code = static_cast<int>(UPDATER_CLI_VALIDATION::UPDATE_TYPE_WITHOUT_FILE);
         return;
     }
 
@@ -1055,7 +1059,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
     else
     {
         cli_io::write_stderr("Wrong combination or set of variables. Please refer --help or manual\n");
-        this->return_code = EPERM;
+        this->return_code = static_cast<int>(UPDATER_CLI_VALIDATION::INCOMPATIBLE_ARG_COMBO);
     }
 }
 
