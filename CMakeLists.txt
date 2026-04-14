@@ -1,26 +1,22 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.18)
 project(fs_updater_cli VERSION 1.1.0 LANGUAGES CXX)
-
-# Compiler settings
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
 
 include(GNUInstallDirs)
 
-# Find required packages
-find_package(Threads REQUIRED)
-find_package(PkgConfig REQUIRED)
+# ==============================================================================
+# Options
+# ==============================================================================
 
-# Use pkg-config for dependencies (Yocto provides .pc files)
-pkg_check_modules(BOTAN2 REQUIRED botan-2)
-pkg_check_modules(JSONCPP REQUIRED jsoncpp)
-pkg_check_modules(LIBARCHIVE REQUIRED libarchive)
+set(OPTIMIZE_FOR "SIZE" CACHE STRING "Release optimization: SIZE or SPEED")
+set_property(CACHE OPTIMIZE_FOR PROPERTY STRINGS SIZE SPEED)
 
-# Configuration options
 set(update_version_type "string" CACHE STRING "Data type for fw/app version")
 
-# Validate version type and set variables for config.h
+# Validate options
+if(NOT OPTIMIZE_FOR MATCHES "^(SIZE|SPEED)$")
+    message(FATAL_ERROR "OPTIMIZE_FOR must be SIZE or SPEED, got: ${OPTIMIZE_FOR}")
+endif()
+
 if("${update_version_type}" STREQUAL "string")
     set(UPDATE_VERSION_TYPE_STRING 1)
     set(UPDATE_VERSION_TYPE_UINT64 0)
@@ -31,10 +27,30 @@ else()
     message(FATAL_ERROR "Invalid update_version_type: ${update_version_type}")
 endif()
 
-# Generate config.h from template
+# Override CMake's default Release flags (-O3 -DNDEBUG) to avoid conflicting -O levels.
+set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG" CACHE STRING "" FORCE)
+
+# ==============================================================================
+# Generated config header
+# ==============================================================================
+
 configure_file(cmake/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config.h)
 
+# ==============================================================================
+# Dependencies
+# ==============================================================================
+
+find_package(Threads REQUIRED)
+find_package(PkgConfig REQUIRED)
+
+pkg_check_modules(BOTAN2 REQUIRED botan-2)
+pkg_check_modules(JSONCPP REQUIRED jsoncpp)
+pkg_check_modules(LIBARCHIVE REQUIRED libarchive)
+
+# ==============================================================================
 # Sources
+# ==============================================================================
+
 set(SOURCES
     src/main.cpp
     src/cli/cli.cpp
@@ -42,21 +58,53 @@ set(SOURCES
     src/logger/LoggerSinkSerial.cpp
 )
 
-# Headers
 set(HEADERS
     src/cli/fs_updater_error.h
 )
 
-# Build executable
+# ==============================================================================
+# Target
+# ==============================================================================
+
 add_executable(fs_updater_cli ${SOURCES})
 
-# Compiler flags
-target_compile_options(fs_updater_cli PRIVATE
-    $<$<CONFIG:Debug>:-Wall -Wextra -Og -g>
-    $<$<CONFIG:Release>:-Wall -Wextra -O2 -DNDEBUG>
+target_compile_features(fs_updater_cli PRIVATE cxx_std_17)
+set_target_properties(fs_updater_cli PROPERTIES
+    CXX_EXTENSIONS OFF
+    OUTPUT_NAME "fs-updater"
 )
 
-# Include directories (Yocto sysroot handles paths automatically)
+# ==============================================================================
+# Compiler and linker flags
+#
+# Deviation: -fno-exceptions and -fno-rtti are NOT applied.
+# fs-updater-lib throws exceptions; CLI must catch.
+# TCLAP (header-only) requires RTTI.
+# ==============================================================================
+
+target_compile_options(fs_updater_cli PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    # Debug
+    $<$<CONFIG:Debug>:-Og -g>
+    # Release optimizations
+    $<$<CONFIG:Release>:$<IF:$<STREQUAL:${OPTIMIZE_FOR},SPEED>,-O2,-Os>>
+    $<$<CONFIG:Release>:-flto>
+    $<$<CONFIG:Release>:-ffunction-sections>
+    $<$<CONFIG:Release>:-fdata-sections>
+)
+
+target_link_options(fs_updater_cli PRIVATE
+    $<$<CONFIG:Release>:-Wl,--gc-sections>
+    $<$<CONFIG:Release>:-flto>
+    $<$<CONFIG:Release>:-s>
+)
+
+# ==============================================================================
+# Include directories
+# ==============================================================================
+
 target_include_directories(fs_updater_cli PRIVATE
     ${CMAKE_CURRENT_BINARY_DIR}
     src/cli
@@ -65,9 +113,12 @@ target_include_directories(fs_updater_cli PRIVATE
     ${LIBARCHIVE_INCLUDE_DIRS}
 )
 
-# Link libraries - let Yocto handle the paths
+# ==============================================================================
+# Link libraries
+# ==============================================================================
+
 target_link_libraries(fs_updater_cli PRIVATE
-    fs_updater          # Library name without full path
+    fs_updater
     ${BOTAN2_LIBRARIES}
     ${JSONCPP_LIBRARIES}
     ${LIBARCHIVE_LIBRARIES}
@@ -76,13 +127,11 @@ target_link_libraries(fs_updater_cli PRIVATE
     z
 )
 
-# Set properties
-set_target_properties(fs_updater_cli PROPERTIES 
-    OUTPUT_NAME "fs-updater"
-)
+# ==============================================================================
+# Install
+# ==============================================================================
 
-# Installation
-install(TARGETS fs_updater_cli 
+install(TARGETS fs_updater_cli
     RUNTIME DESTINATION ${CMAKE_INSTALL_SBINDIR}
 )
 
