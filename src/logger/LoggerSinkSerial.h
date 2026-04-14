@@ -1,14 +1,10 @@
-
 #pragma once
 #include <fs_update_framework/logger/LoggerSinkBase.h>
 
 #include "../cli/SynchronizedSerial.h"
 
-#include <sstream>
-#include <iostream>
-#include <time.h>
-#include <iomanip>
-#include <fstream>
+#include <ctime>
+#include <mutex>
 
 namespace logger
 {
@@ -17,7 +13,6 @@ namespace logger
         private:
             const logger::logLevel log_level;
             std::shared_ptr<SynchronizedSerial> serial_port;
-            // Mutex to ensure thread-safe writes to the serial interface
             static std::mutex serial_mutex;
 
         public:
