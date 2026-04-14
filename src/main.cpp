@@ -1,6 +1,6 @@
 #include "cli/cli.h"
+#include "cli/cli_io.h"
 #include <fs_update_framework/BaseException.h>
-#include <iostream>
 
 int main(int argc, const char ** argv)
 {
@@ -11,7 +11,10 @@ int main(int argc, const char ** argv)
     }
     catch(const std::exception &e)
     {
-        std::cerr << "Unhandled std::exception: " << e.what() << std::endl;
+        std::string msg = "Unhandled std::exception: ";
+        msg.append(e.what());
+        msg.append("\n");
+        cli_io::write_stderr(msg);
         return 124;
     }
 }

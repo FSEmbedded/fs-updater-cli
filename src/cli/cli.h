@@ -14,18 +14,9 @@
 #include <climits>
 #include <exception>
 #include <vector>
-#include <iostream>
-#include <fstream>
+#include <array>
 
 #include "config.h"
-
-typedef enum UpdateTypeT
-{
-  UPDATE_FIRMWARE = 0,
-  UPDATE_APPLICATION,
-  UPDATE_COMMON,
-  UPDATE_UNKNOWN = -1,
-} update_type_t;
 
 /**
  * Namespace contain all CLI related classes of functionality
@@ -64,15 +55,23 @@ namespace cli
 		std::shared_ptr<logger::LoggerHandler> logger_handler;
 
 		int return_code;
-		update_type_t proceeded_update_type;
+
+		/**
+		 * Configure logger sink based on --debug and --automatic flags.
+		 */
+		void setup_logging();
 
 		/**
 		 * Internal function to run update and handle errors as return_value:
-		 * @param update_file_env Zero terminated char array of update package
-		 * @param update_stick Path to update stick directory
-		 * @param use_arg true - uses arg_update, false - use passing parameter
+		 * @param update_file Path to update package (fully resolved)
 		 */
-		void update_image_state(const char *update_file_env, const std::string &update_stick, bool use_arg);
+		void update_image_state(const std::string &update_file);
+
+		/**
+		 * Create rollback marker file in work directory.
+		 * @return true on success, false on failure
+		 */
+		bool create_rollback_marker();
 
 		/**
 		 * Internal function which map the update state to a string.
@@ -142,6 +141,20 @@ namespace cli
 		 * 0 (false) - not bad
 		 */
 		void is_firmware_state_bad(const char & state);
+
+		/* Command handlers dispatched from parse_input */
+		void handle_update_file();
+		void handle_automatic();
+		void handle_print_version();
+		void handle_is_update_available();
+		void handle_download_update();
+		void handle_download_progress();
+		void handle_install_update();
+		void handle_apply_update();
+		void handle_set_app_state_bad();
+		void handle_is_app_state_bad();
+		void handle_set_fw_state_bad();
+		void handle_is_fw_state_bad();
 
 		/**
 		 * Parse input and run as described in commands.

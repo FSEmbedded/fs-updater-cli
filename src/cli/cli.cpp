@@ -1,8 +1,10 @@
 #include "cli.h"
 #include "fs_updater_error.h"
 #include "fs_updater_types.h"
+#include "posix_helpers.h"
+#include "cli_io.h"
 #include <cstdlib>
-#include <iostream>
+#include <cstring>
 
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -11,20 +13,13 @@
 
 constexpr char FSCLI_DOMAIN[] = "cli";
 
-#define FIRMWARE_UPDATE_STATE 0
-#define APPLICATION_UPDATE_STATE 1
+constexpr uint32_t firmware_update_state = 0;
+constexpr uint32_t application_update_state = 1;
 
-/* declaration block for std namespace */
-using std::cerr;
-using std::cout;
-using std::endl;
-using std::ifstream;
-using std::ofstream;
 using std::string;
-using std::stringstream;
 
 cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
-		cmd("F&S Update Framework CLI", ' ', PROJECT_VERSION, false),
+		cmd("F&S Update Framework CLI", ' ', FUS_CLI_PROJECT_VERSION, false),
 		arg_update("",
 		       "update_file",
 		       "Path to update package",
@@ -39,11 +34,6 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
 		       "",
 		       "accepted values: fw or app"
 		),
-		arg_rollback_update("",
-				 "rollback_update",
-				 "Rollback of the last installed update "\
-				 "(must be started before commit update)"
-				 ),
 		arg_switch_fw_slot("",
 				"switch_fw_slot",
 				"Switch from active firmware slot to the inactive "\
@@ -53,6 +43,11 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
 				 "switch_app_slot",
 				 "Switch from active to the inactive application slot. "\
 				 "(apply update required)"
+				 ),
+		arg_rollback_update("",
+				 "rollback_update",
+				 "Rollback of the last installed update "\
+				 "(must be started before commit update)"
 				 ),
 		arg_commit_update("",
 				  "commit_update",
@@ -79,6 +74,10 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
 				"application_version",
 				"Show current application version"
 				),
+		get_version("",
+			    "version",
+			    "Print cli version"
+			    ),
 		notice_update_available("",
 					"is_update_available",
 					"Check update available on the server"
@@ -100,10 +99,6 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
 					   "install_update",
 					   "Install downloaded update"
 					   ),
-		get_version("",
-			    "version",
-			    "Print cli version"
-			    ),
 		set_app_state_bad("",
 			    "set_app_state_bad",
 				"Mark application A or B bad",
@@ -157,58 +152,84 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
     this->cmd.add(is_fw_state_bad);
 
     this->parse_input(argc, argv);
-    proceeded_update_type = UPDATE_UNKNOWN;
 }
 
 cli::fs_update_cli::~fs_update_cli()
 {
 }
 
-void cli::fs_update_cli::update_image_state(const char *update_file_env, const string &update_stick, bool use_arg)
+// ---------------------------------------------------------------------------
+// Logging setup
+// ---------------------------------------------------------------------------
+
+void cli::fs_update_cli::setup_logging()
+{
+    const bool is_automatic = this->arg_automatic.isSet();
+    const auto level = this->arg_debug.isSet()
+        ? logger::logLevel::DEBUG
+        : logger::logLevel::WARNING;
+
+    if (is_automatic)
+    {
+        this->serial_cout = std::make_shared<SynchronizedSerial>();
+        this->logger_sink = std::make_unique<logger::LoggerSinkSerial>(level, serial_cout);
+    }
+    else
+    {
+        this->logger_sink = std::make_shared<logger::LoggerSinkStdout>(level);
+    }
+
+    this->logger_handler = logger::LoggerHandler::initLogger(this->logger_sink);
+    this->update_handler = std::make_unique<fs::FSUpdate>(logger_handler);
+}
+
+// ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
+
+bool cli::fs_update_cli::create_rollback_marker()
+{
+    const string work_dir = this->update_handler->get_work_dir().string();
+    const string marker = posix_helpers::path_join(work_dir, "rollbackUpdate");
+    if (!posix_helpers::create_marker_file(marker.c_str()))
+    {
+        cli_io::write_stderr("Failed to create rollback marker file\n");
+        return false;
+    }
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Update execution
+// ---------------------------------------------------------------------------
+
+void cli::fs_update_cli::update_image_state(const string &update_file)
 {
     try
     {
-        cout << "Update started" << endl;
-        /* get update image type: fw, app or fw and app */
+        cli_io::write_stdout("Update started\n");
         uint8_t installed_update_type = 0;
-        string update_file;
-        /* update type in case second parameter for installation process */
         string update_type;
-        bool isUpdateTypeAvailable = this->arg_update_type.isSet();
-        if (isUpdateTypeAvailable == true)
+        if (this->arg_update_type.isSet())
         {
             update_type = this->arg_update_type.getValue();
             if ((update_type.compare("app") != 0) && (update_type.compare("fw") != 0))
             {
-                cerr << "Update type: " << update_type << " does not exist." << endl;
-                this->return_code = EPERM;
+                cli_io::write_stderr("Update type: " + update_type + " does not exist.\n");
+                this->return_code = EINVAL;
                 return;
             }
         }
-        /* Build string for update file with full path.  */
-        if (use_arg == true)
-        {
-            update_file = this->arg_update.getValue();
-        }
-        else
-        {
-            update_file = update_stick;
-            if (update_stick.back() != '/')
-            {
-                update_file += string("/");
-            }
 
-            update_file += string(update_file_env);
-        }
-        /* start update */
-        this->update_handler->update_image(update_file, update_type, installed_update_type);
+        string mutable_file = update_file;
+        this->update_handler->update_image(mutable_file, update_type, installed_update_type);
 
         switch(installed_update_type)
         {
             case 1:
             this->return_code = static_cast<int>(UPDATER_FIRMWARE_STATE::UPDATE_SUCCESSFUL);
             break;
-            case 2: 
+            case 2:
             this->return_code = static_cast<int>(UPDATER_APPLICATION_STATE::UPDATE_SUCCESSFUL);
             break;
             case 3:
@@ -218,36 +239,35 @@ void cli::fs_update_cli::update_image_state(const char *update_file_env, const s
             this->return_code = static_cast<int>(UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_PROGRESS_ERROR);
         }
 
-        cout << "Image update successful" << endl;
+        cli_io::write_stdout("Image update successful\n");
     }
     catch (const fs::UpdateInProgress &e)
     {
-        cerr << "Image update progress error: " << e.what() << endl;
+        cli_io::write_stderr(string("Image update progress error: ") + e.what() + "\n");
         this->return_code = static_cast<int>(UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_PROGRESS_ERROR);
     }
     catch (const fs::GenericException &e)
     {
-        cerr << e.what() << " errno: " << e.errorno << endl;
+        cli_io::write_stderr(string(e.what()) + " errno: " + std::to_string(e.errorno) + "\n");
         this->return_code = static_cast<int>(UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_PROGRESS_ERROR);
     }
     catch (const fs::BaseFSUpdateException &e)
     {
-        /* Remove tmp.app in case the file tmp.app is available
-         * This is the application update temporary file before rename to
-         * updated application image. In case update fails old version should be
-         * removed.
-         */
-        std::filesystem::path tmp_app = this->update_handler->getTempAppPath();
-        std::filesystem::remove(tmp_app);
-        cerr << "Image update error: " << e.what() << endl;
+        const string tmp_app = this->update_handler->getTempAppPath().string();
+        static_cast<void>(posix_helpers::remove_file(tmp_app.c_str()));
+        cli_io::write_stderr(string("Image update error: ") + e.what() + "\n");
         this->return_code = static_cast<int>(UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_INTERNAL_ERROR);
     }
     catch (const std::exception &e)
     {
-        cerr << "Image update system error: " << e.what() << endl;
+        cli_io::write_stderr(string("Image update system error: ") + e.what() + "\n");
         this->return_code = static_cast<int>(UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_SYSTEM_ERROR);
     }
 }
+
+// ---------------------------------------------------------------------------
+// Commit
+// ---------------------------------------------------------------------------
 
 void cli::fs_update_cli::commit_update()
 {
@@ -255,142 +275,119 @@ void cli::fs_update_cli::commit_update()
     {
         if (this->update_handler->commit_update() == true)
         {
-            cout << "Commit update" << endl;
+            cli_io::write_stdout("Commit update\n");
             this->return_code = static_cast<int>(UPDATER_COMMIT_STATE::UPDATE_COMMIT_SUCCESSFUL);
         }
         else
         {
-            cout << "Commit update not needed" << endl;
+            cli_io::write_stdout("Commit update not needed\n");
             this->return_code = static_cast<int>(UPDATER_COMMIT_STATE::UPDATE_NOT_NEEDED);
         }
     }
     catch (const fs::NotAllowedUpdateState &e)
     {
-        cerr << "Not allowed update state in UBoot" << endl;
+        cli_io::write_stderr("Not allowed update state in UBoot\n");
         this->return_code = static_cast<int>(UPDATER_COMMIT_STATE::UPDATE_NOT_ALLOWED_UBOOT_STATE);
     }
     catch (const std::exception &e)
     {
-        cerr << "FS updater cli error: " << e.what() << endl;
+        cli_io::write_stderr(string("FS updater cli error: ") + e.what() + "\n");
         this->return_code = static_cast<int>(UPDATER_COMMIT_STATE::UPDATE_SYSTEM_ERROR);
     }
 }
+
+// ---------------------------------------------------------------------------
+// Rollback
+// ---------------------------------------------------------------------------
 
 void cli::fs_update_cli::rollback_update()
 {
     try
     {
-        /* get last update reboot state */
         const update_definitions::UBootBootstateFlags update_reboot_state =
             this->update_handler->get_update_reboot_state();
-        /* Create directory if not exists.
-         * GenericException is possible if not available directory
-         * can't be created.
-         */
+
         this->update_handler->create_work_dir();
 
         if (update_reboot_state == update_definitions::UBootBootstateFlags::INCOMPLETE_APP_FW_UPDATE)
         {
-            cout << "Start application and firmware rollback" << endl;
-            /* do rollback application */
+            cli_io::write_stdout("Start application and firmware rollback\n");
             this->update_handler->rollback_application();
-            /* do rollback firmware */
             this->update_handler->rollback_firmware();
-            std::filesystem::path work_dir = this->update_handler->get_work_dir();
-            ofstream rollback((work_dir / "rollbackUpdate"));
-            rollback.close();
-            cout << "Rollback finished successful. Reboot required." << endl;
-            this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_SUCCESSFUL);
         }
         else if (update_reboot_state == update_definitions::UBootBootstateFlags::INCOMPLETE_FW_UPDATE)
         {
-            cout << "Start firmware rollback" << endl;
-            /* do rollback firmware */
+            cli_io::write_stdout("Start firmware rollback\n");
             this->update_handler->rollback_firmware();
-            std::filesystem::path work_dir = this->update_handler->get_work_dir();
-            ofstream rollback((work_dir / "rollbackUpdate"));
-            rollback.close();
-            cout << "Rollback finished successful. Reboot required." << endl;
-            this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_SUCCESSFUL);
         }
         else if (update_reboot_state == update_definitions::UBootBootstateFlags::INCOMPLETE_APP_UPDATE)
         {
-            cout << "Rollback application start" << endl;
-            /* do rollback application */
+            cli_io::write_stdout("Rollback application start\n");
             this->update_handler->rollback_application();
-            std::filesystem::path work_dir = this->update_handler->get_work_dir();
-            ofstream rollback((work_dir / "rollbackUpdate"));
-            rollback.close();
-            cout << "Rollback finished successful. Reboot required." << endl;
-            this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_SUCCESSFUL);
         }
         else
         {
-            cout << "Rollback is not allowed because update reboot state is wrong." << endl;
-            /* return_code would be setted by the function */
+            cli_io::write_stdout("Rollback is not allowed because update reboot state is wrong.\n");
             this->print_update_reboot_state();
+            return;
         }
+
+        this->create_rollback_marker();
+        cli_io::write_stdout("Rollback finished successful. Reboot required.\n");
+        this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_SUCCESSFUL);
     }
     catch (const fs::GenericException &e)
     {
-        cerr << "Rollback update progress error: " << e.what() << " errno: " << e.errorno << endl;
+        cli_io::write_stderr(string("Rollback update progress error: ") + e.what() + " errno: " + std::to_string(e.errorno) + "\n");
         this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_PROGRESS_ERROR);
     }
     catch (const fs::BaseFSUpdateException &e)
     {
-        cerr << "Rollback update error: " << e.what() << endl;
+        cli_io::write_stderr(string("Rollback update error: ") + e.what() + "\n");
         this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_INTERNAL_ERROR);
     }
     catch (const std::exception &e)
     {
-        cerr << "Rollback firmware update system error: " << e.what() << endl;
+        cli_io::write_stderr(string("Rollback firmware update system error: ") + e.what() + "\n");
         this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_SYSTEM_ERROR);
     }
 }
+
+// ---------------------------------------------------------------------------
+// Slot switch
+// ---------------------------------------------------------------------------
 
 void cli::fs_update_cli::switch_firmware_slot()
 {
     try
     {
-        /* get last update reboot state */
         const update_definitions::UBootBootstateFlags update_reboot_state =
             this->update_handler->get_update_reboot_state();
         if (update_reboot_state != update_definitions::UBootBootstateFlags::NO_UPDATE_REBOOT_PENDING)
         {
-            cout << "Switch firmware slot is not allowed because update reboot state is wrong." << endl;
-            /* return_code would be setted by the function */
+            cli_io::write_stdout("Switch firmware slot is not allowed because update reboot state is wrong.\n");
             this->print_update_reboot_state();
         }
         else
         {
-            cout << "Start switch firmware slot" << endl;
-            /* Create directory if not exists.
-             * GenericException is possible if directory does not exist and
-             * can not be created.
-             */
+            cli_io::write_stdout("Start switch firmware slot\n");
             this->update_handler->create_work_dir();
-            /* try to switch to next fw. slot  */
             this->update_handler->rollback_firmware();
-            /* create rollbackUpdate to apply update */
-            std::filesystem::path work_dir = this->update_handler->get_work_dir();
-            ofstream rollback((work_dir / "rollbackUpdate"));
-            rollback.close();
-            cout << "Switch firmware slot successful" << endl;
+            this->create_rollback_marker();
+            cli_io::write_stdout("Switch firmware slot successful\n");
             this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_SUCCESSFUL);
         }
     }
     catch (const fs::GenericException &e)
     {
-        cerr << "Rollback firmware progress error: " << e.what()  << " errno : " << e.errorno << endl;
+        cli_io::write_stderr(string("Rollback firmware progress error: ") + e.what() + " errno : " + std::to_string(e.errorno) + "\n");
 
         switch (e.errorno)
         {
         case EPERM:
-            /* target firmware slot is marked bad */
             this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_BAD);
             break;
         case ECANCELED:
-            /* target firmware slot is uncommitted */
             this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_BAD);
             break;
         default:
@@ -399,12 +396,12 @@ void cli::fs_update_cli::switch_firmware_slot()
     }
     catch (const fs::BaseFSUpdateException &e)
     {
-        cerr << "Rollback firmware update error: " << e.what() << endl;
+        cli_io::write_stderr(string("Rollback firmware update error: ") + e.what() + "\n");
         this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_INTERNAL_ERROR);
     }
     catch (const std::exception &e)
     {
-        cerr << "Rollback firmware update system error: " << e.what() << endl;
+        cli_io::write_stderr(string("Rollback firmware update system error: ") + e.what() + "\n");
         this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_SYSTEM_ERROR);
     }
 }
@@ -413,45 +410,33 @@ void cli::fs_update_cli::switch_application_slot()
 {
     try
     {
-        /* get last update reboot state */
         const update_definitions::UBootBootstateFlags update_reboot_state =
             this->update_handler->get_update_reboot_state();
         if (update_reboot_state != update_definitions::UBootBootstateFlags::NO_UPDATE_REBOOT_PENDING)
         {
-            cout << "Switch application slot is not allowed because update reboot state is wrong." << endl;
-            /* return_code would be setted by the function */
+            cli_io::write_stdout("Switch application slot is not allowed because update reboot state is wrong.\n");
             this->print_update_reboot_state();
         }
         else
         {
-            cout << "Start switch application slot" << endl;
-            /* Create directory if not exists.
-             * GenericException is possible if directory does not exist and
-             * can not be created.
-             */
+            cli_io::write_stdout("Start switch application slot\n");
             this->update_handler->create_work_dir();
-            /* try to switch to next app. slot  */
             this->update_handler->rollback_application();
-            /* create rollbackUpdate to apply update */
-            std::filesystem::path work_dir = this->update_handler->get_work_dir();
-            ofstream rollback((work_dir / "rollbackUpdate"));
-            rollback.close();
-            cout << "Switch application slot successful" << endl;
+            this->create_rollback_marker();
+            cli_io::write_stdout("Switch application slot successful\n");
             this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_SUCCESSFUL);
         }
     }
     catch (const fs::GenericException &e)
     {
-        cerr << "Rollback application progress error: " << e.what() << " errno : " << e.errorno << endl;
+        cli_io::write_stderr(string("Rollback application progress error: ") + e.what() + " errno : " + std::to_string(e.errorno) + "\n");
 
         switch (e.errorno)
         {
         case EPERM:
-            /* application update is not commited */
             this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_BAD);
             break;
         case ECANCELED:
-            /* target application slot is uncommitted */
             this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_BAD);
             break;
         default:
@@ -460,15 +445,19 @@ void cli::fs_update_cli::switch_application_slot()
     }
     catch (const fs::BaseFSUpdateException &e)
     {
-        cerr << "Rollback application update error: " << e.what() << endl;
+        cli_io::write_stderr(string("Rollback application update error: ") + e.what() + "\n");
         this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_INTERNAL_ERROR);
     }
     catch (const std::exception &e)
     {
-        cerr << "Rollback application update system error: " << e.what() << endl;
+        cli_io::write_stderr(string("Rollback application update system error: ") + e.what() + "\n");
         this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_SYSTEM_ERROR);
     }
 }
+
+// ---------------------------------------------------------------------------
+// State queries
+// ---------------------------------------------------------------------------
 
 void cli::fs_update_cli::print_update_reboot_state()
 {
@@ -476,29 +465,29 @@ void cli::fs_update_cli::print_update_reboot_state()
 
     if (update_reboot_state == update_definitions::UBootBootstateFlags::FAILED_APP_UPDATE)
     {
-        cout << "Application update failed" << endl;
+        cli_io::write_stdout("Application update failed\n");
         this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::FAILED_APP_UPDATE);
     }
     else if (update_reboot_state == update_definitions::UBootBootstateFlags::FAILED_FW_UPDATE)
     {
-        cout << "Firmware update failed" << endl;
+        cli_io::write_stdout("Firmware update failed\n");
         this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::FAILED_FW_UPDATE);
     }
     else if (update_reboot_state == update_definitions::UBootBootstateFlags::FW_UPDATE_REBOOT_FAILED)
     {
-        cout << "Firmware reboot update failed" << endl;
+        cli_io::write_stdout("Firmware reboot update failed\n");
         this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::FW_UPDATE_REBOOT_FAILED);
     }
     else if (update_reboot_state == update_definitions::UBootBootstateFlags::INCOMPLETE_FW_UPDATE)
     {
         if (this->update_handler->is_reboot_complete(true))
         {
-            cout << "Incomplete firmware update. Commit required." << endl;
+            cli_io::write_stdout("Incomplete firmware update. Commit required.\n");
             this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_FW_UPDATE);
         }
         else
         {
-            cout << "Missing reboot after firmware update requested" << endl;
+            cli_io::write_stdout("Missing reboot after firmware update requested\n");
             this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::UPDATE_REBOOT_PENDING);
         }
     }
@@ -506,12 +495,12 @@ void cli::fs_update_cli::print_update_reboot_state()
     {
         if (this->update_handler->is_reboot_complete(false))
         {
-            cout << "Incomplete application update. Commit required." << endl;
+            cli_io::write_stdout("Incomplete application update. Commit required.\n");
             this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_UPDATE);
         }
         else
         {
-            cout << "Missing reboot after application update requested" << endl;
+            cli_io::write_stdout("Missing reboot after application update requested\n");
             this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::UPDATE_REBOOT_PENDING);
         }
     }
@@ -519,12 +508,12 @@ void cli::fs_update_cli::print_update_reboot_state()
     {
         if (this->update_handler->is_reboot_complete(true))
         {
-            cout << "Incomplete application and firmware update. Commit required." << endl;
+            cli_io::write_stdout("Incomplete application and firmware update. Commit required.\n");
             this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_FW_UPDATE);
         }
         else
         {
-            cout << "Missing reboot after application and firmware update" << endl;
+            cli_io::write_stdout("Missing reboot after application and firmware update\n");
             this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::UPDATE_REBOOT_PENDING);
         }
     }
@@ -532,12 +521,12 @@ void cli::fs_update_cli::print_update_reboot_state()
     {
         if (this->update_handler->pendingUpdateRollback() == false)
         {
-            cout << "Missing reboot after firmware rollback requested" << endl;
+            cli_io::write_stdout("Missing reboot after firmware rollback requested\n");
             this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::ROLLBACK_FW_REBOOT_PENDING);
         }
         else
         {
-            cout << "Incomplete firmware rollback. Commit requested." << endl;
+            cli_io::write_stdout("Incomplete firmware rollback. Commit requested.\n");
             this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_FW_ROLLBACK);
         }
     }
@@ -545,12 +534,12 @@ void cli::fs_update_cli::print_update_reboot_state()
     {
         if (this->update_handler->pendingUpdateRollback() == false)
         {
-            cout << "Missing reboot after application rollback requested" << endl;
+            cli_io::write_stdout("Missing reboot after application rollback requested\n");
             this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::ROLLBACK_APP_REBOOT_PENDING);
         }
         else
         {
-            cout << "Incomplete application rollback. Commit requested." << endl;
+            cli_io::write_stdout("Incomplete application rollback. Commit requested.\n");
             this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_ROLLBACK);
         }
     }
@@ -558,51 +547,63 @@ void cli::fs_update_cli::print_update_reboot_state()
     {
         if (this->update_handler->pendingUpdateRollback() == false)
         {
-            cout << "Missing reboot after firmware and application rollback requested" << endl;
+            cli_io::write_stdout("Missing reboot after firmware and application rollback requested\n");
             this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::ROLLBACK_APP_FW_REBOOT_PENDING);
         }
         else
         {
-            cout << "Incomplete firmware and application rollback. Commit requested." << endl;
+            cli_io::write_stdout("Incomplete firmware and application rollback. Commit requested.\n");
             this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_FW_ROLLBACK);
         }
     }
     else if (update_reboot_state == update_definitions::UBootBootstateFlags::INCOMPLETE_FW_ROLLBACK)
     {
-        cout << "Incomplete firmware rollback. Commit requested." << endl;
+        cli_io::write_stdout("Incomplete firmware rollback. Commit requested.\n");
         this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_FW_ROLLBACK);
     }
     else if (update_reboot_state == update_definitions::UBootBootstateFlags::INCOMPLETE_APP_ROLLBACK)
     {
-        cout << "Incomplete application rollback. Commit requested." << endl;
+        cli_io::write_stdout("Incomplete application rollback. Commit requested.\n");
         this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_ROLLBACK);
     }
     else if (update_reboot_state == update_definitions::UBootBootstateFlags::INCOMPLETE_APP_FW_ROLLBACK)
     {
-        cout << "Incomplete firmware and application rollback. Commit requested." << endl;
+        cli_io::write_stdout("Incomplete firmware and application rollback. Commit requested.\n");
         this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_FW_ROLLBACK);
     }
     else
     {
-        cout << "No update pending" << endl;
+        cli_io::write_stdout("No update pending\n");
         this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::NO_UPDATE_REBOOT_PENDING);
     }
 }
 
 void cli::fs_update_cli::print_current_application_version()
 {
-    cout << this->update_handler->get_application_version() << endl;
+#if UPDATE_VERSION_TYPE_UINT64
+    cli_io::write_stdout(std::to_string(this->update_handler->get_application_version()) + "\n");
+#else
+    cli_io::write_stdout(this->update_handler->get_application_version() + "\n");
+#endif
 }
 
 void cli::fs_update_cli::print_current_firmware_version()
 {
-    cout << this->update_handler->get_firmware_version() << endl;
+#if UPDATE_VERSION_TYPE_UINT64
+    cli_io::write_stdout(std::to_string(this->update_handler->get_firmware_version()) + "\n");
+#else
+    cli_io::write_stdout(this->update_handler->get_firmware_version() + "\n");
+#endif
 }
+
+// ---------------------------------------------------------------------------
+// State bad get/set
+// ---------------------------------------------------------------------------
 
 void cli::fs_update_cli::set_application_state_bad(const char &state)
 {
     this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::GETSET_STATE_SUCCESSFUL);
-    if (this->update_handler->set_update_state_bad(state, APPLICATION_UPDATE_STATE) == EINVAL)
+    if (this->update_handler->set_update_state_bad(state, application_update_state) == EINVAL)
         this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::PASSING_PARAM_UPDATE_STATE_WRONG);
 }
 
@@ -610,19 +611,19 @@ void cli::fs_update_cli::is_application_state_bad(const char &state)
 {
     if (state != 'a' && state != 'A' && state != 'b' && state != 'B')
     {
-        cout << "X" << endl;
+        cli_io::write_stdout("X\n");
         this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::PASSING_PARAM_UPDATE_STATE_WRONG);
     }
     else
     {
-        cout << this->update_handler->is_update_state_bad(state, APPLICATION_UPDATE_STATE) << endl;
+        cli_io::write_stdout(std::to_string(this->update_handler->is_update_state_bad(state, application_update_state)) + "\n");
     }
 }
 
 void cli::fs_update_cli::set_firmware_state_bad(const char &state)
 {
     this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::GETSET_STATE_SUCCESSFUL);
-    if (this->update_handler->set_update_state_bad(state, FIRMWARE_UPDATE_STATE) == EINVAL)
+    if (this->update_handler->set_update_state_bad(state, firmware_update_state) == EINVAL)
         this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::PASSING_PARAM_UPDATE_STATE_WRONG);
 }
 
@@ -630,670 +631,437 @@ void cli::fs_update_cli::is_firmware_state_bad(const char &state)
 {
     if (state != 'a' && state != 'A' && state != 'b' && state != 'B')
     {
-        cout << "X" << endl;
+        cli_io::write_stdout("X\n");
         this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::PASSING_PARAM_UPDATE_STATE_WRONG);
     }
     else
     {
-        cout << this->update_handler->is_update_state_bad(state, FIRMWARE_UPDATE_STATE) << endl;
+        cli_io::write_stdout(std::to_string(this->update_handler->is_update_state_bad(state, firmware_update_state)) + "\n");
     }
 }
+
+// ---------------------------------------------------------------------------
+// Command handlers (dispatched from parse_input)
+// ---------------------------------------------------------------------------
+
+void cli::fs_update_cli::handle_update_file()
+{
+    const string update_location = this->arg_update.getValue();
+
+    if (!posix_helpers::path_exists(update_location.c_str()))
+    {
+        cli_io::write_stderr("Update file: " + update_location + " does not exist.\n");
+        this->return_code = errno;
+        return;
+    }
+    this->update_image_state(update_location);
+}
+
+void cli::fs_update_cli::handle_automatic()
+{
+    const char *update_stick_env = std::getenv("UPDATE_STICK");
+    const char *update_file_env = std::getenv("UPDATE_FILE");
+
+    if (update_stick_env == nullptr)
+    {
+        this->serial_cout->write("Environment variable \"UPDATE_STICK\" is not set\n");
+        this->return_code = EPERM;
+        return;
+    }
+
+    if (update_file_env == nullptr)
+    {
+        this->serial_cout->write("\"UPDATE_FILE\" env variable -- not set\n");
+        this->return_code = EPERM;
+        return;
+    }
+
+    const string update_stick(update_stick_env);
+    string update_file = update_stick;
+    if (update_stick.back() != '/')
+    {
+        update_file += "/";
+    }
+    update_file += update_file_env;
+
+    this->update_image_state(update_file);
+}
+
+void cli::fs_update_cli::handle_print_version()
+{
+    cli_io::write_stdout(string("F&S Update Framework CLI Version: ") + FUS_CLI_PROJECT_VERSION
+        + " build at: " + __DATE__ + ", " + __TIME__ + ".\n");
+}
+
+void cli::fs_update_cli::handle_is_update_available()
+{
+    const string work_dir = this->update_handler->get_work_dir().string();
+
+    string updateType;
+    if (!posix_helpers::read_file(posix_helpers::path_join(work_dir, "update_type").c_str(), updateType))
+    {
+        cli_io::write_stdout("No updates have been found\n");
+        this->return_code = static_cast<int>(UPDATER_IS_UPDATE_AVAILABLE_STATE::NO_UPDATE_AVAILABLE);
+        return;
+    }
+
+    string updateVersion;
+    if (!posix_helpers::read_file(posix_helpers::path_join(work_dir, "update_version").c_str(), updateVersion))
+    {
+        cli_io::write_stdout("No updates have been found\n");
+        this->return_code = static_cast<int>(UPDATER_IS_UPDATE_AVAILABLE_STATE::NO_UPDATE_AVAILABLE);
+        return;
+    }
+
+    string updateSize;
+    if (!posix_helpers::read_file(posix_helpers::path_join(work_dir, "update_size").c_str(), updateSize))
+    {
+        cli_io::write_stdout("No updates have been found\n");
+        this->return_code = static_cast<int>(UPDATER_IS_UPDATE_AVAILABLE_STATE::NO_UPDATE_AVAILABLE);
+        return;
+    }
+
+    cli_io::write_stdout("A new update is available on the server\n");
+    cli_io::write_stdout("Type: " + updateType + "\n");
+    cli_io::write_stdout("Version: " + updateVersion + "\n");
+    cli_io::write_stdout("Size: " + updateSize + "\n");
+
+    if (updateType == "firmware")
+    {
+        this->return_code = static_cast<int>(UPDATER_IS_UPDATE_AVAILABLE_STATE::FIRMWARE_UPDATE_AVAILABLE);
+    }
+    else if (updateType == "application")
+    {
+        this->return_code = static_cast<int>(UPDATER_IS_UPDATE_AVAILABLE_STATE::APPLICATION_UPDATE_AVAILABLE);
+    }
+    else
+    {
+        this->return_code =
+            static_cast<int>(UPDATER_IS_UPDATE_AVAILABLE_STATE::FIRMWARE_AND_APPLICATION_UPDATE_AVAILABLE);
+    }
+}
+
+void cli::fs_update_cli::handle_download_update()
+{
+    const string work_dir = this->update_handler->get_work_dir().string();
+    if (!posix_helpers::path_exists(posix_helpers::path_join(work_dir, "update_type").c_str()) ||
+        !posix_helpers::path_exists(posix_helpers::path_join(work_dir, "update_version").c_str()) ||
+        !posix_helpers::path_exists(posix_helpers::path_join(work_dir, "update_size").c_str()))
+    {
+        this->return_code = static_cast<int>(UPDATER_DOWNLOAD_UPDATE_STATE::NO_DOWNLOAD_QUEUED);
+    }
+    else if (posix_helpers::path_exists(posix_helpers::path_join(work_dir, "downloadUpdate").c_str()))
+    {
+        cli_io::write_stdout("Download in progress...\n");
+        this->return_code = static_cast<int>(UPDATER_DOWNLOAD_UPDATE_STATE::UPDATE_DOWNLOAD_STARTED_BEFORE);
+    }
+    else
+    {
+        const string marker = posix_helpers::path_join(work_dir, "downloadUpdate");
+        if (!posix_helpers::create_marker_file(marker.c_str()))
+        {
+            cli_io::write_stdout("Could not initiate update download...\n");
+            this->return_code = static_cast<int>(UPDATER_DOWNLOAD_UPDATE_STATE::UPDATE_DOWNLOAD_FAILED);
+        }
+        else
+        {
+            cli_io::write_stdout("Download started...\n");
+            this->return_code = static_cast<int>(UPDATER_DOWNLOAD_UPDATE_STATE::UPDATE_DOWNLOAD_STARTED);
+        }
+    }
+}
+
+void cli::fs_update_cli::handle_download_progress()
+{
+    const string work_dir = this->update_handler->get_work_dir().string();
+    if (!posix_helpers::path_exists(posix_helpers::path_join(work_dir, "downloadUpdate").c_str()))
+    {
+        this->return_code = static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::NO_DOWNLOAD_STARTED);
+        return;
+    }
+
+    uint64_t update_size = 0;
+    string size_str;
+    const string size_path = posix_helpers::path_join(work_dir, "update_size");
+    if (!posix_helpers::read_file(size_path.c_str(), size_str))
+    {
+        cli_io::write_stdout("Update size not available: " + std::to_string(errno) + "\n");
+        this->return_code = static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::NO_DOWNLOAD_STARTED);
+        return;
+    }
+    update_size = std::stoull(size_str);
+
+    if (update_size == 0)
+    {
+        this->return_code = static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::NO_DOWNLOAD_STARTED);
+        return;
+    }
+
+    const string update_location = posix_helpers::path_join(work_dir, "update_location");
+    const ssize_t loc_size = posix_helpers::file_size(update_location.c_str());
+
+    if (loc_size < 0 || loc_size <= 9)
+    {
+        cli_io::write_stdout("Waiting to start download.\n");
+        this->return_code =
+            static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::UPDATE_DOWNLOAD_WAITING_TO_START);
+        return;
+    }
+
+    string update_file_path;
+    if (!posix_helpers::read_file(update_location.c_str(), update_file_path))
+    {
+        this->return_code =
+            static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::UPDATE_DOWNLOAD_WAITING_TO_START);
+        return;
+    }
+
+    if (!posix_helpers::path_exists(update_file_path.c_str()))
+    {
+        cli_io::write_stderr("Update file: " + update_file_path + " does not exist.\n");
+        this->return_code =
+            static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::UPDATE_DOWNLOAD_WAITING_TO_START);
+        return;
+    }
+
+    const ssize_t filesize_s = posix_helpers::file_size(update_file_path.c_str());
+    if (filesize_s <= 0)
+    {
+        if (filesize_s == 0)
+            cli_io::write_stdout("Size of loaded update: 0...\n");
+        this->return_code = static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::NO_DOWNLOAD_STARTED);
+        return;
+    }
+
+    const uint64_t filesize = static_cast<uint64_t>(filesize_s);
+    cli_io::write_stdout("Size of loaded update: " + std::to_string(filesize) + "...\n");
+
+    const int percent = static_cast<int>((filesize * 100U) / update_size);
+
+    cli_io::write_stdout(std::to_string(filesize) + "/" + std::to_string(update_size) + " -- " + std::to_string(percent) + "%\n");
+
+    if (percent < 100)
+    {
+        this->return_code =
+            static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::UPDATE_DOWNLOAD_IN_PROGRESS);
+    }
+    else if (percent >= 100)
+    {
+        this->return_code =
+            static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::UPDATE_DOWNLOAD_FINISHED);
+    }
+}
+
+void cli::fs_update_cli::handle_install_update()
+{
+    const string work_dir = this->update_handler->get_work_dir().string();
+
+    if (posix_helpers::path_exists(posix_helpers::path_join(work_dir, "updateInstalled").c_str()))
+    {
+        cli_io::write_stdout("Update installation finished.\n");
+        this->return_code = static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FINISHED);
+    }
+    else if (!posix_helpers::path_exists(posix_helpers::path_join(work_dir, "update_location").c_str()))
+    {
+        this->return_code = static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::NO_INSTALLATION_QUEUED);
+    }
+    else if (posix_helpers::path_exists(posix_helpers::path_join(work_dir, "installUpdate").c_str()))
+    {
+        cli_io::write_stdout("Update installation in progress.\n");
+        this->return_code = static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_IN_PROGRESS);
+    }
+    else
+    {
+        const string marker = posix_helpers::path_join(work_dir, "installUpdate");
+        if (!posix_helpers::create_marker_file(marker.c_str()))
+        {
+            cli_io::write_stdout("Could not initiate Installation...\n");
+            this->return_code = static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FAILED);
+        }
+        else
+        {
+            cli_io::write_stdout("Update installation started.\n");
+            this->return_code = static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_IN_PROGRESS);
+        }
+    }
+}
+
+void cli::fs_update_cli::handle_apply_update()
+{
+    const string work_dir = this->update_handler->get_work_dir().string();
+    const string installed_path = posix_helpers::path_join(work_dir, "updateInstalled");
+    const string rollback_path = posix_helpers::path_join(work_dir, "rollbackUpdate");
+
+    if (posix_helpers::path_exists(installed_path.c_str()))
+    {
+        if (!posix_helpers::path_exists(posix_helpers::path_join(work_dir, "applyUpdate").c_str()) &&
+            !posix_helpers::path_exists(posix_helpers::path_join(work_dir, "downloadUpdate").c_str()))
+        {
+            cli_io::write_stdout("Apply update...\n");
+            if(this->reboot() != 0) {
+                cli_io::write_stderr(string("Failed to reboot system: ") + strerror(errno) + "\n");
+                this->return_code = errno;
+            } else {
+                this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFUL);
+            }
+        }
+        else
+        {
+            const string apply_marker = posix_helpers::path_join(work_dir, "applyUpdate");
+            if (!posix_helpers::create_marker_file(apply_marker.c_str()))
+            {
+                cli_io::write_stdout("Initiate of update apply fails...\n");
+                this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_FAILED);
+            }
+            else
+            {
+                cli_io::write_stdout("Apply update...\n");
+                this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFUL);
+            }
+        }
+    }
+    else if (posix_helpers::path_exists(rollback_path.c_str()))
+    {
+        const update_definitions::UBootBootstateFlags update_reboot_state =
+            this->update_handler->get_update_reboot_state();
+
+        if (update_reboot_state == update_definitions::UBootBootstateFlags::ROLLBACK_APP_FW_REBOOT_PENDING)
+        {
+            this->update_handler->update_reboot_state(
+                update_definitions::UBootBootstateFlags::INCOMPLETE_APP_FW_ROLLBACK);
+        }
+        else if (update_reboot_state == update_definitions::UBootBootstateFlags::ROLLBACK_FW_REBOOT_PENDING)
+        {
+            this->update_handler->update_reboot_state(
+                update_definitions::UBootBootstateFlags::INCOMPLETE_FW_ROLLBACK);
+        }
+        else if (update_reboot_state == update_definitions::UBootBootstateFlags::ROLLBACK_APP_REBOOT_PENDING)
+        {
+            this->update_handler->update_reboot_state(
+                update_definitions::UBootBootstateFlags::INCOMPLETE_APP_ROLLBACK);
+        }
+
+        cli_io::write_stdout("Apply rollback update...\n");
+
+        if(this->reboot() != 0) {
+            cli_io::write_stderr(string("Failed to reboot system: ") + strerror(errno) + "\n");
+            this->return_code = errno;
+        } else {
+            this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFUL);
+        }
+
+        if (this->return_code != static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFUL))
+        {
+            this->update_handler->update_reboot_state(update_reboot_state);
+        }
+    }
+    else
+    {
+        cli_io::write_stdout("Nothing to apply...\n");
+        this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_FAILED);
+    }
+}
+
+void cli::fs_update_cli::handle_set_app_state_bad()
+{
+    this->set_application_state_bad(this->set_app_state_bad.getValue());
+}
+
+void cli::fs_update_cli::handle_is_app_state_bad()
+{
+    this->is_application_state_bad(this->is_app_state_bad.getValue());
+}
+
+void cli::fs_update_cli::handle_set_fw_state_bad()
+{
+    this->set_firmware_state_bad(this->set_fw_state_bad.getValue());
+}
+
+void cli::fs_update_cli::handle_is_fw_state_bad()
+{
+    this->is_firmware_state_bad(this->is_fw_state_bad.getValue());
+}
+
+// ---------------------------------------------------------------------------
+// Command dispatch
+// ---------------------------------------------------------------------------
 
 void cli::fs_update_cli::parse_input(int argc, const char **argv)
 {
     this->cmd.parse(argc, argv);
 
-    if (this->arg_debug.isSet())
+    this->setup_logging();
+
+    /* Dispatch table: maps each action flag to its handler.
+     * --debug and --update_type are modifiers, not actions.
+     * All action flags are mutually exclusive.
+     */
+    struct ActionEntry {
+        TCLAP::Arg* arg;
+        void (fs_update_cli::*handler)();
+    };
+
+    const std::array<ActionEntry, 19> actions = {{
+        {&arg_update,              &fs_update_cli::handle_update_file},
+        {&arg_commit_update,       &fs_update_cli::commit_update},
+        {&arg_urs,                 &fs_update_cli::print_update_reboot_state},
+        {&arg_automatic,           &fs_update_cli::handle_automatic},
+        {&get_app_version,         &fs_update_cli::print_current_application_version},
+        {&get_fw_version,          &fs_update_cli::print_current_firmware_version},
+        {&get_version,             &fs_update_cli::handle_print_version},
+        {&notice_update_available, &fs_update_cli::handle_is_update_available},
+        {&download_update,         &fs_update_cli::handle_download_update},
+        {&download_progress,       &fs_update_cli::handle_download_progress},
+        {&install_update,          &fs_update_cli::handle_install_update},
+        {&apply_update,            &fs_update_cli::handle_apply_update},
+        {&arg_rollback_update,     &fs_update_cli::rollback_update},
+        {&arg_switch_fw_slot,      &fs_update_cli::switch_firmware_slot},
+        {&arg_switch_app_slot,     &fs_update_cli::switch_application_slot},
+        {&set_app_state_bad,       &fs_update_cli::handle_set_app_state_bad},
+        {&is_app_state_bad,        &fs_update_cli::handle_is_app_state_bad},
+        {&set_fw_state_bad,        &fs_update_cli::handle_set_fw_state_bad},
+        {&is_fw_state_bad,         &fs_update_cli::handle_is_fw_state_bad},
+    }};
+
+    void (fs_update_cli::*matched_handler)() = nullptr;
+    int action_count = 0;
+
+    for (const auto& entry : actions)
     {
-        if (this->arg_automatic.isSet() == false)
+        if (entry.arg->isSet())
         {
-            this->logger_sink = std::make_shared<logger::LoggerSinkStdout>(logger::logLevel::DEBUG);
+            matched_handler = entry.handler;
+            ++action_count;
         }
-        else
-        {
-            this->serial_cout = std::make_shared<SynchronizedSerial>();
-            this->logger_sink = std::make_unique<logger::LoggerSinkSerial>(logger::logLevel::DEBUG, serial_cout);
-        }
+    }
+
+    /* --update_type is only valid with --update_file */
+    if (this->arg_update_type.isSet() && !this->arg_update.isSet())
+    {
+        cli_io::write_stderr("--update_type can only be used with --update_file\n");
+        this->return_code = EPERM;
+        return;
+    }
+
+    if (action_count == 0)
+    {
+        this->handle_print_version();
+        cli_io::write_stdout("No argument given, nothing done. Use --help to get all commands.\n");
+    }
+    else if (action_count == 1)
+    {
+        (this->*matched_handler)();
     }
     else
     {
-        if (this->arg_automatic.isSet() == false)
-        {
-            this->logger_sink = std::make_shared<logger::LoggerSinkStdout>(logger::logLevel::WARNING);
-        }
-        else
-        {
-            this->serial_cout = std::make_shared<SynchronizedSerial>();
-            this->logger_sink = std::make_unique<logger::LoggerSinkSerial>(logger::logLevel::WARNING, serial_cout);
-        }
-    }
-
-    this->logger_handler = logger::LoggerHandler::initLogger(this->logger_sink);
-    this->update_handler = std::make_unique<fs::FSUpdate>(logger_handler);
-
-    // Manual mode
-    if ((this->arg_update.isSet() == true) && (this->arg_rollback_update.isSet() == false) &&
-        (this->arg_switch_fw_slot.isSet() == false) && (this->arg_switch_app_slot.isSet() == false) &&
-        (this->arg_commit_update.isSet() == false) && (this->arg_urs.isSet() == false) &&
-        (this->arg_automatic.isSet() == false) && (this->get_app_version.isSet() == false) &&
-        (this->get_fw_version.isSet() == false) && (this->notice_update_available.isSet() == false) &&
-        (this->download_update.isSet() == false) && (this->download_progress.isSet() == false) &&
-        (this->install_update.isSet() == false) && (this->apply_update.isSet() == false) &&
-        (this->set_app_state_bad.isSet() == false) && (this->is_app_state_bad.isSet() == false) &&
-        (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false))
-    {
-        // update firmware, application or both
-        // use path from argument
-        // check paramter
-        std::filesystem::path update_location = this->arg_update.getValue();
-
-        if (std::filesystem::exists(update_location) == false)
-        {
-            cerr << "Update file: " << update_location << " does not exist." << endl;
-            this->return_code = EPERM;
-            return;
-        }
-        this->update_image_state("", "", true);
-    }
-    else if ((this->arg_update.isSet() == false) && (this->arg_rollback_update.isSet() == false) &&
-             (this->arg_switch_fw_slot.isSet() == false) && (this->arg_switch_app_slot.isSet() == false) &&
-             (this->arg_commit_update.isSet() == true) && (this->arg_urs.isSet() == false) &&
-             (this->arg_automatic.isSet() == false) && (this->get_app_version.isSet() == false) &&
-             (this->get_fw_version.isSet() == false) && (this->notice_update_available.isSet() == false) &&
-             (this->download_progress.isSet() == false) && (this->download_update.isSet() == false) &&
-             (this->install_update.isSet() == false) && (this->apply_update.isSet() == false) &&
-             (this->set_app_state_bad.isSet() == false) && (this->is_app_state_bad.isSet() == false) &&
-             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false) &&
-             (this->arg_update_type.isSet() == false))
-    {
-        // commit update
-        this->commit_update();
-    }
-    else if ((this->arg_update.isSet() == false) && (this->arg_rollback_update.isSet() == false) &&
-             (this->arg_switch_fw_slot.isSet() == false) && (this->arg_switch_app_slot.isSet() == false) &&
-             (this->arg_commit_update.isSet() == false) && (this->arg_urs.isSet() == true) &&
-             (this->arg_automatic.isSet() == false) && (this->get_app_version.isSet() == false) &&
-             (this->get_fw_version.isSet() == false) && (this->notice_update_available.isSet() == false) &&
-             (this->download_update.isSet() == false) && (this->download_progress.isSet() == false) &&
-             (this->install_update.isSet() == false) && (this->apply_update.isSet() == false) &&
-             (this->set_app_state_bad.isSet() == false) && (this->is_app_state_bad.isSet() == false) &&
-             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false) &&
-             (this->arg_update_type.isSet() == false))
-    {
-        // print update reboot state
-        this->print_update_reboot_state();
-    }
-    // Automatic mode
-    else if ((this->arg_update.isSet() == false) && (this->arg_rollback_update.isSet() == false) &&
-             (this->arg_switch_fw_slot.isSet() == false) && (this->arg_switch_app_slot.isSet() == false) &&
-             (this->arg_commit_update.isSet() == false) && (this->arg_urs.isSet() == false) &&
-             (this->arg_automatic.isSet() == true) &&
-             (this->get_app_version.isSet() == false) && (this->get_fw_version.isSet() == false) &&
-             (this->notice_update_available.isSet() == false) && (this->download_update.isSet() == false) &&
-             (this->download_progress.isSet() == false) && (this->install_update.isSet() == false) &&
-             (this->apply_update.isSet() == false) && (this->set_app_state_bad.isSet() == false) &&
-             (this->is_app_state_bad.isSet() == false) && (this->set_fw_state_bad.isSet() == false) &&
-             (this->is_fw_state_bad.isSet() == false))
-    {
-        const char *update_stick_env = std::getenv("UPDATE_STICK");
-        const char *update_file_env = std::getenv("UPDATE_FILE");
-
-        if (update_stick_env == nullptr)
-        {
-            stringstream out;
-            out << "Environment variable \"UPDATE_STICK\" is not set" << endl;
-            this->serial_cout->write(out.str());
-            this->return_code = EPERM;
-            return;
-        }
-        const string update_stick(update_stick_env);
-        if (update_file_env != nullptr)
-        {
-            this->update_image_state(update_file_env, update_stick, false);
-        }
-        else
-        {
-            stringstream out;
-            out << "Not correct UPDATE_FILE system variables set" << endl;
-            if (update_file_env == nullptr)
-            {
-                out << "\"UPDATE_FILE\" env variable -- not set" << endl;
-            }
-            this->serial_cout->write(out.str());
-            this->return_code = EPERM;
-            return;
-        }
-    }
-    else if ((this->arg_update.isSet() == false) && (this->arg_rollback_update.isSet() == false) &&
-             (this->arg_switch_fw_slot.isSet() == false) && (this->arg_switch_app_slot.isSet() == false) &&
-             (this->arg_commit_update.isSet() == false) && (this->arg_urs.isSet() == false) &&
-             (this->arg_automatic.isSet() == false) && (this->get_app_version.isSet() == true) &&
-             (this->get_fw_version.isSet() == false) && (this->notice_update_available.isSet() == false) &&
-             (this->download_update.isSet() == false) && (this->download_progress.isSet() == false) &&
-             (this->install_update.isSet() == false) && (this->apply_update.isSet() == false) &&
-             (this->set_app_state_bad.isSet() == false) && (this->is_app_state_bad.isSet() == false) &&
-             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false) &&
-             (this->arg_update_type.isSet() == false))
-    {
-        this->print_current_application_version();
-    }
-    else if ((this->arg_update.isSet() == false) && (this->arg_rollback_update.isSet() == false) &&
-             (this->arg_switch_fw_slot.isSet() == false) && (this->arg_switch_app_slot.isSet() == false) &&
-             (this->arg_commit_update.isSet() == false) && (this->arg_urs.isSet() == false) &&
-             (this->arg_automatic.isSet() == false) && (this->get_app_version.isSet() == false) &&
-             (this->get_fw_version.isSet() == false) && (this->notice_update_available.isSet() == true) &&
-             (this->download_update.isSet() == false) && (this->download_progress.isSet() == false) &&
-             (this->install_update.isSet() == false) && (this->apply_update.isSet() == false) &&
-             (this->set_app_state_bad.isSet() == false) && (this->is_app_state_bad.isSet() == false) &&
-             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false) &&
-             (this->arg_update_type.isSet() == false))
-    {
-        std::filesystem::path work_dir = this->update_handler->get_work_dir();
-        ifstream update_type_stream(work_dir / "update_type");
-        if (!update_type_stream.is_open())
-        {
-            cout << "No updates have been found" << endl;
-            this->return_code = static_cast<int>(UPDATER_IS_UPDATE_AVAILABLE_STATE::NO_UPDATE_AVAILABLE);
-            return;
-        }
-
-        ifstream update_version_stream(work_dir / "update_version");
-        if (!update_version_stream.is_open())
-        {
-            update_type_stream.close();
-            cout << "No updates have been found" << endl;
-            this->return_code = static_cast<int>(UPDATER_IS_UPDATE_AVAILABLE_STATE::NO_UPDATE_AVAILABLE);
-            return;
-        }
-
-        ifstream update_size_stream(work_dir / "update_size");
-        if (!update_size_stream.is_open())
-        {
-            update_type_stream.close();
-            update_version_stream.close();
-            cout << "No updates have been found" << endl;
-            this->return_code = static_cast<int>(UPDATER_IS_UPDATE_AVAILABLE_STATE::NO_UPDATE_AVAILABLE);
-            return;
-        }
-        /* read update type */
-        std::string updateType(std::istreambuf_iterator<char>(update_type_stream), {});
-        update_type_stream.close();
-
-        /* read update version */
-        std::string updateVersion(std::istreambuf_iterator<char>(update_version_stream), {});
-        update_version_stream.close();
-
-        /* read update size */
-        std::string updateSize(std::istreambuf_iterator<char>(update_size_stream), {});
-        update_size_stream.close();
-
-        cout << "A new update is available on the server" << endl;
-        cout << "Type: " << updateType << endl;
-        cout << "Version: " << updateVersion << endl;
-        cout << "Size: " << updateSize << endl;
-
-        if (updateType == "firmware")
-        {
-            this->proceeded_update_type = UPDATE_FIRMWARE;
-            this->return_code = static_cast<int>(UPDATER_IS_UPDATE_AVAILABLE_STATE::FIRMWARE_UPDATE_AVAILABLE);
-        }
-        else if (updateType == "application")
-        {
-            this->proceeded_update_type = UPDATE_APPLICATION;
-            this->return_code = static_cast<int>(UPDATER_IS_UPDATE_AVAILABLE_STATE::APPLICATION_UPDATE_AVAILABLE);
-        }
-        else
-        {
-            this->proceeded_update_type = UPDATE_COMMON;
-            this->return_code =
-                static_cast<int>(UPDATER_IS_UPDATE_AVAILABLE_STATE::FIRMWARE_AND_APPLICATION_UPDATE_AVAILABLE);
-        }
-    }
-    else if ((this->arg_update.isSet() == false) && (this->arg_rollback_update.isSet() == false) &&
-             (this->arg_switch_fw_slot.isSet() == false) && (this->arg_switch_app_slot.isSet() == false) &&
-             (this->arg_commit_update.isSet() == false) && (this->arg_urs.isSet() == false) &&
-             (this->arg_automatic.isSet() == false) && (this->get_app_version.isSet() == false) &&
-             (this->get_fw_version.isSet() == false) && (this->notice_update_available.isSet() == false) &&
-             (this->download_update.isSet() == true) && (this->download_progress.isSet() == false) &&
-             (this->install_update.isSet() == false) && (this->apply_update.isSet() == false) &&
-             (this->set_app_state_bad.isSet() == false) && (this->is_app_state_bad.isSet() == false) &&
-             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false) &&
-             (this->arg_update_type.isSet() == false))
-    {
-        std::filesystem::path work_dir = this->update_handler->get_work_dir();
-        if (std::filesystem::exists(work_dir / "update_type") == false ||
-            std::filesystem::exists(work_dir / "update_version") == false ||
-            std::filesystem::exists(work_dir / "update_size") == false)
-        {
-            this->return_code = static_cast<int>(UPDATER_DOWNLOAD_UPDATE_STATE::NO_DOWNLOAD_QUEUED);
-        }
-        else if (std::filesystem::exists(work_dir / "downloadUpdate") == true)
-        {
-            cout << "Download in progress..." << endl;
-            this->return_code = static_cast<int>(UPDATER_DOWNLOAD_UPDATE_STATE::UPDATE_DOWNLOAD_STARTED_BEFORE);
-        }
-        else
-        {
-            ofstream download_update_stream(work_dir / "downloadUpdate");
-            if (!download_update_stream.is_open())
-            {
-                cout << "Could not initiate update download..." << endl;
-                this->return_code = static_cast<int>(UPDATER_DOWNLOAD_UPDATE_STATE::UPDATE_DOWNLOAD_FAILED);
-            }
-            else
-            {
-                download_update_stream.close();
-                cout << "Download started..." << endl;
-                this->return_code = static_cast<int>(UPDATER_DOWNLOAD_UPDATE_STATE::UPDATE_DOWNLOAD_STARTED);
-            }
-        }
-    }
-    else if ((this->arg_update.isSet() == false) && (this->arg_rollback_update.isSet() == false) &&
-             (this->arg_switch_fw_slot.isSet() == false) && (this->arg_switch_app_slot.isSet() == false) &&
-             (this->arg_commit_update.isSet() == false) && (this->arg_urs.isSet() == false) &&
-             (this->arg_automatic.isSet() == false) && (this->get_app_version.isSet() == false) &&
-             (this->get_fw_version.isSet() == false) && (this->notice_update_available.isSet() == false) &&
-             (this->download_update.isSet() == false) && (this->download_progress.isSet() == false) &&
-             (this->install_update.isSet() == true) && (this->apply_update.isSet() == false) &&
-             (this->set_app_state_bad.isSet() == false) && (this->is_app_state_bad.isSet() == false) &&
-             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false) &&
-             (this->arg_update_type.isSet() == false))
-    {
-        std::filesystem::path work_dir = this->update_handler->get_work_dir();
-        /* check if file updateInstalled available */
-        ifstream installed_state(work_dir / "updateInstalled");
-        if (installed_state)
-        {
-            cout << "Update installation finished." << endl;
-            this->return_code = static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FINISHED);
-        }
-        else
-        {
-            installed_state.close();
-
-            if (std::filesystem::exists(work_dir / "update_location") == false)
-            {
-                this->return_code = static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::NO_INSTALLATION_QUEUED);
-            }
-            else if (std::filesystem::exists(work_dir / "installUpdate") == true)
-            {
-                cout << "Update installation in progress." << endl;
-                this->return_code = static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_IN_PROGRESS);
-            }
-            else
-            {
-                /* Create file installUpdate to signal fsupdate handler
-                *  to start installation.
-                */
-                ofstream install_update_stream(work_dir / "installUpdate");
-                if (!install_update_stream.is_open())
-                {
-                    cout << "Could not initiate Installation..." << endl;
-                    this->return_code = static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FAILED);
-                }
-                else
-                {
-                    install_update_stream.close();
-                    cout << "Update installation started." << endl;
-                    this->return_code = static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_IN_PROGRESS);
-                }
-            }
-        }
-    }
-    else if ((this->arg_update.isSet() == false) && (this->arg_rollback_update.isSet() == false) &&
-             (this->arg_switch_fw_slot.isSet() == false) && (this->arg_switch_app_slot.isSet() == false) &&
-             (this->arg_commit_update.isSet() == false) && (this->arg_urs.isSet() == false) &&
-             (this->arg_automatic.isSet() == false) && (this->get_app_version.isSet() == false) &&
-             (this->get_fw_version.isSet() == false) && (this->notice_update_available.isSet() == false) &&
-             (this->download_update.isSet() == false) && (this->download_progress.isSet() == false) &&
-             (this->install_update.isSet() == false) && (this->apply_update.isSet() == true) &&
-             (this->set_app_state_bad.isSet() == false) && (this->is_app_state_bad.isSet() == false) &&
-             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false) &&
-             (this->arg_update_type.isSet() == false))
-    {
-        /* The updateInstalled file reflects successful installation state.
-         */
-        std::filesystem::path work_dir = this->update_handler->get_work_dir();
-        ifstream installed_state(work_dir / "updateInstalled");
-        /* check if file updateInstalled available
-         *  yes: update installed successful
-         *  no: update installation fails
-         */
-        if (installed_state.is_open())
-        {
-            /* close the updateInstalled file */
-            installed_state.close();
-            /* Check if it is local or network installation.
-             * In case of local installation the files applyUpdate
-             * and downloadUpdate are not available.
-             */
-            if (std::filesystem::exists(work_dir / "applyUpdate") == false &&
-                std::filesystem::exists(work_dir / "downloadUpdate") == false)
-            {
-                cout << "Apply update..." << endl;
-                /* Local installation process. Force reboot immediately.
-                 */
-                if(this->reboot() != 0) {
-                    /* reboot command fails*/
-                    cerr << "Failed to reboot system: " << strerror(errno) << endl;
-                    this->return_code = errno;
-                } else {
-                    this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFUL);
-                }
-            }
-            else
-            {
-                /* Network installation process.
-                 *  Create applyUpdate because ADU agent is waiting
-                 *  in apply state.
-                 */
-                ofstream apply_update_stream(work_dir / "applyUpdate");
-                if (!apply_update_stream.is_open())
-                {
-                    cout << "Initiate of update apply fails..." << endl;
-                    this->return_code = errno;
-                }
-                else
-                {
-                    apply_update_stream.close();
-                    cout << "Apply update..." << endl;
-                    this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFUL);
-                }
-            }
-        }
-        else
-        {
-            /* In case of rollback /tmp/adu/.work/rollbackUpdate
-             * should created.
-             */
-            std::filesystem::path work_dir = this->update_handler->get_work_dir();
-            ifstream rollback_state(work_dir / "rollbackUpdate");
-            if (rollback_state.is_open())
-            {
-                /* close the rollbackUpdate file */
-                rollback_state.close();
-                /* rollback in progress */
-
-                /* set update rollback state from reboot to incomplete */
-                const update_definitions::UBootBootstateFlags update_reboot_state =
-                    this->update_handler->get_update_reboot_state();
-
-                if (update_reboot_state == update_definitions::UBootBootstateFlags::ROLLBACK_APP_FW_REBOOT_PENDING)
-                {
-                    this->update_handler->update_reboot_state(
-                        update_definitions::UBootBootstateFlags::INCOMPLETE_APP_FW_ROLLBACK);
-                }
-                else if (update_reboot_state == update_definitions::UBootBootstateFlags::ROLLBACK_FW_REBOOT_PENDING)
-                {
-                    this->update_handler->update_reboot_state(
-                        update_definitions::UBootBootstateFlags::INCOMPLETE_FW_ROLLBACK);
-                }
-                else if (update_reboot_state == update_definitions::UBootBootstateFlags::ROLLBACK_APP_REBOOT_PENDING)
-                {
-                    this->update_handler->update_reboot_state(
-                        update_definitions::UBootBootstateFlags::INCOMPLETE_APP_ROLLBACK);
-                }
-
-                cout << "Apply rollback update..." << endl;
-
-                /* Local installation process. Force reboot immediately. */
-                if(this->reboot() != 0) {
-                    /* reboot command fails*/
-                    cerr << "Failed to reboot system: " << strerror(errno) << endl;
-                    this->return_code = errno;
-                } else {
-                    this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFUL);
-                }
-
-                if (this->return_code != static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFUL))
-                {
-                    /* restore old state */
-                    this->update_handler->update_reboot_state(update_reboot_state);
-                }
-            }
-            else
-            {
-                cout << "Nothing to apply..." << endl;
-                this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_FAILED);
-            }
-        }
-    }
-    else if ((this->arg_update.isSet() == false) && (this->arg_rollback_update.isSet() == false) &&
-             (this->arg_switch_fw_slot.isSet() == false) && (this->arg_switch_app_slot.isSet() == false) &&
-             (this->arg_commit_update.isSet() == false) && (this->arg_urs.isSet() == false) &&
-             (this->arg_automatic.isSet() == false) && (this->get_app_version.isSet() == false) &&
-             (this->get_fw_version.isSet() == false) && (this->notice_update_available.isSet() == false) &&
-             (this->download_update.isSet() == false) && (this->download_progress.isSet() == true) &&
-             (this->install_update.isSet() == false) && (this->apply_update.isSet() == false) &&
-             (this->set_app_state_bad.isSet() == false) && (this->is_app_state_bad.isSet() == false) &&
-             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false) &&
-             (this->arg_update_type.isSet() == false))
-    {
-        std::filesystem::path work_dir = this->update_handler->get_work_dir();
-        // check if any download was requested
-        if (std::filesystem::exists(work_dir / "downloadUpdate") == true)
-        {
-            uint64_t update_size = 0;
-            /* First check if update size available */
-            /* get update size */
-            ifstream update_size_stream(work_dir / "update_size");
-            if (!update_size_stream.is_open())
-            {
-                cout << "Update size not available: " << errno << endl;
-                this->return_code = static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::NO_DOWNLOAD_STARTED);
-                return;
-            }
-            /* get file size */
-            update_size_stream >> update_size;
-            update_size_stream.close();
-            /* check for zero */
-            if (update_size == 0)
-            {
-                this->return_code = static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::NO_DOWNLOAD_STARTED);
-            }
-            else
-            {
-                std::filesystem::path update_location = work_dir / "update_location";
-
-                /* Check if ADU agent has written the update location file yet */
-                if (!std::filesystem::exists(update_location) ||
-                    std::filesystem::file_size(update_location) <= 9)
-                {
-                    cout << "Waiting to start download." << endl;
-                    this->return_code =
-                        static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::UPDATE_DOWNLOAD_WAITING_TO_START);
-                }
-                else
-                {
-                    std::filesystem::path update_file_path;
-                    ifstream path_file_stream(update_location);
-                    /* get path to update file */
-                    path_file_stream >> update_file_path;
-                    path_file_stream.close();
-                    /* Does update file exist */
-                    if (!std::filesystem::exists(update_file_path))
-                    {
-                        cerr << "Update file: " << update_file_path << " does not exist." << endl;
-                        this->return_code =
-                            static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::UPDATE_DOWNLOAD_WAITING_TO_START);
-                    }
-                    else
-                    {
-                        /* get current update file size */
-                        size_t filesize = std::filesystem::file_size(update_file_path);
-                        cout << "Size of loaded update: " << filesize << "..." << endl;
-
-                        if (filesize == 0)
-                        {
-                            this->return_code = static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::NO_DOWNLOAD_STARTED);
-                        }
-                        else
-                        {
-                            float is_f = (float)filesize;
-                            float should_f = (float)update_size;
-                            float ratio = is_f / should_f;
-                            int percent = (int)(ratio * 100);
-
-                            cout << filesize << "/";
-                            cout << update_size << " -- ";
-                            cout << percent << "\%" << endl;
-
-                            if (percent < 100)
-                            {
-                                this->return_code =
-                                    static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::UPDATE_DOWNLOAD_IN_PROGRESS);
-                            }
-                            else if (percent == 100)
-                            {
-                                this->return_code =
-                                    static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::UPDATE_DOWNLOAD_FINISHED);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        else
-            this->return_code = static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::NO_DOWNLOAD_STARTED);
-    }
-    else if ((this->arg_update.isSet() == false) && (this->arg_rollback_update.isSet() == false) &&
-             (this->arg_switch_fw_slot.isSet() == false) && (this->arg_switch_app_slot.isSet() == false) &&
-             (this->arg_commit_update.isSet() == false) && (this->arg_urs.isSet() == false) &&
-             (this->arg_automatic.isSet() == false) && (this->get_app_version.isSet() == false) &&
-             (this->get_fw_version.isSet() == true) && (this->notice_update_available.isSet() == false) &&
-             (this->download_update.isSet() == false) && (this->download_progress.isSet() == false) &&
-             (this->install_update.isSet() == false) && (this->apply_update.isSet() == false) &&
-             (this->set_app_state_bad.isSet() == false) && (this->is_app_state_bad.isSet() == false) &&
-             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false) &&
-             (this->arg_update_type.isSet() == false))
-    {
-        this->print_current_firmware_version();
-    }
-    else if ((this->arg_update.isSet() == false) && (this->arg_rollback_update.isSet() == true) &&
-             (this->arg_switch_fw_slot.isSet() == false) && (this->arg_switch_app_slot.isSet() == false) &&
-             (this->arg_commit_update.isSet() == false) && (this->arg_urs.isSet() == false) &&
-             (this->arg_automatic.isSet() == false) && (this->get_app_version.isSet() == false) &&
-             (this->get_fw_version.isSet() == false) && (this->notice_update_available.isSet() == false) &&
-             (this->download_update.isSet() == false) && (this->download_progress.isSet() == false) &&
-             (this->install_update.isSet() == false) && (this->apply_update.isSet() == false) &&
-             (this->set_app_state_bad.isSet() == false) && (this->is_app_state_bad.isSet() == false) &&
-             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false) &&
-             (this->arg_update_type.isSet() == false))
-    {
-        this->rollback_update();
-    }
-    else if ((this->arg_update.isSet() == false) && (this->arg_rollback_update.isSet() == false) &&
-             (this->arg_switch_fw_slot.isSet() == true) && (this->arg_switch_app_slot.isSet() == false) &&
-             (this->arg_commit_update.isSet() == false) && (this->arg_urs.isSet() == false) &&
-             (this->arg_automatic.isSet() == false) && (this->get_app_version.isSet() == false) &&
-             (this->get_fw_version.isSet() == false) && (this->notice_update_available.isSet() == false) &&
-             (this->download_update.isSet() == false) && (this->download_progress.isSet() == false) &&
-             (this->install_update.isSet() == false) && (this->apply_update.isSet() == false) &&
-             (this->set_app_state_bad.isSet() == false) && (this->is_app_state_bad.isSet() == false) &&
-             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false) &&
-             (this->arg_update_type.isSet() == false))
-    {
-        this->switch_firmware_slot();
-    }
-    else if ((this->arg_update.isSet() == false) && (this->arg_rollback_update.isSet() == false) &&
-             (this->arg_switch_fw_slot.isSet() == false) && (this->arg_switch_app_slot.isSet() == true) &&
-             (this->arg_commit_update.isSet() == false) && (this->arg_urs.isSet() == false) &&
-             (this->arg_automatic.isSet() == false) && (this->get_app_version.isSet() == false) &&
-             (this->get_fw_version.isSet() == false) && (this->notice_update_available.isSet() == false) &&
-             (this->download_update.isSet() == false) && (this->download_progress.isSet() == false) &&
-             (this->install_update.isSet() == false) && (this->apply_update.isSet() == false) &&
-             (this->set_app_state_bad.isSet() == false) && (this->is_app_state_bad.isSet() == false) &&
-             (this->set_fw_state_bad.isSet() == false) && (this->is_fw_state_bad.isSet() == false) &&
-             (this->arg_update_type.isSet() == false))
-    {
-        this->switch_application_slot();
-    }
-    else if ((this->arg_update.isSet() == false) && (this->arg_rollback_update.isSet() == false) &&
-             (this->arg_switch_fw_slot.isSet() == false) && (this->arg_switch_app_slot.isSet() == false) &&
-             (this->arg_commit_update.isSet() == false) && (this->arg_urs.isSet() == false) &&
-             (this->arg_automatic.isSet() == false) && (this->get_app_version.isSet() == false) &&
-             (this->get_fw_version.isSet() == false) && (this->notice_update_available.isSet() == false) &&
-             (this->download_update.isSet() == false) && (this->download_progress.isSet() == false) &&
-             (this->install_update.isSet() == false) && (this->apply_update.isSet() == false) &&
-             (this->get_version.isSet() == true) && (this->set_app_state_bad.isSet() == false) &&
-             (this->is_app_state_bad.isSet() == false) && (this->set_fw_state_bad.isSet() == false) &&
-             (this->is_fw_state_bad.isSet() == false) && (this->arg_update_type.isSet() == false))
-    {
-        cout << "F&S Update Framework CLI Version: " << PROJECT_VERSION;
-        cout << " build at: " << __DATE__ << ", " << __TIME__ << "." << endl;
-    }
-    else if ((this->arg_update.isSet() == false) && (this->arg_rollback_update.isSet() == false) &&
-             (this->arg_switch_fw_slot.isSet() == false) && (this->arg_switch_app_slot.isSet() == false) &&
-             (this->arg_commit_update.isSet() == false) && (this->arg_urs.isSet() == false) &&
-             (this->arg_automatic.isSet() == false) && (this->get_app_version.isSet() == false) &&
-             (this->get_fw_version.isSet() == false) && (this->notice_update_available.isSet() == false) &&
-             (this->download_update.isSet() == false) && (this->download_progress.isSet() == false) &&
-             (this->install_update.isSet() == false) && (this->apply_update.isSet() == false) &&
-             (this->get_version.isSet() == false) && (this->set_app_state_bad.isSet() == true) &&
-             (this->is_app_state_bad.isSet() == false) && (this->set_fw_state_bad.isSet() == false) &&
-             (this->is_fw_state_bad.isSet() == false) && (this->arg_update_type.isSet() == false))
-    {
-        this->set_application_state_bad(this->set_app_state_bad.getValue());
-    }
-    else if ((this->arg_update.isSet() == false) && (this->arg_rollback_update.isSet() == false) &&
-             (this->arg_switch_fw_slot.isSet() == false) && (this->arg_switch_app_slot.isSet() == false) &&
-             (this->arg_commit_update.isSet() == false) && (this->arg_urs.isSet() == false) &&
-             (this->arg_automatic.isSet() == false) && (this->get_app_version.isSet() == false) &&
-             (this->get_fw_version.isSet() == false) && (this->notice_update_available.isSet() == false) &&
-             (this->download_update.isSet() == false) && (this->download_progress.isSet() == false) &&
-             (this->install_update.isSet() == false) && (this->apply_update.isSet() == false) &&
-             (this->get_version.isSet() == false) && (this->set_app_state_bad.isSet() == false) &&
-             (this->is_app_state_bad.isSet() == true) && (this->set_fw_state_bad.isSet() == false) &&
-             (this->is_fw_state_bad.isSet() == false) && (this->arg_update_type.isSet() == false))
-    {
-        this->is_application_state_bad(this->is_app_state_bad.getValue());
-    }
-    else if ((this->arg_update.isSet() == false) && (this->arg_rollback_update.isSet() == false) &&
-             (this->arg_switch_fw_slot.isSet() == false) && (this->arg_switch_app_slot.isSet() == false) &&
-             (this->arg_commit_update.isSet() == false) && (this->arg_urs.isSet() == false) &&
-             (this->arg_automatic.isSet() == false) && (this->get_app_version.isSet() == false) &&
-             (this->get_fw_version.isSet() == false) && (this->notice_update_available.isSet() == false) &&
-             (this->download_update.isSet() == false) && (this->download_progress.isSet() == false) &&
-             (this->install_update.isSet() == false) && (this->apply_update.isSet() == false) &&
-             (this->get_version.isSet() == false) && (this->set_app_state_bad.isSet() == false) &&
-             (this->is_app_state_bad.isSet() == false) && (this->set_fw_state_bad.isSet() == true) &&
-             (this->is_fw_state_bad.isSet() == false) && (this->arg_update_type.isSet() == false))
-    {
-        this->set_firmware_state_bad(this->set_fw_state_bad.getValue());
-    }
-    else if ((this->arg_update.isSet() == false) && (this->arg_rollback_update.isSet() == false) &&
-             (this->arg_switch_fw_slot.isSet() == false) && (this->arg_switch_app_slot.isSet() == false) &&
-             (this->arg_commit_update.isSet() == false) && (this->arg_urs.isSet() == false) &&
-             (this->arg_automatic.isSet() == false) && (this->get_app_version.isSet() == false) &&
-             (this->get_fw_version.isSet() == false) && (this->notice_update_available.isSet() == false) &&
-             (this->download_update.isSet() == false) && (this->download_progress.isSet() == false) &&
-             (this->install_update.isSet() == false) && (this->apply_update.isSet() == false) &&
-             (this->get_version.isSet() == false) && (this->set_app_state_bad.isSet() == false) &&
-             (this->is_app_state_bad.isSet() == false) && (this->set_fw_state_bad.isSet() == false) &&
-             (this->is_fw_state_bad.isSet() == true) && (this->arg_update_type.isSet() == false))
-    {
-        this->is_firmware_state_bad(this->is_fw_state_bad.getValue());
-    }
-    else if ((this->arg_update.isSet() == false) && (this->arg_rollback_update.isSet() == false) &&
-             (this->arg_switch_fw_slot.isSet() == false) && (this->arg_switch_app_slot.isSet() == false) &&
-             (this->arg_commit_update.isSet() == false) && (this->arg_urs.isSet() == false) &&
-             (this->arg_automatic.isSet() == false) && (this->get_app_version.isSet() == false) &&
-             (this->get_fw_version.isSet() == false) && (this->notice_update_available.isSet() == false) &&
-             (this->download_update.isSet() == false) && (this->download_progress.isSet() == false) &&
-             (this->install_update.isSet() == false) && (this->apply_update.isSet() == false) &&
-             (this->get_version.isSet() == false) && (this->set_app_state_bad.isSet() == false) &&
-             (this->is_app_state_bad.isSet() == false) && (this->set_fw_state_bad.isSet() == false) &&
-             (this->is_fw_state_bad.isSet() == false) && (this->arg_update_type.isSet() == false))
-    {
-        cout << "F&S Update Framework CLI Version: " << PROJECT_VERSION;
-        cout << " build at: " << __DATE__ << ", " << __TIME__ << "." << endl;
-        cout << "No argument given, nothing done. Use --help to get all commands." << endl;
-    }
-    else
-    {
-        cerr << "Wrong combination or set of variables. Please refer --help or manual" << endl;
+        cli_io::write_stderr("Wrong combination or set of variables. Please refer --help or manual\n");
+        this->return_code = EPERM;
     }
 }
+
+// ---------------------------------------------------------------------------
+// Utilities
+// ---------------------------------------------------------------------------
 
 int cli::fs_update_cli::getReturnCode() const
 {
@@ -1302,14 +1070,6 @@ int cli::fs_update_cli::getReturnCode() const
 
 int cli::fs_update_cli::reboot() const
 {
-    /* TODO: Check if direct reboot without shell call
-     * would be better. Steps:
-     *  - sync filesystem buffers
-     *  - reboot per message RB_AUTOBOOT
-     */
-#if 0 // TODO:
-    sync();
+    ::sync();
     return ::reboot(RB_AUTOBOOT);
-#endif
-    return ::system("/sbin/reboot --reboot --no-wall");
 }
