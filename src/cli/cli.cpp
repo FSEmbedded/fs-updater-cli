@@ -9,7 +9,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <sys/reboot.h>
+#include <csignal>
 
 constexpr char FSCLI_DOMAIN[] = "cli";
 
@@ -1095,6 +1095,11 @@ int cli::fs_update_cli::getReturnCode() const
 
 int cli::fs_update_cli::reboot() const
 {
+    /* Trigger systemd's orderly shutdown via SIGINT to PID 1.
+     * SIGINT → ctrl-alt-del.target → reboot.target → graceful unit stop + reboot.
+     * Uses kill(2) directly: POSIX syscall, no fork/exec/system (MISRA-compliant).
+     * ::sync() flushes dirty buffers before systemd begins stopping services.
+     */
     ::sync();
-    return ::reboot(RB_AUTOBOOT);
+    return ::kill(1, SIGINT);
 }
