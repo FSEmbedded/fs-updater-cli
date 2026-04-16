@@ -332,7 +332,11 @@ void cli::fs_update_cli::rollback_update()
             return;
         }
 
-        this->create_rollback_marker();
+        if (!this->create_rollback_marker())
+        {
+            this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_PROGRESS_ERROR);
+            return;
+        }
         cli_io::write_stdout("Rollback finished successful. Reboot required.\n");
         this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_SUCCESSFUL);
     }
@@ -373,7 +377,11 @@ void cli::fs_update_cli::switch_firmware_slot()
             cli_io::write_stdout("Start switch firmware slot\n");
             this->update_handler->create_work_dir();
             this->update_handler->rollback_firmware();
-            this->create_rollback_marker();
+            if (!this->create_rollback_marker())
+            {
+                this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_PROGRESS_ERROR);
+                return;
+            }
             cli_io::write_stdout("Switch firmware slot successful\n");
             this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_SUCCESSFUL);
         }
@@ -422,7 +430,11 @@ void cli::fs_update_cli::switch_application_slot()
             cli_io::write_stdout("Start switch application slot\n");
             this->update_handler->create_work_dir();
             this->update_handler->rollback_application();
-            this->create_rollback_marker();
+            if (!this->create_rollback_marker())
+            {
+                this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_PROGRESS_ERROR);
+                return;
+            }
             cli_io::write_stdout("Switch application slot successful\n");
             this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_SUCCESSFUL);
         }
@@ -789,7 +801,16 @@ void cli::fs_update_cli::handle_download_progress()
         this->return_code = static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::NO_DOWNLOAD_STARTED);
         return;
     }
-    update_size = std::stoull(size_str);
+    try
+    {
+        update_size = std::stoull(size_str);
+    }
+    catch (const std::exception &)
+    {
+        cli_io::write_stderr("Update size file contains invalid data\n");
+        this->return_code = static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::NO_DOWNLOAD_STARTED);
+        return;
+    }
 
     if (update_size == 0)
     {
@@ -845,7 +866,7 @@ void cli::fs_update_cli::handle_download_progress()
         this->return_code =
             static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::UPDATE_DOWNLOAD_IN_PROGRESS);
     }
-    else if (percent >= 100)
+    else
     {
         this->return_code =
             static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::UPDATE_DOWNLOAD_FINISHED);
