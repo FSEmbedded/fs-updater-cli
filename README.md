@@ -36,11 +36,27 @@ The return-code contract is append-only — existing values must never be renumb
 | `src/cli/cli.h`, `cli.cpp` | 21 TCLAP arguments, dispatch logic |
 | `src/cli/fs_updater_error.h` | Return-code enums (12 categories, 55 codes) |
 | `src/cli/fs_updater_types.h` | `version_t` typedef |
+| `src/cli/cli_io.h` | POSIX stdout/stderr wrappers |
+| `src/cli/posix_helpers.h` | POSIX filesystem helpers (no exceptions) |
 | `src/cli/SynchronizedSerial.cpp` | Serial output sync for `--automatic` mode |
+| `scripts/build.sh` | Cross-compile script; `--lib` for local lib override |
 
 ## Build
 
-Cross-compile with the F&S Yocto SDK. See the [superproject build recipe](../CLAUDE.md#build).
+```bash
+./scripts/build.sh debug           # cross-compile Debug (default)
+./scripts/build.sh release         # cross-compile Release (-Os, LTO, stripped)
+./scripts/build.sh sanitize        # cross-compile Debug with ASan + UBSan
+./scripts/build.sh clean
+
+# Link against a locally built fs-updater-lib instead of the SDK version
+./scripts/build.sh debug --lib ../fs-updater-lib/build
+```
+
+The `--lib <build_dir>` flag installs the lib into a local staging prefix
+(`build/fus_lib_install`) and overrides the SDK sysroot version for that build.
+
+Override the SDK location with `SDK_ROOT=/path/to/sdk ./scripts/build.sh debug`.
 
 ## License
 
