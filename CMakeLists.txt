@@ -12,6 +12,8 @@ set_property(CACHE OPTIMIZE_FOR PROPERTY STRINGS SIZE SPEED)
 
 set(update_version_type "string" CACHE STRING "Data type for fw/app version")
 
+set(FUS_LIB_DIR "" CACHE PATH "Local fs-updater-lib install prefix (overrides SDK)")
+
 # Validate options
 if(NOT OPTIMIZE_FOR MATCHES "^(SIZE|SPEED)$")
     message(FATAL_ERROR "OPTIMIZE_FOR must be SIZE or SPEED, got: ${OPTIMIZE_FOR}")
@@ -112,6 +114,11 @@ target_include_directories(fs_updater_cli PRIVATE
     ${JSONCPP_INCLUDE_DIRS}
     ${LIBARCHIVE_INCLUDE_DIRS}
 )
+
+if(FUS_LIB_DIR)
+    target_include_directories(fs_updater_cli PRIVATE ${FUS_LIB_DIR}/include)
+    target_link_directories(fs_updater_cli PRIVATE ${FUS_LIB_DIR}/lib)
+endif()
 
 # ==============================================================================
 # Link libraries
