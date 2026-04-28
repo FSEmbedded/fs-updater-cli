@@ -1,22 +1,28 @@
 # Signal Files
 
-Work directory: `/tmp/adu/.work/` (default, `TEMP_ADU_WORK_DIR`)
+Work directory: `/tmp/adu/.work/` (default, controlled by `TEMP_ADU_WORK_DIR`).
 
-## File Overview
+Signal files are the IPC mechanism between the ADU agent and the CLI's
+Category C arguments (`--is_update_available`, `--download_update`,
+`--download_progress`, `--install_update`, `--apply_update`). These arguments
+have no direct library interaction — they read and create files in the work
+directory.
 
-| File | Type | Created By | Read By | Purpose |
-|------|------|------------|---------|---------|
-| `update_type` | Metadata | ADU agent | `--is_update_available` | "firmware", "application", or both |
-| `update_version` | Metadata | ADU agent | `--is_update_available` | Version string |
-| `update_size` | Metadata | ADU agent | `--is_update_available`, `--download_progress` | Size in bytes |
-| `update_location` | Metadata | ADU agent | `--download_progress` | Path to downloading file |
-| `downloadUpdate` | Signal | `--download_update` | `--download_progress`, ADU agent | Trigger download |
-| `installUpdate` | Signal | `--install_update` | ADU agent | Trigger installation |
-| `updateInstalled` | Signal | ADU agent / library | `--install_update`, `--apply_update` | Installation complete |
-| `applyUpdate` | Signal | `--apply_update` | ADU agent | Trigger apply (network mode) |
-| `rollbackUpdate` | Signal | `--rollback_update`, `--switch_*_slot` | `--apply_update` | Rollback prepared |
+## File overview
 
-## Network Update Pipeline
+| File | Created by | Read by | Purpose |
+|------|------------|---------|---------|
+| `update_type` | ADU agent | `--is_update_available` | `"firmware"`, `"application"`, or `"both"` |
+| `update_version` | ADU agent | `--is_update_available` | Version string of the pending update |
+| `update_size` | ADU agent | `--is_update_available`, `--download_progress` | Expected file size in bytes |
+| `update_location` | ADU agent | `--download_progress` | Path to the file being downloaded |
+| `downloadUpdate` | `--download_update` | ADU agent | Signal: start the download |
+| `installUpdate` | `--install_update` | ADU agent | Signal: run the installation |
+| `updateInstalled` | ADU agent / lib | `--install_update`, `--apply_update` | Installation complete |
+| `applyUpdate` | `--apply_update` | ADU agent | Signal: trigger apply (network mode) |
+| `rollbackUpdate` | `--rollback_update`, `--switch_*_slot` | `--apply_update` | Rollback prepared |
+
+## Network update pipeline
 
 ```mermaid
 sequenceDiagram
@@ -46,7 +52,10 @@ sequenceDiagram
     ADU->>FS: read applyUpdate, trigger reboot
 ```
 
-## Local Update Flow
+## Local update flow
+
+Local `--update_file` installs directly via the library; no signal files are
+created except `updateInstalled` on completion.
 
 ```mermaid
 sequenceDiagram
@@ -60,11 +69,11 @@ sequenceDiagram
     CLI->>FS: write updateInstalled
 
     User->>CLI: --apply_update
-    Note over FS: No applyUpdate/downloadUpdate files
+    Note over FS: No applyUpdate / downloadUpdate files
     CLI->>CLI: Direct reboot (local mode)
 ```
 
-## Rollback Signal Flow
+## Rollback signal flow
 
 ```mermaid
 sequenceDiagram
