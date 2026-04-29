@@ -1,7 +1,7 @@
 # fs-updater CLI
 
 Command-line interface for the F&S Update Framework. Converts
-[`fs-updater-lib`](https://github.com/fsembedded/fs-updater-lib/blob/main/README.md)
+[`fs-updater-lib`](https://github.com/fsembedded/fs-updater-lib/blob/master/README.md)
 API calls and exceptions into TCLAP arguments and POSIX exit codes.
 
 Binary: `fs-updater`, installed to `/usr/sbin/`.
@@ -39,8 +39,8 @@ prefix (`build/fus_lib_install`) and overrides the SDK sysroot version.
 
 | Component | Purpose |
 |-----------|---------|
-| [fs-updater-lib](https://github.com/fsembedded/fs-updater-lib/blob/main/README.md) | Core update library consumed by this CLI |
-| [dynamic-overlay](https://github.com/fsembedded/dynamic-overlay/blob/main/README.md) | Preinit overlay mounting; reads the U-Boot state this CLI writes |
+| [fs-updater-lib](https://github.com/fsembedded/fs-updater-lib/blob/master/README.md) | Core update library consumed by this CLI |
+| [dynamic-overlay](https://github.com/fsembedded/dynamic-overlay/blob/master/README.md) | Preinit overlay mounting; reads the U-Boot state this CLI writes |
 
 ## Return-code stability contract
 
