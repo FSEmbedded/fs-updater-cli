@@ -1097,7 +1097,7 @@ int cli::fs_update_cli::reboot() const
 {
     /* Trigger systemd's orderly shutdown via SIGINT to PID 1.
      * SIGINT → ctrl-alt-del.target → reboot.target → graceful unit stop + reboot.
-     * Uses kill(2) directly: POSIX syscall, no fork/exec/system (MISRA-compliant).
+     * Uses kill(2) directly: a POSIX syscall, with no process spawning.
      * ::sync() flushes dirty buffers before systemd begins stopping services.
      */
     ::sync();

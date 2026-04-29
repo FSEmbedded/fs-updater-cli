@@ -37,10 +37,9 @@ device or a QEMU image with U-Boot environment support.
 
 Targeting C++17.
 
-**Exception to the project-wide rules:** `fs-updater-cli` intentionally enables
-RTTI and exceptions (`-frtti`, no `-fno-exceptions`). TCLAP (the argument
-parsing library) requires both. All exceptions thrown by `fs-updater-lib` are
-caught in `main()` and translated to exit codes; they must not escape.
+**Exceptions and RTTI are enabled.** `fs-updater-lib` reports errors by
+throwing; every exception is caught in `main()` and translated to an exit
+code, and none may escape.
 
 Rules that apply in full:
 
