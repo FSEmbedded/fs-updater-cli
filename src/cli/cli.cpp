@@ -794,34 +794,7 @@ void cli::fs_update_cli::handle_download_update()
         return;
     }
 
-    /* ADU handler still writes these files */
-    const string work_dir = this->update_handler->get_work_dir().string();
-    string type, version, size_str;
-    if (!posix_helpers::read_file(posix_helpers::path_join(work_dir, "update_type").c_str(), type) ||
-        !posix_helpers::read_file(posix_helpers::path_join(work_dir, "update_version").c_str(), version) ||
-        !posix_helpers::read_file(posix_helpers::path_join(work_dir, "update_size").c_str(), size_str))
-    {
-        this->return_code = static_cast<int>(UPDATER_DOWNLOAD_UPDATE_STATE::NO_DOWNLOAD_QUEUED);
-        return;
-    }
-
-    uint64_t size = 0;
-    try { size = std::stoull(size_str); }
-    catch (const std::exception&)
-    {
-        this->return_code = static_cast<int>(UPDATER_DOWNLOAD_UPDATE_STATE::NO_DOWNLOAD_QUEUED);
-        return;
-    }
-
-    const uint32_t sid = fus_dbus::start_download(type, version, size);
-    if (sid == 0)
-    {
-        cli_io::write_stdout("Could not initiate update download...\n");
-        this->return_code = static_cast<int>(UPDATER_DOWNLOAD_UPDATE_STATE::UPDATE_DOWNLOAD_FAILED);
-        return;
-    }
-    cli_io::write_stdout("Download started...\n");
-    this->return_code = static_cast<int>(UPDATER_DOWNLOAD_UPDATE_STATE::UPDATE_DOWNLOAD_STARTED);
+    this->return_code = static_cast<int>(UPDATER_DOWNLOAD_UPDATE_STATE::NO_DOWNLOAD_QUEUED);
 #else
     const string work_dir = this->update_handler->get_work_dir().string();
     if (!posix_helpers::path_exists(posix_helpers::path_join(work_dir, "update_type").c_str()) ||
