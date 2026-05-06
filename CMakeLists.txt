@@ -15,6 +15,8 @@ set(update_version_type "string" CACHE STRING "Data type for fw/app version")
 set(FUS_LIB_DIR "" CACHE PATH "Local fs-updater-lib install prefix (overrides SDK)")
 
 option(BUILD_DBUS_SUPPORT "Build cloud-flow CLI handlers as D-Bus clients" OFF)
+option(BUILD_TESTING      "Build unit tests (native build)"                  OFF)
+option(BUILD_MAIN_TARGET  "Build CLI executable (OFF = tests only)"          ON)
 
 # Validate options
 if(NOT OPTIMIZE_FOR MATCHES "^(SIZE|SPEED)$")
@@ -39,6 +41,16 @@ set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG" CACHE STRING "" FORCE)
 # ==============================================================================
 
 configure_file(cmake/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config.h)
+
+# ==============================================================================
+# Tests-only mode (skip CLI executable when cross-compile libs unavailable)
+# ==============================================================================
+
+if(BUILD_TESTING AND NOT BUILD_MAIN_TARGET)
+    enable_testing()
+    add_subdirectory(tests)
+    return()
+endif()
 
 # ==============================================================================
 # Dependencies
@@ -157,3 +169,12 @@ install(TARGETS fs_updater_cli
 )
 
 install(FILES ${HEADERS} DESTINATION ${CMAKE_INSTALL_FULL_INCLUDEDIR})
+
+# ==============================================================================
+# Tests
+# ==============================================================================
+
+if(BUILD_TESTING)
+    enable_testing()
+    add_subdirectory(tests)
+endif()

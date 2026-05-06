@@ -4,6 +4,7 @@ set -e
 SDK_ROOT="${SDK_ROOT:-/opt/fslc-xwayland/5.15-scarthgap}"
 SDK_ENV="$SDK_ROOT/environment-setup-cortexa53-fslc-linux"
 SDK_CMAKE="$SDK_ROOT/sysroots/x86_64-fslcsdk-linux/usr/bin/cmake"
+SDK_CTEST="$SDK_ROOT/sysroots/x86_64-fslcsdk-linux/usr/bin/ctest"
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 usage() {
@@ -14,6 +15,7 @@ Targets:
   debug       Cross-compile Debug build (default)
   release     Cross-compile Release build (-Os, LTO)
   sanitize    Cross-compile Debug build with ASan + UBSan
+  test        Native build + run unit tests
   clean       Remove all build directories
 
 Options:
@@ -33,7 +35,7 @@ while [ $# -gt 0 ]; do
     --speed)   EXTRA_ARGS+=("-DOPTIMIZE_FOR=SPEED") ;;
     --uint64)  EXTRA_ARGS+=("-Dupdate_version_type=uint64") ;;
     --lib)     LIB_BUILD_DIR="$(realpath "$2")"; shift ;;
-    debug | release | sanitize | clean)
+    debug | release | sanitize | test | clean)
         if [ -n "$TARGET" ]; then
             echo "Multiple targets specified: $TARGET and $1"
             usage
@@ -69,6 +71,31 @@ build_cross() {
     make -j"$(nproc)"
 }
 
+build_test() {
+    local build_dir="$PROJECT_ROOT/build_test"
+    local cmake_args=("$@")
+
+    # Prefer SDK cmake/ctest; fall back to system cmake/ctest if SDK not present
+    local cmake_bin="$SDK_CMAKE"
+    local ctest_bin="$SDK_CTEST"
+    if [ ! -x "$cmake_bin" ]; then
+        cmake_bin="$(command -v cmake 2>/dev/null)" || { echo "cmake not found"; exit 1; }
+        ctest_bin="$(command -v ctest 2>/dev/null)" || ctest_bin="$cmake_bin --build . --target test"
+    fi
+
+    mkdir -p "$build_dir" && cd "$build_dir"
+    "$cmake_bin" \
+        -DCMAKE_BUILD_TYPE=Debug \
+        -DCMAKE_C_COMPILER=gcc \
+        -DCMAKE_CXX_COMPILER=g++ \
+        -DBUILD_TESTING=ON \
+        -DBUILD_MAIN_TARGET=OFF \
+        "${cmake_args[@]}" \
+        "$PROJECT_ROOT"
+    make -j"$(nproc)"
+    "$ctest_bin" --output-on-failure
+}
+
 case "$TARGET" in
 debug)
     build_cross -DCMAKE_BUILD_TYPE=Debug "${EXTRA_ARGS[@]}"
@@ -81,9 +108,12 @@ sanitize)
         -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=all" \
         "${EXTRA_ARGS[@]}"
     ;;
+test)
+    build_test "${EXTRA_ARGS[@]}"
+    ;;
 clean)
-    rm -rf "$PROJECT_ROOT/build"
-    echo "Build directory removed."
+    rm -rf "$PROJECT_ROOT/build" "$PROJECT_ROOT/build_test"
+    echo "Build directories removed."
     ;;
 *)
     usage
