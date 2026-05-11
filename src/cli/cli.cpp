@@ -30,13 +30,6 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
 		       "",
 		       "absolute filesystem path"
 		       ),
-		arg_update_type("",
-		       "update_type",
-		       "Update type firmware or application",
-		       false,
-		       "",
-		       "accepted values: fw or app"
-		),
 		arg_switch_fw_slot("",
 				"switch_fw_slot",
 				"Switch from active firmware slot to the inactive "\
@@ -133,7 +126,6 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
 		return_code(0)
 {
     this->cmd.add(arg_update);
-    this->cmd.add(arg_update_type);
     this->cmd.add(arg_rollback_update);
     this->cmd.add(arg_switch_fw_slot);
     this->cmd.add(arg_switch_app_slot);
@@ -213,17 +205,6 @@ void cli::fs_update_cli::update_image_state(const string &update_file)
         cli_io::write_stdout("Update started\n");
         uint8_t installed_update_type = 0;
         string update_type;
-        if (this->arg_update_type.isSet())
-        {
-            update_type = this->arg_update_type.getValue();
-            if ((update_type.compare("app") != 0) && (update_type.compare("fw") != 0))
-            {
-                cli_io::write_stderr("Update type: " + update_type + " does not exist.\n");
-                this->return_code = static_cast<int>(UPDATER_CLI_VALIDATION::INVALID_UPDATE_TYPE);
-                return;
-            }
-        }
-
         string mutable_file = update_file;
         this->update_handler->update_image(mutable_file, update_type, installed_update_type);
 
@@ -1197,14 +1178,6 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
             matched_handler = entry.handler;
             ++action_count;
         }
-    }
-
-    /* --update_type is only valid with --update_file */
-    if (this->arg_update_type.isSet() && !this->arg_update.isSet())
-    {
-        cli_io::write_stderr("--update_type can only be used with --update_file\n");
-        this->return_code = static_cast<int>(UPDATER_CLI_VALIDATION::UPDATE_TYPE_WITHOUT_FILE);
-        return;
     }
 
     if (action_count == 0)
