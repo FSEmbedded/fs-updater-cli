@@ -22,6 +22,9 @@ Options:
   --speed           Optimize for speed (-O2) instead of size (-Os)
   --uint64          Use uint64 version type instead of string
   --lib <build_dir> Use locally built fs-updater-lib from this build directory
+  --no-dbus         Disable D-Bus cloud-flow handlers (BUILD_DBUS_SUPPORT=OFF).
+                    On this branch D-Bus is the default; opt out only when
+                    the lib is also built --no-dbus.
 EOF
     exit 1
 }
@@ -35,6 +38,7 @@ while [ $# -gt 0 ]; do
     --speed)   EXTRA_ARGS+=("-DOPTIMIZE_FOR=SPEED") ;;
     --uint64)  EXTRA_ARGS+=("-Dupdate_version_type=uint64") ;;
     --lib)     LIB_BUILD_DIR="$(realpath "$2")"; shift ;;
+    --no-dbus) EXTRA_ARGS+=("-DBUILD_DBUS_SUPPORT=OFF") ;;
     debug | release | sanitize | test | clean)
         if [ -n "$TARGET" ]; then
             echo "Multiple targets specified: $TARGET and $1"

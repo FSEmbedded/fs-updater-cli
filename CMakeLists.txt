@@ -14,7 +14,7 @@ set(update_version_type "string" CACHE STRING "Data type for fw/app version")
 
 set(FUS_LIB_DIR "" CACHE PATH "Local fs-updater-lib install prefix (overrides SDK)")
 
-option(BUILD_DBUS_SUPPORT "Build cloud-flow CLI handlers as D-Bus clients" OFF)
+option(BUILD_DBUS_SUPPORT "Build cloud-flow CLI handlers as D-Bus clients" ON)
 option(BUILD_TESTING      "Build unit tests (native build)"                  OFF)
 option(BUILD_MAIN_TARGET  "Build CLI executable (OFF = tests only)"          ON)
 
