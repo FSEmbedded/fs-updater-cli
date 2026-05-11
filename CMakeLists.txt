@@ -61,7 +61,6 @@ find_package(PkgConfig REQUIRED)
 
 pkg_check_modules(BOTAN2 REQUIRED botan-2)
 pkg_check_modules(JSONCPP REQUIRED jsoncpp)
-pkg_check_modules(LIBARCHIVE REQUIRED libarchive)
 
 # ==============================================================================
 # Sources
@@ -126,7 +125,6 @@ target_include_directories(fs_updater_cli PRIVATE
     src/cli
     ${BOTAN2_INCLUDE_DIRS}
     ${JSONCPP_INCLUDE_DIRS}
-    ${LIBARCHIVE_INCLUDE_DIRS}
 )
 
 if(FUS_LIB_DIR)
@@ -142,7 +140,6 @@ target_link_libraries(fs_updater_cli PRIVATE
     fs_updater
     ${BOTAN2_LIBRARIES}
     ${JSONCPP_LIBRARIES}
-    ${LIBARCHIVE_LIBRARIES}
     Threads::Threads
     ubootenv
     z
