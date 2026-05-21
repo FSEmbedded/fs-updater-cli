@@ -50,6 +50,12 @@ namespace cli
 		/* One-shot query of InstallProgress / InstallState, mirrors
 		 * --download_progress in shape and exit-code semantics. */
 		TCLAP::SwitchArg install_progress;
+		/* Request best-effort cancel of the install for a given
+		 * session_id. The actual outcome is observable via
+		 * --install_progress and the InstallCompleted signal. Named
+		 * with the _arg suffix to disambiguate from the
+		 * fus_dbus::cancel_install() free function. */
+		TCLAP::ValueArg<uint32_t> cancel_install_arg;
 		TCLAP::ValueArg<char> set_app_state_bad;
 		TCLAP::ValueArg<char> is_app_state_bad;
 		TCLAP::ValueArg<char> set_fw_state_bad;
@@ -158,6 +164,7 @@ namespace cli
 		void handle_install_update();
 		void handle_update_install();
 		void handle_install_progress();
+		void handle_cancel_install();
 		void handle_apply_update();
 		void handle_set_app_state_bad();
 		void handle_is_app_state_bad();

@@ -106,6 +106,13 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
 						 "install_progress",
 						 "Show the progress of the current install"
 						 ),
+		cancel_install_arg("",
+						   "cancel_install",
+						   "Best-effort cancel of the install for the given session_id",
+						   false,
+						   0,
+						   "session_id (uint32)"
+						   ),
 		set_app_state_bad("",
 			    "set_app_state_bad",
 				"Mark application A or B bad",
@@ -151,6 +158,7 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
     this->cmd.add(install_update);
     this->cmd.add(update_install);
     this->cmd.add(install_progress);
+    this->cmd.add(cancel_install_arg);
     this->cmd.add(download_progress);
     this->cmd.add(download_update);
     this->cmd.add(notice_update_available);
@@ -982,11 +990,11 @@ void cli::fs_update_cli::handle_install_progress()
             static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::NO_INSTALLATION_QUEUED);
         return;
     }
-    if (install_state == "failed") {
-        this->return_code =
-            static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FAILED);
-        return;
-    }
+
+    /* Print the final percent before returning, including for the
+     * "failed" terminal state — callers want to see how far the
+     * install got before it failed. (Diverges from
+     * handle_download_progress on purpose.) */
     const int pct = fus_dbus::get_install_progress();
     if (pct < 0) {
         this->return_code =
@@ -994,7 +1002,11 @@ void cli::fs_update_cli::handle_install_progress()
         return;
     }
     cli_io::write_stdout(std::to_string(pct) + "%\n");
-    if (install_state == "finished") {
+
+    if (install_state == "failed") {
+        this->return_code =
+            static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FAILED);
+    } else if (install_state == "finished") {
         this->return_code =
             static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FINISHED);
     } else {
@@ -1005,6 +1017,34 @@ void cli::fs_update_cli::handle_install_progress()
     cli_io::write_stderr("D-Bus support not built in\n");
     this->return_code =
         static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::NO_INSTALLATION_QUEUED);
+#endif
+}
+
+void cli::fs_update_cli::handle_cancel_install()
+{
+#if BUILD_DBUS_SUPPORT
+    const uint32_t sid = this->cancel_install_arg.getValue();
+    if (sid == 0) {
+        cli_io::write_stderr("--cancel_install requires a non-zero session_id\n");
+        this->return_code =
+            static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FAILED);
+        return;
+    }
+    if (!fus_dbus::cancel_install(sid)) {
+        cli_io::write_stderr("CancelInstall D-Bus call failed\n");
+        this->return_code =
+            static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FAILED);
+        return;
+    }
+    cli_io::write_stdout("Cancel requested for session " +
+                         std::to_string(sid) +
+                         "; final outcome via --install_progress.\n");
+    this->return_code =
+        static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_IN_PROGRESS);
+#else
+    cli_io::write_stderr("D-Bus support not built in\n");
+    this->return_code =
+        static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FAILED);
 #endif
 }
 
@@ -1227,7 +1267,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
         void (fs_update_cli::*handler)();
     };
 
-    const std::array<ActionEntry, 21> actions = {{
+    const std::array<ActionEntry, 22> actions = {{
         {&arg_update,              &fs_update_cli::handle_update_file},
         {&arg_commit_update,       &fs_update_cli::commit_update},
         {&arg_urs,                 &fs_update_cli::print_update_reboot_state},
@@ -1241,6 +1281,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
         {&install_update,          &fs_update_cli::handle_install_update},
         {&install_progress,        &fs_update_cli::handle_install_progress},
         {&update_install,          &fs_update_cli::handle_update_install},
+        {&cancel_install_arg,      &fs_update_cli::handle_cancel_install},
         {&apply_update,            &fs_update_cli::handle_apply_update},
         {&arg_rollback_update,     &fs_update_cli::rollback_update},
         {&arg_switch_fw_slot,      &fs_update_cli::switch_firmware_slot},
