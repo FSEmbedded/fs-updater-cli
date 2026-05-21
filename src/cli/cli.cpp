@@ -95,6 +95,17 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
 					   "install_update",
 					   "Install downloaded update"
 					   ),
+		update_install("",
+					   "update_install",
+					   "Install a local update bundle via the D-Bus service",
+					   false,
+					   "",
+					   "absolute filesystem path"
+					   ),
+		install_progress("",
+						 "install_progress",
+						 "Show the progress of the current install"
+						 ),
 		set_app_state_bad("",
 			    "set_app_state_bad",
 				"Mark application A or B bad",
@@ -138,6 +149,8 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
     this->cmd.add(get_version);
     this->cmd.add(apply_update);
     this->cmd.add(install_update);
+    this->cmd.add(update_install);
+    this->cmd.add(install_progress);
     this->cmd.add(download_progress);
     this->cmd.add(download_update);
     this->cmd.add(notice_update_available);
@@ -927,6 +940,74 @@ void cli::fs_update_cli::handle_download_progress()
 #endif
 }
 
+void cli::fs_update_cli::handle_update_install()
+{
+#if BUILD_DBUS_SUPPORT
+    const string path = this->update_install.getValue();
+    if (path.empty()) {
+        cli_io::write_stderr("--update_install requires a path argument\n");
+        this->return_code =
+            static_cast<int>(UPDATER_CLI_VALIDATION::UPDATE_FILE_NOT_FOUND);
+        return;
+    }
+
+    /* Service-side validates existence + state and returns FILE_NOT_FOUND
+     * or LIMITS_EXCEEDED — install_local returns 0 on any failure. */
+    const uint32_t sid = fus_dbus::install_local(path);
+    if (sid == 0) {
+        cli_io::write_stderr("InstallLocal D-Bus call failed\n");
+        this->return_code =
+            static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FAILED);
+        return;
+    }
+
+    cli_io::write_stdout("Install started; session " +
+                         std::to_string(sid) +
+                         ". Poll --install_progress for status.\n");
+    this->return_code =
+        static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_IN_PROGRESS);
+#else
+    cli_io::write_stderr("D-Bus support not built in\n");
+    this->return_code =
+        static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FAILED);
+#endif
+}
+
+void cli::fs_update_cli::handle_install_progress()
+{
+#if BUILD_DBUS_SUPPORT
+    const string install_state = fus_dbus::get_install_state();
+    if (install_state.empty() || install_state == "idle") {
+        this->return_code =
+            static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::NO_INSTALLATION_QUEUED);
+        return;
+    }
+    if (install_state == "failed") {
+        this->return_code =
+            static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FAILED);
+        return;
+    }
+    const int pct = fus_dbus::get_install_progress();
+    if (pct < 0) {
+        this->return_code =
+            static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::NO_INSTALLATION_QUEUED);
+        return;
+    }
+    cli_io::write_stdout(std::to_string(pct) + "%\n");
+    if (install_state == "finished") {
+        this->return_code =
+            static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FINISHED);
+    } else {
+        this->return_code =
+            static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_IN_PROGRESS);
+    }
+#else
+    cli_io::write_stderr("D-Bus support not built in\n");
+    this->return_code =
+        static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::NO_INSTALLATION_QUEUED);
+#endif
+}
+
 void cli::fs_update_cli::handle_install_update()
 {
 #if BUILD_DBUS_SUPPORT
@@ -1146,7 +1227,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
         void (fs_update_cli::*handler)();
     };
 
-    const std::array<ActionEntry, 19> actions = {{
+    const std::array<ActionEntry, 21> actions = {{
         {&arg_update,              &fs_update_cli::handle_update_file},
         {&arg_commit_update,       &fs_update_cli::commit_update},
         {&arg_urs,                 &fs_update_cli::print_update_reboot_state},
@@ -1158,6 +1239,8 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
         {&download_update,         &fs_update_cli::handle_download_update},
         {&download_progress,       &fs_update_cli::handle_download_progress},
         {&install_update,          &fs_update_cli::handle_install_update},
+        {&install_progress,        &fs_update_cli::handle_install_progress},
+        {&update_install,          &fs_update_cli::handle_update_install},
         {&apply_update,            &fs_update_cli::handle_apply_update},
         {&arg_rollback_update,     &fs_update_cli::rollback_update},
         {&arg_switch_fw_slot,      &fs_update_cli::switch_firmware_slot},

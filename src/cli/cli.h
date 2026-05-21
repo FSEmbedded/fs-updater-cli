@@ -43,6 +43,13 @@ namespace cli
 		TCLAP::SwitchArg download_progress;
 		TCLAP::SwitchArg download_update;
 		TCLAP::SwitchArg install_update;
+		/* Unified-install entry point — local flow. The path is required;
+		 * the cloud-flow entry point uses --install_update, matching the
+		 * existing one-flag-per-trigger pattern. */
+		TCLAP::ValueArg<std::string> update_install;
+		/* One-shot query of InstallProgress / InstallState, mirrors
+		 * --download_progress in shape and exit-code semantics. */
+		TCLAP::SwitchArg install_progress;
 		TCLAP::ValueArg<char> set_app_state_bad;
 		TCLAP::ValueArg<char> is_app_state_bad;
 		TCLAP::ValueArg<char> set_fw_state_bad;
@@ -149,6 +156,8 @@ namespace cli
 		void handle_download_update();
 		void handle_download_progress();
 		void handle_install_update();
+		void handle_update_install();
+		void handle_install_progress();
 		void handle_apply_update();
 		void handle_set_app_state_bad();
 		void handle_is_app_state_bad();

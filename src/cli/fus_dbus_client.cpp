@@ -144,6 +144,64 @@ bool start_install(uint32_t session_id, const std::string& type)
     return r >= 0;
 }
 
+uint32_t install_local(const std::string& path)
+{
+    BusGuard g;
+    if (!open_bus(g)) return 0;
+
+    sd_bus_error    err = SD_BUS_ERROR_NULL;
+    sd_bus_message* raw = nullptr;
+    uint32_t        sid = 0;
+
+    int r = sd_bus_call_method(g.bus, BUS_NAME, OBJ_PATH, INTERFACE,
+                               "InstallLocal", &err, &raw,
+                               "s", path.c_str());
+    if (r >= 0) {
+        auto reply = wrap_msg(raw);
+        sd_bus_message_read(reply.get(), "u", &sid);
+    }
+
+    sd_bus_error_free(&err);
+    return sid;
+}
+
+bool cancel_install(uint32_t session_id)
+{
+    BusGuard g;
+    if (!open_bus(g)) return false;
+
+    sd_bus_error    err = SD_BUS_ERROR_NULL;
+    sd_bus_message* raw = nullptr;
+
+    int r = sd_bus_call_method(g.bus, BUS_NAME, OBJ_PATH, INTERFACE,
+                               "CancelInstall", &err, &raw,
+                               "u", session_id);
+    if (r >= 0) sd_bus_message_unref(raw);
+
+    sd_bus_error_free(&err);
+    return r >= 0;
+}
+
+int get_install_progress()
+{
+    BusGuard g;
+    if (!open_bus(g)) return -1;
+
+    sd_bus_error    err = SD_BUS_ERROR_NULL;
+    sd_bus_message* raw = nullptr;
+    int32_t         pct = -1;
+
+    int r = sd_bus_get_property(g.bus, BUS_NAME, OBJ_PATH, INTERFACE,
+                                "InstallProgress", &err, &raw, "i");
+    if (r >= 0) {
+        auto reply = wrap_msg(raw);
+        sd_bus_message_read(reply.get(), "i", &pct);
+    }
+
+    sd_bus_error_free(&err);
+    return static_cast<int>(pct);
+}
+
 std::string get_install_state()
 {
     return read_string_property("InstallState");
