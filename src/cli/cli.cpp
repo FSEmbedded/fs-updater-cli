@@ -205,6 +205,9 @@ void cli::fs_update_cli::setup_logging()
 
 bool cli::fs_update_cli::create_rollback_marker()
 {
+#if !BUILD_DBUS_SUPPORT
+    /* Marker reader is non-D-Bus-only; D-Bus builds drive rollback
+     * through the service's Rollback() method, no file involved. */
     const string work_dir = this->update_handler->get_work_dir().string();
     const string marker = posix_helpers::path_join(work_dir, "rollbackUpdate");
     if (!posix_helpers::create_marker_file(marker.c_str()))
@@ -212,6 +215,7 @@ bool cli::fs_update_cli::create_rollback_marker()
         cli_io::write_stderr("Failed to create rollback marker file\n");
         return false;
     }
+#endif
     return true;
 }
 
