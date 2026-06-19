@@ -1263,7 +1263,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
     this->setup_logging();
 
     /* Dispatch table: maps each action flag to its handler.
-     * --debug and --update_type are modifiers, not actions.
+     * --debug is the only modifier, not an action.
      * All action flags are mutually exclusive.
      */
     struct ActionEntry {
