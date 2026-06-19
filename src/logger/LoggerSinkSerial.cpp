@@ -1,5 +1,6 @@
 #include "LoggerSinkSerial.h"
 #include <fs_update_framework/logger/LoggerEntry.h>
+#include <fs_update_framework/logger/LoggerLevel.h>
 #include <chrono>
 #include <ctime>
 #include <string>
@@ -21,35 +22,20 @@ namespace logger
             return;
 
         const auto entry_level = entry->getLogLevel();
-        bool should_output = false;
-        const char* level_prefix = nullptr;
 
+        // Monotonic threshold via the shared predicate (single source of
+        // truth in the lib) so this sink filters identically to every other.
+        if (!logger::should_log(entry_level, log_level))
+            return;
+
+        const char* level_prefix = "";
         switch (entry_level)
         {
-            case logLevel::DEBUG:
-                if (log_level == logLevel::DEBUG)
-                {
-                    level_prefix = "DEBUG";
-                    should_output = true;
-                }
-                break;
-            case logLevel::WARNING:
-                if (log_level == logLevel::DEBUG || log_level == logLevel::WARNING)
-                {
-                    level_prefix = "WARNING";
-                    should_output = true;
-                }
-                break;
-            case logLevel::ERROR:
-                level_prefix = "ERROR";
-                should_output = true;
-                break;
-            default:
-                return;
+            case logLevel::ERROR:   level_prefix = "ERROR";   break;
+            case logLevel::WARNING: level_prefix = "WARNING"; break;
+            case logLevel::INFO:    level_prefix = "INFO";    break;
+            case logLevel::DEBUG:   level_prefix = "DEBUG";   break;
         }
-
-        if (!should_output)
-            return;
 
         const auto time_t_val = std::chrono::system_clock::to_time_t(entry->getTimepoint());
         std::tm time_buf{};
