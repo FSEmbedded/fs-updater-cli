@@ -17,6 +17,7 @@ set(FUS_LIB_DIR "" CACHE PATH "Local fs-updater-lib install prefix (overrides SD
 option(BUILD_DBUS_SUPPORT "Build cloud-flow CLI handlers as D-Bus clients" ON)
 option(BUILD_TESTING      "Build unit tests (native build)"                  OFF)
 option(BUILD_MAIN_TARGET  "Build CLI executable (OFF = tests only)"          ON)
+option(FSUP_WERROR        "Treat compiler warnings as errors (-Werror)"      ON)
 
 # Validate options
 if(NOT OPTIMIZE_FOR MATCHES "^(SIZE|SPEED)$")
@@ -101,6 +102,9 @@ target_compile_options(fs_updater_cli PRIVATE
     -Wall
     -Wextra
     -Wpedantic
+    # The cli is warning-clean. Gated so a toolchain bump can be
+    # unblocked with -DFSUP_WERROR=OFF. TCLAP/deps are -isystem and exempt.
+    $<$<BOOL:${FSUP_WERROR}>:-Werror>
     # Debug
     $<$<CONFIG:Debug>:-Og -g>
     # Release optimizations
