@@ -74,6 +74,10 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
 			    "version",
 			    "Print cli version"
 			    ),
+		arg_help("h",
+			 "help",
+			 "Display usage information and exit"
+			 ),
 		notice_update_available("",
 					"is_update_available",
 					"Check update available on the server"
@@ -154,6 +158,7 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
     this->cmd.add(get_fw_version);
     this->cmd.add(get_app_version);
     this->cmd.add(get_version);
+    this->cmd.add(arg_help);
     this->cmd.add(apply_update);
     this->cmd.add(install_update);
     this->cmd.add(update_install);
@@ -714,6 +719,16 @@ void cli::fs_update_cli::handle_print_version()
         + " build at: " + __DATE__ + ", " + __TIME__ + ".\n");
 }
 
+void cli::fs_update_cli::handle_print_help()
+{
+    /* Reuse TCLAP's own usage formatter so --help prints exactly the USAGE
+     * block already shown on a parse error (helpAndVersion is disabled on the
+     * CmdLine, so the built-in --help switch is not registered). */
+    TCLAP::StdOutput output;
+    output.usage(this->cmd);
+    this->return_code = 0;
+}
+
 void cli::fs_update_cli::handle_is_update_available()
 {
 #if BUILD_DBUS_SUPPORT
@@ -1259,6 +1274,15 @@ void cli::fs_update_cli::handle_is_fw_state_bad()
 void cli::fs_update_cli::parse_input(int argc, const char **argv)
 {
     this->cmd.parse(argc, argv);
+
+    /* --help short-circuits before setup_logging(): printing usage must not
+     * construct the updater (FSUpdate→UBoot) or touch hardware. Placed after
+     * parse() so unknown arguments still raise the usual PARSE ERROR. */
+    if (this->arg_help.isSet())
+    {
+        this->handle_print_help();
+        return;
+    }
 
     this->setup_logging();
 

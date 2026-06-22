@@ -38,6 +38,7 @@ namespace cli
 		TCLAP::SwitchArg get_fw_version;
 		TCLAP::SwitchArg get_app_version;
 		TCLAP::SwitchArg get_version;
+		TCLAP::SwitchArg arg_help;
 		TCLAP::SwitchArg notice_update_available;
 		TCLAP::SwitchArg apply_update;
 		TCLAP::SwitchArg download_progress;
@@ -158,6 +159,7 @@ namespace cli
 		void handle_update_file();
 		void handle_automatic();
 		void handle_print_version();
+		void handle_print_help();
 		void handle_is_update_available();
 		void handle_download_update();
 		void handle_download_progress();
