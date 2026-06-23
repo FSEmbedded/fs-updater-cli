@@ -213,7 +213,7 @@ bool cli::fs_update_cli::create_rollback_marker()
 #if !BUILD_DBUS_SUPPORT
     /* Marker reader is non-D-Bus-only; D-Bus builds drive rollback
      * through the service's Rollback() method, no file involved. */
-    const string work_dir = this->update_handler->get_work_dir().string();
+    const string work_dir = this->update_handler->get_work_dir();
     const string marker = posix_helpers::path_join(work_dir, "rollbackUpdate");
     if (!posix_helpers::create_marker_file(marker.c_str()))
     {
@@ -267,7 +267,7 @@ void cli::fs_update_cli::update_image_state(const string &update_file)
     }
     catch (const fs::BaseFSUpdateException &e)
     {
-        const string tmp_app = this->update_handler->getTempAppPath().string();
+        const string tmp_app = this->update_handler->getTempAppPath();
         static_cast<void>(posix_helpers::remove_file(tmp_app.c_str()));
         cli_io::write_stderr(string("Image update error: ") + e.what() + "\n");
         this->return_code = static_cast<int>(UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_INTERNAL_ERROR);
@@ -757,7 +757,7 @@ void cli::fs_update_cli::handle_is_update_available()
             static_cast<int>(UPDATER_IS_UPDATE_AVAILABLE_STATE::FIRMWARE_AND_APPLICATION_UPDATE_AVAILABLE);
     }
 #else
-    const string work_dir = this->update_handler->get_work_dir().string();
+    const string work_dir = this->update_handler->get_work_dir();
 
     string updateType;
     if (!posix_helpers::read_file(posix_helpers::path_join(work_dir, "update_type").c_str(), updateType))
@@ -817,7 +817,7 @@ void cli::fs_update_cli::handle_download_update()
 
     this->return_code = static_cast<int>(UPDATER_DOWNLOAD_UPDATE_STATE::NO_DOWNLOAD_QUEUED);
 #else
-    const string work_dir = this->update_handler->get_work_dir().string();
+    const string work_dir = this->update_handler->get_work_dir();
     if (!posix_helpers::path_exists(posix_helpers::path_join(work_dir, "update_type").c_str()) ||
         !posix_helpers::path_exists(posix_helpers::path_join(work_dir, "update_version").c_str()) ||
         !posix_helpers::path_exists(posix_helpers::path_join(work_dir, "update_size").c_str()))
@@ -878,7 +878,7 @@ void cli::fs_update_cli::handle_download_progress()
             static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::UPDATE_DOWNLOAD_FINISHED);
     }
 #else
-    const string work_dir = this->update_handler->get_work_dir().string();
+    const string work_dir = this->update_handler->get_work_dir();
     if (!posix_helpers::path_exists(posix_helpers::path_join(work_dir, "downloadUpdate").c_str()))
     {
         this->return_code = static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::NO_DOWNLOAD_STARTED);
@@ -1109,7 +1109,7 @@ void cli::fs_update_cli::handle_install_update()
     cli_io::write_stdout("Update installation started.\n");
     this->return_code = static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_IN_PROGRESS);
 #else
-    const string work_dir = this->update_handler->get_work_dir().string();
+    const string work_dir = this->update_handler->get_work_dir();
 
     if (posix_helpers::path_exists(posix_helpers::path_join(work_dir, "updateInstalled").c_str()))
     {
@@ -1144,7 +1144,7 @@ void cli::fs_update_cli::handle_install_update()
 
 void cli::fs_update_cli::handle_apply_update()
 {
-    const string work_dir = this->update_handler->get_work_dir().string();
+    const string work_dir = this->update_handler->get_work_dir();
     const string rollback_path = posix_helpers::path_join(work_dir, "rollbackUpdate");
 
 #if BUILD_DBUS_SUPPORT
