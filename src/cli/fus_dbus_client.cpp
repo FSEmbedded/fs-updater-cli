@@ -41,8 +41,10 @@ std::string read_string_property(const char* prop)
 
     if (sd_bus_get_property_string(g.bus, BUS_NAME, OBJ_PATH, INTERFACE,
                                    prop, &err, &raw) >= 0 && raw) {
+        /* sd-bus returns a heap string the caller must release; own it
+         * with a guard so it frees on every exit path. */
+        const std::unique_ptr<char, decltype(&std::free)> owned(raw, std::free);
         result = raw;
-        free(raw);
     }
 
     sd_bus_error_free(&err);
