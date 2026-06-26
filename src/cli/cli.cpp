@@ -1168,6 +1168,14 @@ void cli::fs_update_cli::handle_apply_update()
         this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFUL);
         return;
     }
+    if (fus_dbus::get_install_state() == "in_progress")
+    {
+        /* Install still running: refuse to apply until it finishes,
+         * otherwise the durable-state fallback would reboot mid-write. */
+        cli_io::write_stdout("Install in progress; cannot apply yet.\n");
+        this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_FAILED);
+        return;
+    }
 #else
     const string installed_path = posix_helpers::path_join(work_dir, "updateInstalled");
     if (posix_helpers::path_exists(installed_path.c_str()))
