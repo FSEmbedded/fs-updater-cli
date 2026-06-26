@@ -1242,8 +1242,36 @@ void cli::fs_update_cli::handle_apply_update()
     }
     else
     {
-        cli_io::write_stdout("Nothing to apply...\n");
-        this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_FAILED);
+        /* No install tracked in this session: consult the durable
+         * update_reboot_state via the lib. */
+        bool reboot_needed = false;
+        try
+        {
+            reboot_needed = this->update_handler->apply_pending_update();
+        }
+        catch (const fs::ApplyUpdateInvalidState &)
+        {
+            cli_io::write_stdout("Nothing to apply...\n");
+            this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_FAILED);
+            return;
+        }
+        catch (const std::exception &e)
+        {
+            /* Apply failed: report and leave the state machine untouched. */
+            cli_io::write_stderr(string("Initiate of update apply fails... ") + e.what() + "\n");
+            this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_FAILED);
+            return;
+        }
+
+        cli_io::write_stdout("Apply update...\n");
+        if (reboot_needed && this->reboot() != 0)
+        {
+            const int saved = errno;
+            cli_io::write_stderr(string("Failed to reboot system: ") + strerror(saved) + "\n");
+            this->return_code = static_cast<int>(UPDATER_SYSTEM::REBOOT_FAILED);
+            return;
+        }
+        this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFUL);
     }
 }
 
