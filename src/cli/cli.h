@@ -8,6 +8,7 @@
 
 #include "SynchronizedSerial.h"
 #include "../logger/LoggerSinkSerial.h"
+#include "cli_classify.h"
 
 #include <string>
 #include <stdexcept>
@@ -44,6 +45,18 @@ namespace cli
 		TCLAP::SwitchArg download_progress;
 		TCLAP::SwitchArg download_update;
 		TCLAP::SwitchArg install_update;
+		/* Unified install (v2): --install_update [<path>]. With a path the
+		 * positional install_path selects a local install via the service
+		 * (InstallLocal, blocking); without it, --install_update advances an
+		 * ADU-staged download (StartInstall). install_path is an optional
+		 * global positional — the bare-path rule (parse_input) rejects it unless
+		 * --install_update is also set. */
+		TCLAP::UnlabeledValueArg<std::string> install_path;
+		/* Async install opt-in: kick InstallLocal and return immediately
+		 * with the session_id instead of blocking on the terminal verdict. */
+		TCLAP::SwitchArg arg_detach;
+		/* Serial-console log sink modifier (orthogonal, like --debug). */
+		TCLAP::SwitchArg arg_serial;
 		/* Unified-install entry point — local flow. The path is required;
 		 * the cloud-flow entry point uses --install_update, matching the
 		 * existing one-flag-per-trigger pattern. */
@@ -68,6 +81,11 @@ namespace cli
 		std::shared_ptr<logger::LoggerHandler> logger_handler;
 
 		int return_code;
+
+		/* Install mode resolved by classify() in parse_input from the
+		 * --install_update / install_path combination; consumed by
+		 * handle_install_update. */
+		cli::InstallMode install_mode = cli::InstallMode::none;
 
 		/**
 		 * Configure logger sink based on --debug and --automatic flags.

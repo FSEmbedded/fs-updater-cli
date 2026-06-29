@@ -2,6 +2,7 @@
 
 #include <systemd/sd-bus.h>
 
+#include <chrono>
 #include <cstdint>
 #include <cstdlib>
 #include <memory>
@@ -253,6 +254,90 @@ bool apply(bool& reboot_needed)
 
     sd_bus_error_free(&err);
     return r >= 0;
+}
+
+namespace {
+
+struct CompletionState {
+    uint32_t want_sid = 0;
+    bool     fired    = false;
+    bool     success  = false;
+};
+
+/* sd-bus signal handler for InstallCompleted("ubs" = session_id, success,
+ * message). Non-capturing so it converts to a plain function pointer. */
+int on_install_completed(sd_bus_message* m, void* userdata, sd_bus_error* /*err*/)
+{
+    auto* st = static_cast<CompletionState*>(userdata);
+    uint32_t    sid = 0;
+    int         ok  = 0;
+    const char* msg = nullptr;
+    if (sd_bus_message_read(m, "ubs", &sid, &ok, &msg) >= 0 && sid == st->want_sid) {
+        st->fired   = true;
+        st->success = ok != 0;
+    }
+    return 0;
+}
+
+} // namespace
+
+InstallResult wait_for_install(uint32_t session_id, int idle_timeout_ms,
+                               void (*on_progress)(int))
+{
+    InstallResult res;
+
+    BusGuard g;
+    if (!open_bus(g)) return res;
+
+    CompletionState st;
+    st.want_sid = session_id;
+
+    sd_bus_slot* slot = nullptr;
+    if (sd_bus_match_signal(g.bus, &slot, BUS_NAME, OBJ_PATH, INTERFACE,
+                            "InstallCompleted", on_install_completed, &st) < 0) {
+        return res;
+    }
+    const std::unique_ptr<sd_bus_slot, decltype(&sd_bus_slot_unref)>
+        slot_guard(slot, sd_bus_slot_unref);
+
+    /* Race guard: the worker may have reached a terminal state between
+     * install_local() returning and the match being installed. */
+    {
+        const std::string s0 = get_install_state();
+        if (s0 == "finished" || s0 == "failed") {
+            res.reached_terminal = true;
+            res.success          = (s0 == "finished");
+            res.type             = get_update_type();
+            return res;
+        }
+    }
+
+    using clock = std::chrono::steady_clock;
+    auto deadline = clock::now() + std::chrono::milliseconds(idle_timeout_ms);
+    int  last_pct = -1;
+
+    while (!st.fired) {
+        const int r = sd_bus_process(g.bus, nullptr);
+        if (r < 0) break;
+        if (r > 0) continue; /* handled an event — re-check fired / drain queue */
+
+        const int pct = get_install_progress();
+        if (pct >= 0 && pct != last_pct) {
+            last_pct = pct;
+            if (on_progress != nullptr) on_progress(pct);
+            deadline = clock::now() + std::chrono::milliseconds(idle_timeout_ms);
+        }
+        if (clock::now() >= deadline) break; /* idle watchdog — no hang */
+
+        sd_bus_wait(g.bus, 250000 /* us */);
+    }
+
+    if (st.fired) {
+        res.reached_terminal = true;
+        res.success          = st.success;
+        res.type             = get_update_type();
+    }
+    return res;
 }
 
 } // namespace fus_dbus

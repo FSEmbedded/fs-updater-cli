@@ -16,6 +16,49 @@
 
 constexpr char FSCLI_DOMAIN[] = "cli";
 
+#if BUILD_DBUS_SUPPORT
+namespace {
+
+/* Idle watchdog for the blocking local install (ms with no progress nor
+ * completion before giving up). Overridable for slow media / CI. */
+int install_wait_idle_ms()
+{
+    const char* env = std::getenv("FSUP_INSTALL_WAIT_MS");
+    if (env != nullptr)
+    {
+        const long v = std::strtol(env, nullptr, 10);
+        if (v > 0 && v <= 3600000) return static_cast<int>(v);
+    }
+    return 120000; /* 2 min */
+}
+
+/* Live progress line during a blocking install; called only on change. */
+void render_install_progress(int pct)
+{
+    cli_io::write_stdout("\rInstalling: " + std::to_string(pct) + "%");
+}
+
+/* Map a terminal install verdict to the 0-11 return-code family by type:
+ * success 0/4/8, failure 3/7/11 (fw/app/fw+app). Keeps the local install in
+ * the same family as the legacy --update_file, so callers migrate rc-clean. */
+int map_install_terminal(bool success, const std::string& type)
+{
+    if (type == "app")
+        return static_cast<int>(success
+            ? UPDATER_APPLICATION_STATE::UPDATE_SUCCESSFUL
+            : UPDATER_APPLICATION_STATE::UPDATE_SYSTEM_ERROR);
+    if (type == "fw+app")
+        return static_cast<int>(success
+            ? UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_SUCCESSFUL
+            : UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_SYSTEM_ERROR);
+    return static_cast<int>(success
+        ? UPDATER_FIRMWARE_STATE::UPDATE_SUCCESSFUL
+        : UPDATER_FIRMWARE_STATE::UPDATE_SYSTEM_ERROR);
+}
+
+} // namespace
+#endif
+
 constexpr uint32_t firmware_update_state = 0;
 constexpr uint32_t application_update_state = 1;
 
@@ -97,8 +140,25 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
 					    ),
 		install_update("",
 					   "install_update",
-					   "Install downloaded update"
+					   "Install an update: with a path, install that local bundle "
+					   "via the service (blocking); without, advance an ADU-staged "
+					   "download"
 					   ),
+		install_path("install_path",
+					 "Optional local update bundle path for --install_update",
+					 false,
+					 "",
+					 "absolute filesystem path"
+					 ),
+		arg_detach("",
+				   "detach",
+				   "With --install_update <path>: start the install and return "
+				   "immediately with the session id instead of blocking"
+				   ),
+		arg_serial("",
+				   "serial",
+				   "Send log output to the serial console (modifier, like --debug)"
+				   ),
 		update_install("",
 					   "update_install",
 					   "Install a local update bundle via the D-Bus service",
@@ -162,6 +222,9 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
     this->cmd.add(apply_update);
     this->cmd.add(install_update);
     this->cmd.add(update_install);
+    this->cmd.add(install_path);
+    this->cmd.add(arg_detach);
+    this->cmd.add(arg_serial);
     this->cmd.add(install_progress);
     this->cmd.add(cancel_install_arg);
     this->cmd.add(download_progress);
@@ -185,12 +248,12 @@ cli::fs_update_cli::~fs_update_cli()
 
 void cli::fs_update_cli::setup_logging()
 {
-    const bool is_automatic = this->arg_automatic.isSet();
+    const bool use_serial = this->arg_automatic.isSet() || this->arg_serial.isSet();
     const auto level = this->arg_debug.isSet()
         ? logger::logLevel::DEBUG
         : logger::logLevel::WARNING;
 
-    if (is_automatic)
+    if (use_serial)
     {
         this->serial_cout = std::make_shared<SynchronizedSerial>();
         this->logger_sink = std::make_unique<logger::LoggerSinkSerial>(level, serial_cout);
@@ -1070,6 +1133,53 @@ void cli::fs_update_cli::handle_cancel_install()
 void cli::fs_update_cli::handle_install_update()
 {
 #if BUILD_DBUS_SUPPORT
+    /* Local install: --install_update <path> → InstallLocal. Blocking by
+     * default (stream progress, return the terminal 0/4/8 ÷ 3/7/11 verdict);
+     * --detach returns immediately with the session id. */
+    if (this->install_mode == cli::InstallMode::local)
+    {
+        const string path = this->install_path.getValue();
+        if (!posix_helpers::path_exists(path.c_str()))
+        {
+            cli_io::write_stderr("Update file: " + path + " does not exist.\n");
+            this->return_code =
+                static_cast<int>(UPDATER_CLI_VALIDATION::UPDATE_FILE_NOT_FOUND);
+            return;
+        }
+
+        const uint32_t sid = fus_dbus::install_local(path);
+        if (sid == 0)
+        {
+            cli_io::write_stderr("InstallLocal D-Bus call failed\n");
+            this->return_code =
+                static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FAILED);
+            return;
+        }
+
+        if (this->arg_detach.isSet())
+        {
+            cli_io::write_stdout("Install started; session " + std::to_string(sid) +
+                                 ". Poll --install_progress for status.\n");
+            this->return_code =
+                static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_IN_PROGRESS);
+            return;
+        }
+
+        const fus_dbus::InstallResult r =
+            fus_dbus::wait_for_install(sid, install_wait_idle_ms(),
+                                       &render_install_progress);
+        cli_io::write_stdout("\n");
+        if (!r.reached_terminal)
+        {
+            cli_io::write_stderr("Timed out waiting for the install to finish\n");
+            this->return_code =
+                static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FAILED);
+            return;
+        }
+        this->return_code = map_install_terminal(r.success, r.type);
+        return;
+    }
+
     const string install_state = fus_dbus::get_install_state();
     if (install_state == "finished")
     {
@@ -1318,6 +1428,33 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
     {
         this->handle_print_help();
         return;
+    }
+
+    /* Install-surface pre-check via the HW-free classifier: the bare-path
+     * rule (the global install positional is only valid with
+     * --install_update) and the --detach guard run BEFORE setup_logging
+     * constructs the FSUpdate/HW path. Mutual exclusion across all actions
+     * stays with the dispatch loop below. */
+    {
+        cli::RawFlags rf;
+        rf.install_update_set = this->install_update.isSet();
+        rf.install_path_set   = this->install_path.isSet();
+        rf.install_path       = this->install_path.isSet()
+                                  ? this->install_path.getValue()
+                                  : std::string{};
+        rf.detach = this->arg_detach.isSet();
+        rf.serial = this->arg_serial.isSet();
+        rf.debug  = this->arg_debug.isSet();
+
+        const cli::ParseOutcome po = cli::classify(rf);
+        if (po.kind == cli::ParseOutcome::Kind::parse_error)
+        {
+            cli_io::write_stderr(po.error + "\n");
+            this->return_code =
+                static_cast<int>(UPDATER_CLI_VALIDATION::INCOMPATIBLE_ARG_COMBO);
+            return;
+        }
+        this->install_mode = po.mode;
     }
 
     this->setup_logging();
