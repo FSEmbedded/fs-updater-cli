@@ -82,10 +82,9 @@ namespace cli
 
 		int return_code;
 
-		/* Install mode resolved by classify() in parse_input from the
-		 * --install_update / install_path combination; consumed by
-		 * handle_install_update. */
-		cli::InstallMode install_mode = cli::InstallMode::none;
+		/* Install-surface decision resolved by classify() in parse_input;
+		 * consumed by handle_install_update. */
+		cli::ParseOutcome install_outcome;
 
 		/**
 		 * Configure logger sink based on --debug and --automatic flags.

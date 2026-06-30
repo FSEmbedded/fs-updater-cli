@@ -1118,9 +1118,9 @@ void cli::fs_update_cli::handle_install_update()
     /* Local install: --install_update <path> → InstallLocal. Blocking by
      * default (stream progress, return the terminal 0/4/8 ÷ 3/7/11 verdict);
      * --detach returns immediately with the session id. */
-    if (this->install_mode == cli::InstallMode::local)
+    if (this->install_outcome.mode == cli::InstallMode::local)
     {
-        const string path = this->install_path.getValue();
+        const string path = this->install_outcome.install_path;
         /* Resolve to an absolute path in the CLI's working directory: the
          * service receives this path and resolves it against ITS own CWD, so a
          * relative path would point at a different (or missing) file. realpath
@@ -1146,7 +1146,7 @@ void cli::fs_update_cli::handle_install_update()
             return;
         }
 
-        if (this->arg_detach.isSet())
+        if (this->install_outcome.detach)
         {
             cli_io::write_stdout("Install started; session " + std::to_string(sid) +
                                  ". Poll --install_progress for status.\n");
@@ -1445,8 +1445,6 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
                                   ? this->install_path.getValue()
                                   : std::string{};
         rf.detach = this->arg_detach.isSet();
-        rf.serial = this->arg_serial.isSet();
-        rf.debug  = this->arg_debug.isSet();
 
         const cli::ParseOutcome po = cli::classify(rf);
         if (po.kind == cli::ParseOutcome::Kind::parse_error)
@@ -1456,7 +1454,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
                 static_cast<int>(UPDATER_CLI_VALIDATION::INCOMPATIBLE_ARG_COMBO);
             return;
         }
-        this->install_mode = po.mode;
+        this->install_outcome = po;
     }
 
     this->setup_logging();

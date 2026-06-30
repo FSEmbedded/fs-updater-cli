@@ -4,60 +4,46 @@
 
 /* HW-free classifier for the install surface.
  *
- * classify() turns the raw, already-parsed flag state (RawFlags, produced by
- * the TCLAP front-end in parse_input) into a ParseOutcome that the dispatcher
- * acts on. It contains NO TCLAP and NO FSUpdate/HW dependency so the install
- * surface decisions are natively unit-testable. */
+ * classify() turns the raw, already-parsed install flags (RawFlags, from the
+ * TCLAP front-end in parse_input) into a ParseOutcome the dispatcher and the
+ * install handler act on. It owns exactly the install-surface decisions —
+ * the bare-path rule, the --detach guard, and the local/cloud mode selection — with NO
+ * TCLAP and NO FSUpdate/HW dependency, so they are natively unit-testable.
+ *
+ * It deliberately does NOT enforce mutual exclusion across all actions: that
+ * stays with the dispatch loop in parse_input, which counts every action flag.
+ * Global modifiers (--serial/--debug) are not install-surface decisions and
+ * are read directly where they apply (setup_logging). */
 namespace cli
 {
-    enum class ActionId
-    {
-        none,
-        install_update, /* unified install: local (with path) or cloud-advance */
-        commit_update,  /* representative second action for mutual-exclusion */
-    };
-
     enum class InstallMode
     {
-        none,
+        none,  /* not an install invocation */
         local, /* --install_update <path> → InstallLocal, blocking */
         cloud, /* --install_update        → StartInstall (ADU-staged) */
     };
 
-    /* Raw flag state extracted from TCLAP after cmd.parse(). One bool per
-     * action flag plus the optional install positional and the modifiers. */
+    /* Install flags extracted from TCLAP after cmd.parse(). */
     struct RawFlags
     {
         bool install_update_set = false; /* --install_update present */
         bool install_path_set   = false; /* optional positional path present */
         std::string install_path;
-
-        bool commit_update_set = false; /* --commit_update */
-
-        bool detach = false; /* --detach: async install opt-in */
-        bool serial = false; /* --serial: serial log sink modifier */
-        bool debug  = false; /* --debug:  debug log level modifier */
+        bool detach = false;             /* --detach: async install opt-in */
     };
 
     struct ParseOutcome
     {
         enum class Kind
         {
-            action,            /* a single valid action was selected */
-            no_action,         /* nothing to do (print version + hint) */
-            parse_error,       /* bare-path / malformed combination */
-            incompatible_combo /* more than one action flag set */
+            ok,         /* no guard violation; mode/path/detach are usable */
+            parse_error /* bare-path / --detach rule violated */
         };
 
-        Kind kind = Kind::no_action;
-        ActionId action = ActionId::none;
-        InstallMode mode = InstallMode::none;
-        std::string install_path;
-
-        bool detach = false;
-        bool serial = false;
-        bool debug  = false;
-
+        Kind kind = Kind::ok;
+        InstallMode mode = InstallMode::none; /* local/cloud iff --install_update set */
+        std::string install_path;             /* the resolved positional, if any */
+        bool detach = false;                  /* honoured only for a local install */
         std::string error;
     };
 
