@@ -279,12 +279,42 @@ int on_install_completed(sd_bus_message* m, void* userdata, sd_bus_error* /*err*
     return 0;
 }
 
+/* Read a string property on an ALREADY-open connection (no reconnect). */
+std::string read_string_property_on(sd_bus* bus, const char* prop)
+{
+    sd_bus_error err = SD_BUS_ERROR_NULL;
+    char*        raw = nullptr;
+    std::string  result;
+    if (sd_bus_get_property_string(bus, BUS_NAME, OBJ_PATH, INTERFACE,
+                                   prop, &err, &raw) >= 0 && raw) {
+        const std::unique_ptr<char, decltype(&std::free)> owned(raw, std::free);
+        result = raw;
+    }
+    sd_bus_error_free(&err);
+    return result;
+}
+
+/* Read an int32 property on an ALREADY-open connection. -1 on error. */
+int read_int_property_on(sd_bus* bus, const char* prop)
+{
+    sd_bus_error    err = SD_BUS_ERROR_NULL;
+    sd_bus_message* raw = nullptr;
+    int32_t         val = -1;
+    if (sd_bus_get_property(bus, BUS_NAME, OBJ_PATH, INTERFACE,
+                            prop, &err, &raw, "i") >= 0) {
+        auto reply = wrap_msg(raw);
+        sd_bus_message_read(reply.get(), "i", &val);
+    }
+    sd_bus_error_free(&err);
+    return static_cast<int>(val);
+}
+
 } // namespace
 
 InstallResult wait_for_install(uint32_t session_id, int idle_timeout_ms,
                                void (*on_progress)(int))
 {
-    InstallResult res;
+    InstallResult res; /* defaults to observe_error */
 
     BusGuard g;
     if (!open_bus(g)) return res;
@@ -300,44 +330,53 @@ InstallResult wait_for_install(uint32_t session_id, int idle_timeout_ms,
     const std::unique_ptr<sd_bus_slot, decltype(&sd_bus_slot_unref)>
         slot_guard(slot, sd_bus_slot_unref);
 
+    /* Build a completed result, reading the type on the still-open bus. */
+    auto completed = [&g](bool ok) {
+        InstallResult r;
+        r.status  = InstallResult::Status::completed;
+        r.success = ok;
+        r.type    = read_string_property_on(g.bus, "UpdateType");
+        return r;
+    };
+
     /* Race guard: the worker may have reached a terminal state between
      * install_local() returning and the match being installed. */
     {
-        const std::string s0 = get_install_state();
-        if (s0 == "finished" || s0 == "failed") {
-            res.reached_terminal = true;
-            res.success          = (s0 == "finished");
-            res.type             = get_update_type();
-            return res;
-        }
+        const std::string s0 = read_string_property_on(g.bus, "InstallState");
+        if (s0 == "finished") return completed(true);
+        if (s0 == "failed")   return completed(false);
     }
 
     using clock = std::chrono::steady_clock;
     auto deadline = clock::now() + std::chrono::milliseconds(idle_timeout_ms);
     int  last_pct = -1;
 
-    while (!st.fired) {
+    for (;;) {
         const int r = sd_bus_process(g.bus, nullptr);
-        if (r < 0) break;
-        if (r > 0) continue; /* handled an event — re-check fired / drain queue */
+        if (r < 0) { res.status = InstallResult::Status::observe_error; return res; }
+        if (st.fired) return completed(st.success);
+        if (r > 0) continue; /* drained an event — re-check fired / queue */
 
-        const int pct = get_install_progress();
+        /* Idle slice: poll state + progress on the open connection. The state
+         * poll also catches a terminal that the signal missed. */
+        const std::string state = read_string_property_on(g.bus, "InstallState");
+        if (state == "finished") return completed(true);
+        if (state == "failed")   return completed(false);
+
+        const int pct = read_int_property_on(g.bus, "InstallProgress");
         if (pct >= 0 && pct != last_pct) {
             last_pct = pct;
             if (on_progress != nullptr) on_progress(pct);
             deadline = clock::now() + std::chrono::milliseconds(idle_timeout_ms);
         }
-        if (clock::now() >= deadline) break; /* idle watchdog — no hang */
+
+        if (clock::now() >= deadline) {
+            res.status = InstallResult::Status::timed_out;
+            return res;
+        }
 
         sd_bus_wait(g.bus, 250000 /* us */);
     }
-
-    if (st.fired) {
-        res.reached_terminal = true;
-        res.success          = st.success;
-        res.type             = get_update_type();
-    }
-    return res;
 }
 
 } // namespace fus_dbus

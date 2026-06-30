@@ -1169,14 +1169,26 @@ void cli::fs_update_cli::handle_install_update()
             fus_dbus::wait_for_install(sid, install_wait_idle_ms(),
                                        &render_install_progress);
         cli_io::write_stdout("\n");
-        if (!r.reached_terminal)
+        switch (r.status)
         {
-            cli_io::write_stderr("Timed out waiting for the install to finish\n");
+        case fus_dbus::InstallResult::Status::completed:
+            /* Terminal verdict mapped into the 0/4/8 ÷ 3/7/11 family by type. */
+            this->return_code = map_install_terminal(r.success, r.type);
+            break;
+        case fus_dbus::InstallResult::Status::timed_out:
+            /* Install may still be running — report in-progress, not failed. */
+            cli_io::write_stderr("Install still running after the no-progress "
+                                 "timeout; poll --install_progress.\n");
             this->return_code =
-                static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FAILED);
-            return;
+                static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_IN_PROGRESS);
+            break;
+        case fus_dbus::InstallResult::Status::observe_error:
+            cli_io::write_stderr("Could not observe the install over D-Bus; "
+                                 "poll --install_progress.\n");
+            this->return_code =
+                static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_IN_PROGRESS);
+            break;
         }
-        this->return_code = map_install_terminal(r.success, r.type);
         return;
     }
 
