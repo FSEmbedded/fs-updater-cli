@@ -77,6 +77,7 @@ pkg_check_modules(JSONCPP REQUIRED jsoncpp)
 set(SOURCES
     src/main.cpp
     src/cli/cli.cpp
+    src/cli/cli_classify.cpp
     src/cli/SynchronizedSerial.cpp
     src/logger/LoggerSinkSerial.cpp
 )
