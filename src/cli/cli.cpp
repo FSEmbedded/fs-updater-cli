@@ -38,24 +38,6 @@ void render_install_progress(int pct)
     cli_io::write_stdout("\rInstalling: " + std::to_string(pct) + "%");
 }
 
-/* Map a terminal install verdict to the 0-11 return-code family by type:
- * success 0/4/8, failure 3/7/11 (fw/app/fw+app). Keeps the local install in
- * the same family as the legacy --update_file, so callers migrate rc-clean. */
-int map_install_terminal(bool success, const std::string& type)
-{
-    if (type == "app")
-        return static_cast<int>(success
-            ? UPDATER_APPLICATION_STATE::UPDATE_SUCCESSFUL
-            : UPDATER_APPLICATION_STATE::UPDATE_SYSTEM_ERROR);
-    if (type == "fw+app")
-        return static_cast<int>(success
-            ? UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_SUCCESSFUL
-            : UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_SYSTEM_ERROR);
-    return static_cast<int>(success
-        ? UPDATER_FIRMWARE_STATE::UPDATE_SUCCESSFUL
-        : UPDATER_FIRMWARE_STATE::UPDATE_SYSTEM_ERROR);
-}
-
 } // namespace
 #endif
 
@@ -1139,15 +1121,23 @@ void cli::fs_update_cli::handle_install_update()
     if (this->install_mode == cli::InstallMode::local)
     {
         const string path = this->install_path.getValue();
-        if (!posix_helpers::path_exists(path.c_str()))
+        /* Resolve to an absolute path in the CLI's working directory: the
+         * service receives this path and resolves it against ITS own CWD, so a
+         * relative path would point at a different (or missing) file. realpath
+         * also verifies existence/accessibility. */
+        char* resolved = ::realpath(path.c_str(), nullptr);
+        if (resolved == nullptr)
         {
-            cli_io::write_stderr("Update file: " + path + " does not exist.\n");
+            cli_io::write_stderr("Update file: " + path +
+                                 " does not exist or is not accessible.\n");
             this->return_code =
                 static_cast<int>(UPDATER_CLI_VALIDATION::UPDATE_FILE_NOT_FOUND);
             return;
         }
+        const std::unique_ptr<char, decltype(&std::free)> resolved_guard(resolved, std::free);
+        const string abs_path(resolved);
 
-        const uint32_t sid = fus_dbus::install_local(path);
+        const uint32_t sid = fus_dbus::install_local(abs_path);
         if (sid == 0)
         {
             cli_io::write_stderr("InstallLocal D-Bus call failed\n");
@@ -1173,7 +1163,7 @@ void cli::fs_update_cli::handle_install_update()
         {
         case fus_dbus::InstallResult::Status::completed:
             /* Terminal verdict mapped into the 0/4/8 ÷ 3/7/11 family by type. */
-            this->return_code = map_install_terminal(r.success, r.type);
+            this->return_code = cli::install_terminal_code(r.success, r.type);
             break;
         case fus_dbus::InstallResult::Status::timed_out:
             /* Install may still be running — report in-progress, not failed. */

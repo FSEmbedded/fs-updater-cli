@@ -121,3 +121,25 @@ TEST(Classify, NoFlagsIsNoAction)
 
     EXPECT_EQ(out.kind, ParseOutcome::Kind::no_action);
 }
+
+/* --- install_terminal_code: terminal verdict → return code by type --- */
+TEST(InstallTerminalCode, KnownTypesMapToTheirFamily)
+{
+    EXPECT_EQ(cli::install_terminal_code(true,  "fw"),     0);
+    EXPECT_EQ(cli::install_terminal_code(false, "fw"),     3);
+    EXPECT_EQ(cli::install_terminal_code(true,  "app"),    4);
+    EXPECT_EQ(cli::install_terminal_code(false, "app"),    7);
+    EXPECT_EQ(cli::install_terminal_code(true,  "fw+app"), 8);
+    EXPECT_EQ(cli::install_terminal_code(false, "fw+app"), 11);
+}
+
+/* An empty/unknown type must NOT be reported as the firmware family (which
+ * would map an app success to 0 instead of 4). It yields the type-agnostic
+ * install-family terminal code instead. */
+TEST(InstallTerminalCode, EmptyOrUnknownTypeIsTypeAgnosticNotFirmware)
+{
+    EXPECT_EQ(cli::install_terminal_code(true,  ""),       48); /* not 0 */
+    EXPECT_EQ(cli::install_terminal_code(false, ""),       49); /* not 3 */
+    EXPECT_EQ(cli::install_terminal_code(true,  "bogus"),  48);
+    EXPECT_EQ(cli::install_terminal_code(false, "bogus"),  49);
+}

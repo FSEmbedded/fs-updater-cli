@@ -62,4 +62,11 @@ namespace cli
     };
 
     [[nodiscard]] ParseOutcome classify(const RawFlags& flags);
+
+    /* Map a terminal install verdict to the CLI return code by update type:
+     * fw→0/3, app→4/7, fw+app→8/11 (success/failure). An unknown or empty type
+     * cannot be classified into a per-type family, so it yields the
+     * type-agnostic install-family terminal code (48 finished / 49 failed) —
+     * never a misclassified firmware code. */
+    [[nodiscard]] int install_terminal_code(bool success, const std::string& type);
 }

@@ -1,7 +1,31 @@
 #include "cli_classify.h"
 
+#include "fs_updater_error.h"
+
 namespace cli
 {
+    int install_terminal_code(bool success, const std::string& type)
+    {
+        if (type == "fw")
+            return static_cast<int>(success
+                ? UPDATER_FIRMWARE_STATE::UPDATE_SUCCESSFUL
+                : UPDATER_FIRMWARE_STATE::UPDATE_SYSTEM_ERROR);
+        if (type == "app")
+            return static_cast<int>(success
+                ? UPDATER_APPLICATION_STATE::UPDATE_SUCCESSFUL
+                : UPDATER_APPLICATION_STATE::UPDATE_SYSTEM_ERROR);
+        if (type == "fw+app")
+            return static_cast<int>(success
+                ? UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_SUCCESSFUL
+                : UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_SYSTEM_ERROR);
+        /* Unknown/empty type: cannot classify into a per-type family — return
+         * the type-agnostic install-family terminal code rather than guessing
+         * firmware (which would misreport an app success as 0 instead of 4). */
+        return static_cast<int>(success
+            ? UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FINISHED
+            : UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FAILED);
+    }
+
     ParseOutcome classify(const RawFlags& flags)
     {
         ParseOutcome out;
