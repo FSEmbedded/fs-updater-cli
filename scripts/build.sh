@@ -25,6 +25,9 @@ Options:
   --no-dbus         Disable D-Bus cloud-flow handlers (BUILD_DBUS_SUPPORT=OFF).
                     On this branch D-Bus is the default; opt out only when
                     the lib is also built --no-dbus.
+  --sanitize        With 'test': run the native suite under ASan/UBSan
+                    (separate build_test_san/ dir; cross builds keep the
+                    'sanitize' target).
 EOF
     exit 1
 }
@@ -36,6 +39,7 @@ EXTRA_ARGS=()
 while [ $# -gt 0 ]; do
     case "$1" in
     --speed)   EXTRA_ARGS+=("-DOPTIMIZE_FOR=SPEED") ;;
+    --sanitize) EXTRA_ARGS+=("-DENABLE_SANITIZERS=ON"); TEST_SUFFIX="_san" ;;
     --uint64)  EXTRA_ARGS+=("-Dupdate_version_type=uint64") ;;
     --lib)     LIB_BUILD_DIR="$(realpath "$2")"; shift ;;
     --no-dbus) EXTRA_ARGS+=("-DBUILD_DBUS_SUPPORT=OFF") ;;
@@ -55,6 +59,11 @@ while [ $# -gt 0 ]; do
 done
 
 TARGET="${TARGET:-debug}"
+
+if [ -n "${TEST_SUFFIX:-}" ] && [ "$TARGET" != "test" ]; then
+    echo "--sanitize applies to the 'test' target only (cross builds: use the 'sanitize' target)"
+    exit 1
+fi
 
 build_cross() {
     local build_dir="$PROJECT_ROOT/build"
@@ -76,7 +85,7 @@ build_cross() {
 }
 
 build_test() {
-    local build_dir="$PROJECT_ROOT/build_test"
+    local build_dir="$PROJECT_ROOT/build_test${TEST_SUFFIX:-}"
     local cmake_args=("$@")
 
     # Prefer SDK cmake/ctest; fall back to system cmake/ctest if SDK not present
@@ -116,7 +125,7 @@ test)
     build_test "${EXTRA_ARGS[@]}"
     ;;
 clean)
-    rm -rf "$PROJECT_ROOT/build" "$PROJECT_ROOT/build_test"
+    rm -rf "$PROJECT_ROOT/build" "$PROJECT_ROOT/build_test" "$PROJECT_ROOT/build_test_san"
     echo "Build directories removed."
     ;;
 *)

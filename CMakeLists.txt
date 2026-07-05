@@ -18,6 +18,7 @@ option(BUILD_DBUS_SUPPORT "Build cloud-flow CLI handlers as D-Bus clients" ON)
 option(BUILD_TESTING      "Build unit tests (native build)"                  OFF)
 option(BUILD_MAIN_TARGET  "Build CLI executable (OFF = tests only)"          ON)
 option(FSUP_WERROR        "Treat compiler warnings as errors (-Werror)"      ON)
+option(ENABLE_SANITIZERS  "Enable ASan and UBSan (native test builds)"       OFF)
 
 # Validate options
 if(NOT OPTIMIZE_FOR MATCHES "^(SIZE|SPEED)$")
@@ -36,6 +37,12 @@ endif()
 
 # Override CMake's default Release flags (-O3 -DNDEBUG) to avoid conflicting -O levels.
 set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG" CACHE STRING "" FORCE)
+
+# Global so the test binaries (and fetched gtest) share the sanitizer runtime.
+if(ENABLE_SANITIZERS)
+    add_compile_options(-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=address,undefined)
+endif()
 
 # ==============================================================================
 # Generated config header
