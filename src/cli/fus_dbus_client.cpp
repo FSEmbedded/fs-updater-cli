@@ -2,6 +2,7 @@
 
 #include <systemd/sd-bus.h>
 
+#include <cerrno>
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
@@ -25,6 +26,22 @@ using MsgPtr = std::unique_ptr<sd_bus_message, decltype(&sd_bus_message_unref)>;
 
 MsgPtr wrap_msg(sd_bus_message* m) {
     return MsgPtr(m, sd_bus_message_unref);
+}
+
+/* Must match the service's busy error name (service.cpp ERROR_BUSY). */
+constexpr const char* ERROR_BUSY = "de.fsembedded.fsupdate1.Error.Busy";
+
+/* Classify a failed sd_bus call by its error name first (authoritative for
+ * busy / access-denied), then by errno as a fallback. */
+CallError classify_call_error(int r, const sd_bus_error* err) {
+    if (r >= 0) return CallError::none;
+    if (err != nullptr && err->name != nullptr) {
+        if (sd_bus_error_has_name(err, ERROR_BUSY))                 return CallError::busy;
+        if (sd_bus_error_has_name(err, SD_BUS_ERROR_ACCESS_DENIED)) return CallError::denied;
+    }
+    if (r == -EBUSY)  return CallError::busy;
+    if (r == -ENOSYS) return CallError::no_updater;
+    return CallError::other;
 }
 
 bool open_bus(BusGuard& g) {
@@ -147,8 +164,10 @@ bool start_install(uint32_t session_id, const std::string& type)
     return r >= 0;
 }
 
-uint32_t install_local(const std::string& path)
+uint32_t install_local(const std::string& path, CallError* err_out)
 {
+    if (err_out != nullptr) *err_out = CallError::other;
+
     BusGuard g;
     if (!open_bus(g)) return 0;
 
@@ -162,6 +181,9 @@ uint32_t install_local(const std::string& path)
     if (r >= 0) {
         auto reply = wrap_msg(raw);
         sd_bus_message_read(reply.get(), "u", &sid);
+        if (err_out != nullptr) *err_out = CallError::none;
+    } else if (err_out != nullptr) {
+        *err_out = classify_call_error(r, &err);
     }
 
     sd_bus_error_free(&err);

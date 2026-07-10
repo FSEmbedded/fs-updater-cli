@@ -121,7 +121,9 @@ enum class UPDATER_CLI_VALIDATION : int{
     MISSING_ENV_UPDATE_STICK  = 62,  // retired placeholder (was --automatic)
     MISSING_ENV_UPDATE_FILE   = 63,  // retired placeholder (was --automatic)
     UPDATE_TYPE_WITHOUT_FILE  = 64,  // retired placeholder (was --update_type)
-    INCOMPATIBLE_ARG_COMBO    = 65
+    INCOMPATIBLE_ARG_COMBO    = 65,
+    INSTALL_BUSY              = 66,  // another install/download already in flight
+    PERMISSION_DENIED         = 67   // polkit / bus-policy rejected the call
 };
 
 enum class UPDATER_SYSTEM : int{

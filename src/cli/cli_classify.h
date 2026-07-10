@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <string>
 
 /* HW-free classifier for the install surface.
@@ -48,6 +49,17 @@ namespace cli
     };
 
     [[nodiscard]] ParseOutcome classify(const RawFlags& flags);
+
+    /* Verdict of the action dispatch: action flags are mutually exclusive,
+     * modifiers (--debug/--serial/--detach) never count as actions. */
+    enum class DispatchVerdict
+    {
+        version_only, /* no action given: print version, return code stays 0 */
+        run,          /* exactly one action: dispatch its handler */
+        combo_error   /* more than one action: INCOMPATIBLE_ARG_COMBO */
+    };
+
+    [[nodiscard]] DispatchVerdict dispatch_verdict(std::size_t action_count);
 
     /* Map a terminal install verdict to the CLI return code by update type:
      * fw→0/3, app→4/7, fw+app→8/11 (success/failure). An unknown or empty type

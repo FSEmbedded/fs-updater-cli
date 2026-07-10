@@ -40,6 +40,15 @@ namespace cli
             return out;
         }
 
+        /* An empty positional cannot name a bundle; reject it up front with a
+         * clear message instead of letting realpath("") fail downstream. */
+        if (flags.install_path_set && flags.install_path.empty())
+        {
+            out.kind  = ParseOutcome::Kind::parse_error;
+            out.error = "the install path must not be empty";
+            return out;
+        }
+
         /* --detach only qualifies a local install (a path). The cloud-advance
          * form is already non-blocking, so --detach there is meaningless. */
         if (flags.detach && !flags.install_path_set)
@@ -58,5 +67,14 @@ namespace cli
         }
 
         return out; /* kind = ok */
+    }
+
+    DispatchVerdict dispatch_verdict(std::size_t action_count)
+    {
+        if (action_count == 0)
+            return DispatchVerdict::version_only;
+        if (action_count == 1)
+            return DispatchVerdict::run;
+        return DispatchVerdict::combo_error;
     }
 }

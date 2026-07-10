@@ -989,12 +989,34 @@ void cli::fs_update_cli::handle_install_update()
         const std::unique_ptr<char, decltype(&std::free)> resolved_guard(resolved, std::free);
         const string abs_path(resolved);
 
-        const uint32_t sid = fus_dbus::install_local(abs_path);
+        fus_dbus::CallError cerr = fus_dbus::CallError::other;
+        const uint32_t sid = fus_dbus::install_local(abs_path, &cerr);
         if (sid == 0)
         {
-            cli_io::write_stderr("InstallLocal D-Bus call failed\n");
-            this->return_code =
-                static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FAILED);
+            switch (cerr)
+            {
+            case fus_dbus::CallError::busy:
+                cli_io::write_stderr("Another install or download is already in progress.\n");
+                this->return_code =
+                    static_cast<int>(UPDATER_CLI_VALIDATION::INSTALL_BUSY);
+                break;
+            case fus_dbus::CallError::denied:
+                cli_io::write_stderr("Permission denied by policy for the install request.\n");
+                this->return_code =
+                    static_cast<int>(UPDATER_CLI_VALIDATION::PERMISSION_DENIED);
+                break;
+            case fus_dbus::CallError::no_updater:
+                cli_io::write_stderr("Updater is not available on the service.\n");
+                this->return_code =
+                    static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FAILED);
+                break;
+            case fus_dbus::CallError::none:
+            case fus_dbus::CallError::other:
+                cli_io::write_stderr("InstallLocal D-Bus call failed\n");
+                this->return_code =
+                    static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FAILED);
+                break;
+            }
             return;
         }
 
@@ -1343,7 +1365,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
     }};
 
     void (fs_update_cli::*matched_handler)() = nullptr;
-    int action_count = 0;
+    std::size_t action_count = 0;
 
     for (const auto& entry : actions)
     {
@@ -1354,19 +1376,19 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
         }
     }
 
-    if (action_count == 0)
+    switch (cli::dispatch_verdict(action_count))
     {
+    case cli::DispatchVerdict::version_only:
         this->handle_print_version();
         cli_io::write_stdout("No argument given, nothing done. Use --help to get all commands.\n");
-    }
-    else if (action_count == 1)
-    {
+        break;
+    case cli::DispatchVerdict::run:
         (this->*matched_handler)();
-    }
-    else
-    {
+        break;
+    case cli::DispatchVerdict::combo_error:
         cli_io::write_stderr("Wrong combination or set of variables. Please refer --help or manual\n");
         this->return_code = static_cast<int>(UPDATER_CLI_VALIDATION::INCOMPATIBLE_ARG_COMBO);
+        break;
     }
 }
 

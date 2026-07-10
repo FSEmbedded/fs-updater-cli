@@ -5,6 +5,17 @@
 
 namespace fus_dbus {
 
+/* Why a privileged D-Bus call failed, derived from the sd_bus error name +
+ * errno, so the CLI can return a distinct exit code / message instead of
+ * collapsing every failure into one sentinel. */
+enum class CallError {
+    none,        /* the call succeeded */
+    busy,        /* -EBUSY / de.fsembedded.fsupdate1.Error.Busy */
+    denied,      /* org.freedesktop.DBus.Error.AccessDenied (polkit / bus policy) */
+    no_updater,  /* -ENOSYS / updater not available on the service */
+    other        /* anything else (bad args, I/O, bus not reachable, …) */
+};
+
 struct CheckUpdateResult {
     bool        available = false;
     std::string type;
@@ -17,7 +28,9 @@ uint32_t          start_download(const std::string& type, const std::string& ver
 int               get_download_progress();   /* 0-100, or -1 on error */
 std::string       get_download_state();      /* "idle"|"in_progress"|"finished"|"failed"|"" */
 bool              start_install(uint32_t session_id, const std::string& type);
-uint32_t          install_local(const std::string& path);  /* 0 on error */
+/* 0 on error; when err_out is non-null it receives why the call failed
+ * (busy / denied / no_updater / other) so the CLI can map a distinct rc. */
+uint32_t          install_local(const std::string& path, CallError* err_out = nullptr);
 bool              cancel_install(uint32_t session_id);
 int               get_install_progress();    /* 0-100, or -1 on error */
 std::string       get_install_state();       /* "idle"|"in_progress"|"finished"|"failed"|"" */

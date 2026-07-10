@@ -105,6 +105,52 @@ TEST(Classify, NoFlagsIsOkWithNoMode)
     EXPECT_EQ(out.mode, InstallMode::none);
 }
 
+/* --- Empty-string path: `fs-updater --install_update ""` must be rejected at
+ * the parse seam, not trickle into realpath("") and a misleading I/O error. */
+TEST(Classify, EmptyPathWithInstallUpdateIsParseError)
+{
+    RawFlags f{};
+    f.install_update_set = true;
+    f.install_path_set   = true;
+    f.install_path       = "";
+
+    const ParseOutcome out = cli::classify(f);
+
+    EXPECT_EQ(out.kind, ParseOutcome::Kind::parse_error);
+}
+
+/* An empty positional without --install_update stays a bare-path rejection. */
+TEST(Classify, EmptyPathWithoutInstallUpdateIsParseError)
+{
+    RawFlags f{};
+    f.install_path_set = true;
+    f.install_path     = "";
+
+    const ParseOutcome out = cli::classify(f);
+
+    EXPECT_EQ(out.kind, ParseOutcome::Kind::parse_error);
+}
+
+/* --- dispatch_verdict: pins the action-count contract of the dispatch loop.
+ * Modifiers (--debug/--serial/--detach) never enter the action table, so an
+ * invocation like `fs-updater --serial` is the 0-action case: print the
+ * version, run nothing, return code stays 0 — not a combo error. */
+TEST(DispatchVerdict, NoActionPrintsVersionOnly)
+{
+    EXPECT_EQ(cli::dispatch_verdict(0), cli::DispatchVerdict::version_only);
+}
+
+TEST(DispatchVerdict, ExactlyOneActionRuns)
+{
+    EXPECT_EQ(cli::dispatch_verdict(1), cli::DispatchVerdict::run);
+}
+
+TEST(DispatchVerdict, MultipleActionsAreAComboError)
+{
+    EXPECT_EQ(cli::dispatch_verdict(2), cli::DispatchVerdict::combo_error);
+    EXPECT_EQ(cli::dispatch_verdict(19), cli::DispatchVerdict::combo_error);
+}
+
 /* --- install_terminal_code: terminal verdict → return code by type --- */
 TEST(InstallTerminalCode, KnownTypesMapToTheirFamily)
 {
