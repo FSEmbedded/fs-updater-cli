@@ -48,13 +48,6 @@ using std::string;
 
 cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
 		cmd("F&S Update Framework CLI", ' ', FUS_CLI_PROJECT_VERSION, false),
-		arg_update("",
-		       "update_file",
-		       "Path to update package",
-		       false,
-		       "",
-		       "absolute filesystem path"
-		       ),
 		arg_switch_fw_slot("",
 				"switch_fw_slot",
 				"Switch from active firmware slot to the inactive "\
@@ -79,10 +72,6 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
 			"update_reboot_state",
 			"Get state of update"
 			),
-		arg_automatic("",
-			    "automatic",
-				"Automatic update modus"
-			    ),
 		arg_debug("",
 			  "debug",
 			  "Enable debug output"
@@ -141,13 +130,6 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
 				   "serial",
 				   "Send log output to the serial console (modifier, like --debug)"
 				   ),
-		update_install("",
-					   "update_install",
-					   "Install a local update bundle via the D-Bus service",
-					   false,
-					   "",
-					   "absolute filesystem path"
-					   ),
 		install_progress("",
 						 "install_progress",
 						 "Show the progress of the current install"
@@ -189,13 +171,11 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
 			    ),
 		return_code(0)
 {
-    this->cmd.add(arg_update);
     this->cmd.add(arg_rollback_update);
     this->cmd.add(arg_switch_fw_slot);
     this->cmd.add(arg_switch_app_slot);
     this->cmd.add(arg_commit_update);
     this->cmd.add(arg_urs);
-    this->cmd.add(arg_automatic);
     this->cmd.add(arg_debug);
     this->cmd.add(get_fw_version);
     this->cmd.add(get_app_version);
@@ -203,7 +183,6 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
     this->cmd.add(arg_help);
     this->cmd.add(apply_update);
     this->cmd.add(install_update);
-    this->cmd.add(update_install);
     this->cmd.add(install_path);
     this->cmd.add(arg_detach);
     this->cmd.add(arg_serial);
@@ -230,7 +209,7 @@ cli::fs_update_cli::~fs_update_cli()
 
 void cli::fs_update_cli::setup_logging()
 {
-    const bool use_serial = this->arg_automatic.isSet() || this->arg_serial.isSet();
+    const bool use_serial = this->arg_serial.isSet();
     const auto level = this->arg_debug.isSet()
         ? logger::logLevel::DEBUG
         : logger::logLevel::WARNING;
@@ -272,57 +251,6 @@ bool cli::fs_update_cli::create_rollback_marker()
 // ---------------------------------------------------------------------------
 // Update execution
 // ---------------------------------------------------------------------------
-
-void cli::fs_update_cli::update_image_state(const string &update_file)
-{
-    try
-    {
-        cli_io::write_stdout("Update started\n");
-        uint8_t installed_update_type = 0;
-        string update_type;
-        string mutable_file = update_file;
-        this->update_handler->update_image(mutable_file, update_type, installed_update_type);
-
-        switch(installed_update_type)
-        {
-            case 1:
-            this->return_code = static_cast<int>(UPDATER_FIRMWARE_STATE::UPDATE_SUCCESSFUL);
-            break;
-            case 2:
-            this->return_code = static_cast<int>(UPDATER_APPLICATION_STATE::UPDATE_SUCCESSFUL);
-            break;
-            case 3:
-            this->return_code = static_cast<int>(UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_SUCCESSFUL);
-            break;
-            default:
-            this->return_code = static_cast<int>(UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_PROGRESS_ERROR);
-        }
-
-        cli_io::write_stdout("Image update successful\n");
-    }
-    catch (const fs::UpdateInProgress &e)
-    {
-        cli_io::write_stderr(string("Image update progress error: ") + e.what() + "\n");
-        this->return_code = static_cast<int>(UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_PROGRESS_ERROR);
-    }
-    catch (const fs::GenericException &e)
-    {
-        cli_io::write_stderr(string(e.what()) + " errno: " + std::to_string(e.errorno) + "\n");
-        this->return_code = static_cast<int>(UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_PROGRESS_ERROR);
-    }
-    catch (const fs::BaseFSUpdateException &e)
-    {
-        const string tmp_app = this->update_handler->getTempAppPath();
-        static_cast<void>(posix_helpers::remove_file(tmp_app.c_str()));
-        cli_io::write_stderr(string("Image update error: ") + e.what() + "\n");
-        this->return_code = static_cast<int>(UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_INTERNAL_ERROR);
-    }
-    catch (const std::exception &e)
-    {
-        cli_io::write_stderr(string("Image update system error: ") + e.what() + "\n");
-        this->return_code = static_cast<int>(UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_SYSTEM_ERROR);
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Commit
@@ -715,49 +643,6 @@ void cli::fs_update_cli::is_firmware_state_bad(const char &state)
 // Command handlers (dispatched from parse_input)
 // ---------------------------------------------------------------------------
 
-void cli::fs_update_cli::handle_update_file()
-{
-    const string update_location = this->arg_update.getValue();
-
-    if (!posix_helpers::path_exists(update_location.c_str()))
-    {
-        cli_io::write_stderr("Update file: " + update_location + " does not exist.\n");
-        this->return_code = static_cast<int>(UPDATER_CLI_VALIDATION::UPDATE_FILE_NOT_FOUND);
-        return;
-    }
-    this->update_image_state(update_location);
-}
-
-void cli::fs_update_cli::handle_automatic()
-{
-    const char *update_stick_env = std::getenv("UPDATE_STICK");
-    const char *update_file_env = std::getenv("UPDATE_FILE");
-
-    if (update_stick_env == nullptr)
-    {
-        this->serial_cout->write("Environment variable \"UPDATE_STICK\" is not set\n");
-        this->return_code = static_cast<int>(UPDATER_CLI_VALIDATION::MISSING_ENV_UPDATE_STICK);
-        return;
-    }
-
-    if (update_file_env == nullptr)
-    {
-        this->serial_cout->write("\"UPDATE_FILE\" env variable -- not set\n");
-        this->return_code = static_cast<int>(UPDATER_CLI_VALIDATION::MISSING_ENV_UPDATE_FILE);
-        return;
-    }
-
-    const string update_stick(update_stick_env);
-    string update_file = update_stick;
-    if (update_stick.back() != '/')
-    {
-        update_file += "/";
-    }
-    update_file += update_file_env;
-
-    this->update_image_state(update_file);
-}
-
 void cli::fs_update_cli::handle_print_version()
 {
     cli_io::write_stdout(string("F&S Update Framework CLI Version: ") + FUS_CLI_PROJECT_VERSION
@@ -1009,39 +894,6 @@ void cli::fs_update_cli::handle_download_progress()
         this->return_code =
             static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::UPDATE_DOWNLOAD_FINISHED);
     }
-#endif
-}
-
-void cli::fs_update_cli::handle_update_install()
-{
-#if BUILD_DBUS_SUPPORT
-    const string path = this->update_install.getValue();
-    if (path.empty()) {
-        cli_io::write_stderr("--update_install requires a path argument\n");
-        this->return_code =
-            static_cast<int>(UPDATER_CLI_VALIDATION::UPDATE_FILE_NOT_FOUND);
-        return;
-    }
-
-    /* Service-side validates existence + state and returns FILE_NOT_FOUND
-     * or LIMITS_EXCEEDED — install_local returns 0 on any failure. */
-    const uint32_t sid = fus_dbus::install_local(path);
-    if (sid == 0) {
-        cli_io::write_stderr("InstallLocal D-Bus call failed\n");
-        this->return_code =
-            static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FAILED);
-        return;
-    }
-
-    cli_io::write_stdout("Install started; session " +
-                         std::to_string(sid) +
-                         ". Poll --install_progress for status.\n");
-    this->return_code =
-        static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_IN_PROGRESS);
-#else
-    cli_io::write_stderr("D-Bus support not built in\n");
-    this->return_code =
-        static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FAILED);
 #endif
 }
 
@@ -1468,11 +1320,9 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
         void (fs_update_cli::*handler)();
     };
 
-    const std::array<ActionEntry, 22> actions = {{
-        {&arg_update,              &fs_update_cli::handle_update_file},
+    const std::array<ActionEntry, 19> actions = {{
         {&arg_commit_update,       &fs_update_cli::commit_update},
         {&arg_urs,                 &fs_update_cli::print_update_reboot_state},
-        {&arg_automatic,           &fs_update_cli::handle_automatic},
         {&get_app_version,         &fs_update_cli::print_current_application_version},
         {&get_fw_version,          &fs_update_cli::print_current_firmware_version},
         {&get_version,             &fs_update_cli::handle_print_version},
@@ -1481,7 +1331,6 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
         {&download_progress,       &fs_update_cli::handle_download_progress},
         {&install_update,          &fs_update_cli::handle_install_update},
         {&install_progress,        &fs_update_cli::handle_install_progress},
-        {&update_install,          &fs_update_cli::handle_update_install},
         {&cancel_install_arg,      &fs_update_cli::handle_cancel_install},
         {&apply_update,            &fs_update_cli::handle_apply_update},
         {&arg_rollback_update,     &fs_update_cli::rollback_update},

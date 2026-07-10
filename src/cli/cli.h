@@ -28,13 +28,11 @@ namespace cli
 	{
         private:
 		TCLAP::CmdLine cmd;
-		TCLAP::ValueArg<std::string> arg_update;
 		TCLAP::SwitchArg arg_switch_fw_slot;
 		TCLAP::SwitchArg arg_switch_app_slot;
 		TCLAP::SwitchArg arg_rollback_update;
 		TCLAP::SwitchArg arg_commit_update;
 		TCLAP::SwitchArg arg_urs;
-		TCLAP::SwitchArg arg_automatic;
 		TCLAP::SwitchArg arg_debug;
 		TCLAP::SwitchArg get_fw_version;
 		TCLAP::SwitchArg get_app_version;
@@ -57,10 +55,6 @@ namespace cli
 		TCLAP::SwitchArg arg_detach;
 		/* Serial-console log sink modifier (orthogonal, like --debug). */
 		TCLAP::SwitchArg arg_serial;
-		/* Unified-install entry point — local flow. The path is required;
-		 * the cloud-flow entry point uses --install_update, matching the
-		 * existing one-flag-per-trigger pattern. */
-		TCLAP::ValueArg<std::string> update_install;
 		/* One-shot query of InstallProgress / InstallState, mirrors
 		 * --download_progress in shape and exit-code semantics. */
 		TCLAP::SwitchArg install_progress;
@@ -87,15 +81,9 @@ namespace cli
 		cli::ParseOutcome install_outcome;
 
 		/**
-		 * Configure logger sink based on --debug and --automatic flags.
+		 * Configure logger sink based on --debug and --serial flags.
 		 */
 		void setup_logging();
-
-		/**
-		 * Internal function to run update and handle errors as return_value:
-		 * @param update_file Path to update package (fully resolved)
-		 */
-		void update_image_state(const std::string &update_file);
 
 		/**
 		 * Create rollback marker file in work directory.
@@ -173,15 +161,12 @@ namespace cli
 		void is_firmware_state_bad(const char & state);
 
 		/* Command handlers dispatched from parse_input */
-		void handle_update_file();
-		void handle_automatic();
 		void handle_print_version();
 		void handle_print_help();
 		void handle_is_update_available();
 		void handle_download_update();
 		void handle_download_progress();
 		void handle_install_update();
-		void handle_update_install();
 		void handle_install_progress();
 		void handle_cancel_install();
 		void handle_apply_update();

@@ -116,11 +116,11 @@ enum class UPDATER_SETGET_UPDATE_STATE : int{
 };
 
 enum class UPDATER_CLI_VALIDATION : int{
-    INVALID_UPDATE_TYPE       = 60,
+    INVALID_UPDATE_TYPE       = 60,  // retired placeholder (was --update_type)
     UPDATE_FILE_NOT_FOUND     = 61,
-    MISSING_ENV_UPDATE_STICK  = 62,
-    MISSING_ENV_UPDATE_FILE   = 63,
-    UPDATE_TYPE_WITHOUT_FILE  = 64,
+    MISSING_ENV_UPDATE_STICK  = 62,  // retired placeholder (was --automatic)
+    MISSING_ENV_UPDATE_FILE   = 63,  // retired placeholder (was --automatic)
+    UPDATE_TYPE_WITHOUT_FILE  = 64,  // retired placeholder (was --update_type)
     INCOMPATIBLE_ARG_COMBO    = 65
 };
 
