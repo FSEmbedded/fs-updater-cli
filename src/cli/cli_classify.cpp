@@ -2,8 +2,21 @@
 
 #include "fs_updater_error.h"
 
+#include <cerrno>
+#include <cstring>
+
 namespace cli
 {
+namespace
+{
+    /* Must match the service's D-Bus error names (service.cpp). Duplicated
+     * across the repo boundary by necessity; the wire contract is pinned by
+     * both this unit's tests and the service's contract tests. */
+    constexpr const char* ERROR_BUSY          = "de.fsembedded.fsupdate1.Error.Busy";
+    constexpr const char* ERROR_NO_UPDATER    = "de.fsembedded.fsupdate1.Error.NoUpdater";
+    constexpr const char* ERROR_ACCESS_DENIED = "org.freedesktop.DBus.Error.AccessDenied";
+}
+
     int install_terminal_code(bool success, const std::string& type)
     {
         if (type == "fw")
@@ -44,7 +57,7 @@ namespace cli
          * clear message instead of letting realpath("") fail downstream. */
         if (flags.install_path_set && flags.install_path.empty())
         {
-            out.kind  = ParseOutcome::Kind::parse_error;
+            out.kind  = ParseOutcome::Kind::bad_path;
             out.error = "the install path must not be empty";
             return out;
         }
@@ -76,5 +89,48 @@ namespace cli
         if (action_count == 1)
             return DispatchVerdict::run;
         return DispatchVerdict::combo_error;
+    }
+
+    CallError classify_call_error(int r, const char* error_name)
+    {
+        if (r >= 0)
+            return CallError::none;
+
+        /* Name first: the busy/denied/no-updater names are the only reliable
+         * discriminators over the bus. NEVER map -EACCES back to denied — every
+         * FAILED error maps to -EACCES on the wire, so that would misreport an
+         * unrelated failure as a permission denial. */
+        if (error_name != nullptr)
+        {
+            if (std::strcmp(error_name, ERROR_BUSY) == 0)          return CallError::busy;
+            if (std::strcmp(error_name, ERROR_ACCESS_DENIED) == 0) return CallError::denied;
+            if (std::strcmp(error_name, ERROR_NO_UPDATER) == 0)    return CallError::no_updater;
+        }
+
+        /* errno fallback for a direct peer or version skew where no known name
+         * is set (an unregistered custom name maps to -EIO on the wire, so only
+         * the raw -EBUSY/-ENOSYS of a same-host peer reach here). */
+        if (r == -EBUSY)  return CallError::busy;
+        if (r == -ENOSYS) return CallError::no_updater;
+        return CallError::other;
+    }
+
+    int install_start_error_code(CallError e)
+    {
+        switch (e)
+        {
+        case CallError::busy:
+            return static_cast<int>(UPDATER_CLI_VALIDATION::INSTALL_BUSY);
+        case CallError::denied:
+            return static_cast<int>(UPDATER_CLI_VALIDATION::PERMISSION_DENIED);
+        case CallError::none:
+            /* Call succeeded but the session id was unreadable — the worker is
+             * already running, so report in-progress, not a failure. */
+            return static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_IN_PROGRESS);
+        case CallError::no_updater:
+        case CallError::other:
+            break;
+        }
+        return static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FAILED);
     }
 }

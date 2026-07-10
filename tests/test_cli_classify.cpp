@@ -9,6 +9,9 @@
 
 #include <gtest/gtest.h>
 
+#include <cerrno>
+
+using cli::CallError;
 using cli::InstallMode;
 using cli::ParseOutcome;
 using cli::RawFlags;
@@ -106,8 +109,10 @@ TEST(Classify, NoFlagsIsOkWithNoMode)
 }
 
 /* --- Empty-string path: `fs-updater --install_update ""` must be rejected at
- * the parse seam, not trickle into realpath("") and a misleading I/O error. */
-TEST(Classify, EmptyPathWithInstallUpdateIsParseError)
+ * the parse seam, not trickle into realpath("") and a misleading I/O error. It
+ * is a bad_path (→ file-not-found 61), distinct from an argument-combo error
+ * (65): a script keying on 61 for a bad bundle path must still get 61. */
+TEST(Classify, EmptyPathWithInstallUpdateIsBadPath)
 {
     RawFlags f{};
     f.install_update_set = true;
@@ -116,11 +121,14 @@ TEST(Classify, EmptyPathWithInstallUpdateIsParseError)
 
     const ParseOutcome out = cli::classify(f);
 
-    EXPECT_EQ(out.kind, ParseOutcome::Kind::parse_error);
+    EXPECT_EQ(out.kind, ParseOutcome::Kind::bad_path);
+    EXPECT_FALSE(out.error.empty());
 }
 
-/* An empty positional without --install_update stays a bare-path rejection. */
-TEST(Classify, EmptyPathWithoutInstallUpdateIsParseError)
+/* An empty positional without --install_update stays a bare-path rejection: the
+ * order matters — the bare-path rule fires before the empty-path check, so the
+ * outcome is parse_error with the bare-path message, not bad_path. */
+TEST(Classify, EmptyPathWithoutInstallUpdateIsGuardB)
 {
     RawFlags f{};
     f.install_path_set = true;
@@ -129,12 +137,13 @@ TEST(Classify, EmptyPathWithoutInstallUpdateIsParseError)
     const ParseOutcome out = cli::classify(f);
 
     EXPECT_EQ(out.kind, ParseOutcome::Kind::parse_error);
+    EXPECT_EQ(out.error, "a path argument is only valid with --install_update");
 }
 
-/* --- dispatch_verdict: pins the action-count contract of the dispatch loop.
- * Modifiers (--debug/--serial/--detach) never enter the action table, so an
- * invocation like `fs-updater --serial` is the 0-action case: print the
- * version, run nothing, return code stays 0 — not a combo error. */
+/* --- dispatch_verdict: pins only the count→verdict arithmetic (0→version,
+ * 1→run, N→combo). WHICH flags count as actions is decided by the caller
+ * (parse_input builds the action table); this function never sees the flags,
+ * so these cases pin the mapping, not table membership. */
 TEST(DispatchVerdict, NoActionPrintsVersionOnly)
 {
     EXPECT_EQ(cli::dispatch_verdict(0), cli::DispatchVerdict::version_only);
@@ -171,4 +180,54 @@ TEST(InstallTerminalCode, EmptyOrUnknownTypeIsTypeAgnosticNotFirmware)
     EXPECT_EQ(cli::install_terminal_code(false, ""),       49); /* not 3 */
     EXPECT_EQ(cli::install_terminal_code(true,  "bogus"),  48);
     EXPECT_EQ(cli::install_terminal_code(false, "bogus"),  49);
+}
+
+/* --- classify_call_error: the busy-name string is the only reliable busy
+ * detector over the bus and, before this seam existed, had no executable pin
+ * on the client side. The exact literals must match service.cpp. --- */
+
+TEST(ClassifyCallError, SuccessIsNone)
+{
+    EXPECT_EQ(cli::classify_call_error(0,  nullptr), CallError::none);
+    EXPECT_EQ(cli::classify_call_error(1,  nullptr), CallError::none);
+}
+
+TEST(ClassifyCallError, NamesAreAuthoritative)
+{
+    EXPECT_EQ(cli::classify_call_error(-EIO, "de.fsembedded.fsupdate1.Error.Busy"),
+              CallError::busy);
+    EXPECT_EQ(cli::classify_call_error(-EIO, "org.freedesktop.DBus.Error.AccessDenied"),
+              CallError::denied);
+    EXPECT_EQ(cli::classify_call_error(-EIO, "de.fsembedded.fsupdate1.Error.NoUpdater"),
+              CallError::no_updater);
+}
+
+/* EACCES-collision pin: a generic Failed error maps to -EACCES on the wire, so
+ * classifying by errno would call it "denied". The name must win → other, and
+ * -EACCES must NEVER be treated as denied. */
+TEST(ClassifyCallError, FailedNameIsOtherNotDenied)
+{
+    EXPECT_EQ(cli::classify_call_error(-EACCES, "org.freedesktop.DBus.Error.Failed"),
+              CallError::other);
+    EXPECT_EQ(cli::classify_call_error(-EACCES, nullptr), CallError::other);
+}
+
+/* errno fallback: a same-host direct peer with no known name still yields the
+ * raw -EBUSY / -ENOSYS (an unregistered name maps to -EIO, hence other). */
+TEST(ClassifyCallError, ErrnoFallbackWhenNameAbsent)
+{
+    EXPECT_EQ(cli::classify_call_error(-EBUSY,  nullptr), CallError::busy);
+    EXPECT_EQ(cli::classify_call_error(-ENOSYS, nullptr), CallError::no_updater);
+    EXPECT_EQ(cli::classify_call_error(-EIO,    nullptr), CallError::other);
+}
+
+/* --- install_start_error_code: pins the exit codes for each CallError
+ * (66/67 for busy/denied, 47/49 for the accepted/failed defaults). --- */
+TEST(InstallStartErrorCode, MapsEachCallError)
+{
+    EXPECT_EQ(cli::install_start_error_code(CallError::busy),       66); /* INSTALL_BUSY */
+    EXPECT_EQ(cli::install_start_error_code(CallError::denied),     67); /* PERMISSION_DENIED */
+    EXPECT_EQ(cli::install_start_error_code(CallError::none),       47); /* accepted; poll */
+    EXPECT_EQ(cli::install_start_error_code(CallError::no_updater), 49); /* install failed */
+    EXPECT_EQ(cli::install_start_error_code(CallError::other),      49);
 }

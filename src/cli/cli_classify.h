@@ -37,8 +37,9 @@ namespace cli
     {
         enum class Kind
         {
-            ok,         /* no guard violation; mode/path/detach are usable */
-            parse_error /* bare-path / --detach rule violated */
+            ok,          /* no guard violation; mode/path/detach are usable */
+            parse_error, /* bare-path / --detach rule violated → combo-error code */
+            bad_path     /* install path unusable (empty) → file-not-found code */
         };
 
         Kind kind = Kind::ok;
@@ -60,6 +61,29 @@ namespace cli
     };
 
     [[nodiscard]] DispatchVerdict dispatch_verdict(std::size_t action_count);
+
+    /* Why a privileged D-Bus install call failed, derived from the error name
+     * (authoritative) then errno. Kept here, not in the sd-bus client, so the
+     * classification is natively unit-testable without a bus. */
+    enum class CallError
+    {
+        none,       /* the call succeeded */
+        busy,       /* de.fsembedded.fsupdate1.Error.Busy / -EBUSY */
+        denied,     /* org.freedesktop.DBus.Error.AccessDenied (polkit / bus policy) */
+        no_updater, /* de.fsembedded.fsupdate1.Error.NoUpdater / -ENOSYS */
+        other       /* anything else (bad args, I/O, bus not reachable, …) */
+    };
+
+    /* Classify a failed call by its D-Bus error name first (the name crosses
+     * the bus; a handler-return errno does not once a name is set), then by
+     * errno as a direct-peer / version-skew fallback. error_name may be null.
+     * Pure — no sd-bus dependency. */
+    [[nodiscard]] CallError classify_call_error(int r, const char* error_name);
+
+    /* Map an install-start failure to the CLI return code: busy→66, denied→67,
+     * a succeeded-but-unreadable call (none)→47 in-progress, everything else
+     * (no_updater/other)→49 failed. */
+    [[nodiscard]] int install_start_error_code(CallError e);
 
     /* Map a terminal install verdict to the CLI return code by update type:
      * fw→0/3, app→4/7, fw+app→8/11 (success/failure). An unknown or empty type

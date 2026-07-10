@@ -989,34 +989,32 @@ void cli::fs_update_cli::handle_install_update()
         const std::unique_ptr<char, decltype(&std::free)> resolved_guard(resolved, std::free);
         const string abs_path(resolved);
 
-        fus_dbus::CallError cerr = fus_dbus::CallError::other;
-        const uint32_t sid = fus_dbus::install_local(abs_path, &cerr);
+        cli::CallError cerr = cli::CallError::other;
+        const uint32_t sid = fus_dbus::install_local(abs_path, cerr);
         if (sid == 0)
         {
+            /* Message only — the return code comes from the classifier seam so
+             * the cli/service error contract lives in one natively-tested place. */
             switch (cerr)
             {
-            case fus_dbus::CallError::busy:
+            case cli::CallError::busy:
                 cli_io::write_stderr("Another install or download is already in progress.\n");
-                this->return_code =
-                    static_cast<int>(UPDATER_CLI_VALIDATION::INSTALL_BUSY);
                 break;
-            case fus_dbus::CallError::denied:
+            case cli::CallError::denied:
                 cli_io::write_stderr("Permission denied by policy for the install request.\n");
-                this->return_code =
-                    static_cast<int>(UPDATER_CLI_VALIDATION::PERMISSION_DENIED);
                 break;
-            case fus_dbus::CallError::no_updater:
+            case cli::CallError::no_updater:
                 cli_io::write_stderr("Updater is not available on the service.\n");
-                this->return_code =
-                    static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FAILED);
                 break;
-            case fus_dbus::CallError::none:
-            case fus_dbus::CallError::other:
+            case cli::CallError::none:
+                cli_io::write_stdout("Install accepted; session id unreadable — "
+                                     "poll --install_progress for status.\n");
+                break;
+            case cli::CallError::other:
                 cli_io::write_stderr("InstallLocal D-Bus call failed\n");
-                this->return_code =
-                    static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FAILED);
                 break;
             }
+            this->return_code = cli::install_start_error_code(cerr);
             return;
         }
 
@@ -1086,10 +1084,24 @@ void cli::fs_update_cli::handle_install_update()
         this->return_code = static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::NO_INSTALLATION_QUEUED);
         return;
     }
-    if (!fus_dbus::start_install(sid, type))
+    cli::CallError cloud_err = cli::CallError::other;
+    if (!fus_dbus::start_install(sid, type, cloud_err))
     {
-        cli_io::write_stdout("Could not initiate Installation...\n");
-        this->return_code = static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FAILED);
+        /* Same flag, same service condition as the local form — surface the
+         * same distinct busy/denied codes instead of one blanket failure. */
+        switch (cloud_err)
+        {
+        case cli::CallError::busy:
+            cli_io::write_stderr("Another install or download is already in progress.\n");
+            break;
+        case cli::CallError::denied:
+            cli_io::write_stderr("Permission denied by policy for the install request.\n");
+            break;
+        default:
+            cli_io::write_stdout("Could not initiate Installation...\n");
+            break;
+        }
+        this->return_code = cli::install_start_error_code(cloud_err);
         return;
     }
     cli_io::write_stdout("Update installation started.\n");
@@ -1321,11 +1333,14 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
         rf.detach = this->arg_detach.isSet();
 
         const cli::ParseOutcome po = cli::classify(rf);
-        if (po.kind == cli::ParseOutcome::Kind::parse_error)
+        if (po.kind != cli::ParseOutcome::Kind::ok)
         {
             cli_io::write_stderr(po.error + "\n");
-            this->return_code =
-                static_cast<int>(UPDATER_CLI_VALIDATION::INCOMPATIBLE_ARG_COMBO);
+            /* An unusable path is a file-not-found (61), not an argument-combo
+             * error (65) — script callers key on 61 for a bad bundle path. */
+            this->return_code = (po.kind == cli::ParseOutcome::Kind::bad_path)
+                ? static_cast<int>(UPDATER_CLI_VALIDATION::UPDATE_FILE_NOT_FOUND)
+                : static_cast<int>(UPDATER_CLI_VALIDATION::INCOMPATIBLE_ARG_COMBO);
             return;
         }
         this->install_outcome = po;
@@ -1334,8 +1349,9 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
     this->setup_logging();
 
     /* Dispatch table: maps each action flag to its handler.
-     * --debug is the only modifier, not an action.
-     * All action flags are mutually exclusive.
+     * --debug and --serial are modifiers, and --detach only qualifies a local
+     * install — none of them are actions. All action flags below are mutually
+     * exclusive.
      */
     struct ActionEntry {
         TCLAP::Arg* arg;

@@ -3,18 +3,9 @@
 #include <cstdint>
 #include <string>
 
-namespace fus_dbus {
+#include "cli_classify.h"   /* cli::CallError — the HW-free failure classifier */
 
-/* Why a privileged D-Bus call failed, derived from the sd_bus error name +
- * errno, so the CLI can return a distinct exit code / message instead of
- * collapsing every failure into one sentinel. */
-enum class CallError {
-    none,        /* the call succeeded */
-    busy,        /* -EBUSY / de.fsembedded.fsupdate1.Error.Busy */
-    denied,      /* org.freedesktop.DBus.Error.AccessDenied (polkit / bus policy) */
-    no_updater,  /* -ENOSYS / updater not available on the service */
-    other        /* anything else (bad args, I/O, bus not reachable, …) */
-};
+namespace fus_dbus {
 
 struct CheckUpdateResult {
     bool        available = false;
@@ -27,10 +18,11 @@ CheckUpdateResult check_update_available();
 uint32_t          start_download(const std::string& type, const std::string& version, uint64_t size);
 int               get_download_progress();   /* 0-100, or -1 on error */
 std::string       get_download_state();      /* "idle"|"in_progress"|"finished"|"failed"|"" */
-bool              start_install(uint32_t session_id, const std::string& type);
-/* 0 on error; when err_out is non-null it receives why the call failed
- * (busy / denied / no_updater / other) so the CLI can map a distinct rc. */
-uint32_t          install_local(const std::string& path, CallError* err_out = nullptr);
+/* err_out receives why the call failed (none on success) so the CLI can map a
+ * distinct rc instead of collapsing every failure into one sentinel. */
+bool              start_install(uint32_t session_id, const std::string& type, cli::CallError& err_out);
+/* 0 on error or when the session id was unreadable; err_out disambiguates. */
+uint32_t          install_local(const std::string& path, cli::CallError& err_out);
 bool              cancel_install(uint32_t session_id);
 int               get_install_progress();    /* 0-100, or -1 on error */
 std::string       get_install_state();       /* "idle"|"in_progress"|"finished"|"failed"|"" */

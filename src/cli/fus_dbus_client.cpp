@@ -28,22 +28,6 @@ MsgPtr wrap_msg(sd_bus_message* m) {
     return MsgPtr(m, sd_bus_message_unref);
 }
 
-/* Must match the service's busy error name (service.cpp ERROR_BUSY). */
-constexpr const char* ERROR_BUSY = "de.fsembedded.fsupdate1.Error.Busy";
-
-/* Classify a failed sd_bus call by its error name first (authoritative for
- * busy / access-denied), then by errno as a fallback. */
-CallError classify_call_error(int r, const sd_bus_error* err) {
-    if (r >= 0) return CallError::none;
-    if (err != nullptr && err->name != nullptr) {
-        if (sd_bus_error_has_name(err, ERROR_BUSY))                 return CallError::busy;
-        if (sd_bus_error_has_name(err, SD_BUS_ERROR_ACCESS_DENIED)) return CallError::denied;
-    }
-    if (r == -EBUSY)  return CallError::busy;
-    if (r == -ENOSYS) return CallError::no_updater;
-    return CallError::other;
-}
-
 bool open_bus(BusGuard& g) {
     return sd_bus_open_system(&g.bus) >= 0;
 }
@@ -147,8 +131,10 @@ std::string get_download_state()
     return read_string_property("DownloadState");
 }
 
-bool start_install(uint32_t session_id, const std::string& type)
+bool start_install(uint32_t session_id, const std::string& type, cli::CallError& err_out)
 {
+    err_out = cli::CallError::other;
+
     BusGuard g;
     if (!open_bus(g)) return false;
 
@@ -158,15 +144,20 @@ bool start_install(uint32_t session_id, const std::string& type)
     int r = sd_bus_call_method(g.bus, BUS_NAME, OBJ_PATH, INTERFACE,
                                "StartInstall", &err, &raw,
                                "us", session_id, type.c_str());
-    if (r >= 0) sd_bus_message_unref(raw);
+    if (r >= 0) {
+        sd_bus_message_unref(raw);
+        err_out = cli::CallError::none;
+    } else {
+        err_out = cli::classify_call_error(r, err.name);
+    }
 
     sd_bus_error_free(&err);
     return r >= 0;
 }
 
-uint32_t install_local(const std::string& path, CallError* err_out)
+uint32_t install_local(const std::string& path, cli::CallError& err_out)
 {
-    if (err_out != nullptr) *err_out = CallError::other;
+    err_out = cli::CallError::other;
 
     BusGuard g;
     if (!open_bus(g)) return 0;
@@ -180,10 +171,15 @@ uint32_t install_local(const std::string& path, CallError* err_out)
                                "s", path.c_str());
     if (r >= 0) {
         auto reply = wrap_msg(raw);
-        sd_bus_message_read(reply.get(), "u", &sid);
-        if (err_out != nullptr) *err_out = CallError::none;
-    } else if (err_out != nullptr) {
-        *err_out = classify_call_error(r, &err);
+        /* The service spawns the worker before replying, so a successful call
+         * means the install is running even if the reply body is unreadable.
+         * Report none (accepted) and leave sid 0 — the caller maps that to
+         * "accepted; poll progress", not a failure. */
+        if (sd_bus_message_read(reply.get(), "u", &sid) < 0)
+            sid = 0;
+        err_out = cli::CallError::none;
+    } else {
+        err_out = cli::classify_call_error(r, err.name);
     }
 
     sd_bus_error_free(&err);
