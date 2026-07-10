@@ -95,13 +95,17 @@ TEST(FsUpdaterError, AllExitCodesAreDistinct)
         code(UPDATER_CLI_VALIDATION::MISSING_ENV_UPDATE_FILE),
         code(UPDATER_CLI_VALIDATION::UPDATE_TYPE_WITHOUT_FILE),
         code(UPDATER_CLI_VALIDATION::INCOMPATIBLE_ARG_COMBO),
+        code(UPDATER_CLI_VALIDATION::INSTALL_BUSY),
+        code(UPDATER_CLI_VALIDATION::PERMISSION_DENIED),
 
         code(UPDATER_SYSTEM::REBOOT_FAILED),
 
         code(UPDATER_FATAL::UNHANDLED_EXCEPTION),
     };
 
-    EXPECT_EQ(all_codes.size(), 63u);
+    // Add every new enumerator here too: this set is the whole-table drift
+    // guard and does not derive from fs_updater_error.h automatically.
+    EXPECT_EQ(all_codes.size(), 65u);
 }
 
 TEST(FsUpdaterError, AllExitCodesFitInUnsignedByteSpace)
