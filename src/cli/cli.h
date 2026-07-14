@@ -10,6 +10,7 @@
 #include "../logger/LoggerSinkSerial.h"
 #include "cli_classify.h"
 #include "path_value_arg.h"
+#include "non_empty_value_arg.h"
 
 #include <string>
 #include <stdexcept>
@@ -66,11 +67,14 @@ namespace cli
 		 * --install_progress and the InstallCompleted signal. Named
 		 * with the _arg suffix to disambiguate from the
 		 * fus_dbus::cancel_install() free function. */
-		TCLAP::ValueArg<uint32_t> cancel_install_arg;
-		TCLAP::ValueArg<char> set_app_state_bad;
-		TCLAP::ValueArg<char> is_app_state_bad;
-		TCLAP::ValueArg<char> set_fw_state_bad;
-		TCLAP::ValueArg<char> is_fw_state_bad;
+		/* NonEmptyValueArg, not ValueArg: an empty value would otherwise keep
+		 * the default and act on it — cancelling session 0, or answering for
+		 * slot 'a' — while looking like a deliberate request. */
+		cli::NonEmptyValueArg<uint32_t> cancel_install_arg;
+		cli::NonEmptyValueArg<char> set_app_state_bad;
+		cli::NonEmptyValueArg<char> is_app_state_bad;
+		cli::NonEmptyValueArg<char> set_fw_state_bad;
+		cli::NonEmptyValueArg<char> is_fw_state_bad;
 
 		std::unique_ptr<fs::FSUpdate> update_handler;
 		std::shared_ptr<SynchronizedSerial> serial_cout;
