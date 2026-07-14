@@ -9,8 +9,7 @@
 #include "SynchronizedSerial.h"
 #include "../logger/LoggerSinkSerial.h"
 #include "cli_classify.h"
-#include "path_value_arg.h"
-#include "non_empty_value_arg.h"
+#include "cli_args.h"
 
 #include <string>
 #include <stdexcept>
@@ -29,52 +28,10 @@ namespace cli
 	class fs_update_cli
 	{
         private:
-		TCLAP::CmdLine cmd;
-		TCLAP::SwitchArg arg_switch_fw_slot;
-		TCLAP::SwitchArg arg_switch_app_slot;
-		TCLAP::SwitchArg arg_rollback_update;
-		TCLAP::SwitchArg arg_commit_update;
-		TCLAP::SwitchArg arg_urs;
-		TCLAP::SwitchArg arg_debug;
-		TCLAP::SwitchArg get_fw_version;
-		TCLAP::SwitchArg get_app_version;
-		TCLAP::SwitchArg get_version;
-		TCLAP::SwitchArg arg_help;
-		TCLAP::SwitchArg notice_update_available;
-		TCLAP::SwitchArg apply_update;
-		TCLAP::SwitchArg download_progress;
-		TCLAP::SwitchArg download_update;
-		TCLAP::SwitchArg install_update;
-		/* Unified install (v2): --install_update [<path>]. With a path the
-		 * positional install_path selects a local install via the service
-		 * (InstallLocal, blocking); without it, --install_update advances an
-		 * ADU-staged download (StartInstall). install_path is an optional
-		 * global positional — the bare-path rule (parse_input) rejects it unless
-		 * --install_update is also set. PathValueArg additionally declines
-		 * option-like tokens, so an unknown flag stays an unknown flag instead
-		 * of being absorbed here. */
-		cli::PathValueArg install_path;
-		/* Async install opt-in: kick InstallLocal and return immediately
-		 * with the session_id instead of blocking on the terminal verdict. */
-		TCLAP::SwitchArg arg_detach;
-		/* Serial-console log sink modifier (orthogonal, like --debug). */
-		TCLAP::SwitchArg arg_serial;
-		/* One-shot query of InstallProgress / InstallState, mirrors
-		 * --download_progress in shape and exit-code semantics. */
-		TCLAP::SwitchArg install_progress;
-		/* Request best-effort cancel of the install for a given
-		 * session_id. The actual outcome is observable via
-		 * --install_progress and the InstallCompleted signal. Named
-		 * with the _arg suffix to disambiguate from the
-		 * fus_dbus::cancel_install() free function. */
-		/* NonEmptyValueArg, not ValueArg: an empty value would otherwise keep
-		 * the default and act on it — cancelling session 0, or answering for
-		 * slot 'a' — while looking like a deliberate request. */
-		cli::NonEmptyValueArg<uint32_t> cancel_install_arg;
-		cli::NonEmptyValueArg<char> set_app_state_bad;
-		cli::NonEmptyValueArg<char> is_app_state_bad;
-		cli::NonEmptyValueArg<char> set_fw_state_bad;
-		cli::NonEmptyValueArg<char> is_fw_state_bad;
+		/* The whole argument surface. Separated so it can be exercised without
+		 * a board: constructing this class opens the boot environment, so any
+		 * test of parsing or dispatch selection would need hardware otherwise. */
+		cli::CliArgs args;
 
 		std::unique_ptr<fs::FSUpdate> update_handler;
 		std::shared_ptr<SynchronizedSerial> serial_cout;
@@ -189,6 +146,9 @@ namespace cli
 		 * @throw ErrorNotSystemVariable
 		 */
 		void parse_input(int argc, const char ** argv);
+
+		/* Run the action the parse layer selected. */
+		void dispatch(cli::Command command);
 		int reboot() const;
 
         public:

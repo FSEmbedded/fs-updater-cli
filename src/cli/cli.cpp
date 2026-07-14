@@ -47,156 +47,8 @@ constexpr uint32_t application_update_state = 1;
 using std::string;
 
 cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
-		cmd("F&S Update Framework CLI", ' ', FUS_CLI_PROJECT_VERSION, false),
-		arg_switch_fw_slot("",
-				"switch_fw_slot",
-				"Switch from active firmware slot to the inactive "\
-				"(apply update required)"
-				),
-		arg_switch_app_slot("",
-				 "switch_app_slot",
-				 "Switch from active to the inactive application slot. "\
-				 "(apply update required)"
-				 ),
-		arg_rollback_update("",
-				 "rollback_update",
-				 "Rollback of the last installed update "\
-				 "(must be started before commit update)"
-				 ),
-		arg_commit_update("",
-				  "commit_update",
-				  "Confirm success of installation, rollback, switch or fail. "\
-				  "Run after boot and waits for application response"
-				  ),
-		arg_urs("",
-			"update_reboot_state",
-			"Get state of update"
-			),
-		arg_debug("",
-			  "debug",
-			  "Enable debug output"
-			  ),
-		get_fw_version("",
-			       "firmware_version",
-			       "Show current firmware version"
-			       ),
-		get_app_version("",
-				"application_version",
-				"Show current application version"
-				),
-		get_version("",
-			    "version",
-			    "Print cli version"
-			    ),
-		arg_help("h",
-			 "help",
-			 "Display usage information and exit"
-			 ),
-		notice_update_available("",
-					"is_update_available",
-					"Check update available on the server"
-					),
-		apply_update("",
-			     "apply_update",
-			     "Apply update installation, rollback or switch to other slot. "\
-				 "Reboot to the updated slot."
-			     ),
-		download_progress("",
-				  "download_progress",
-				  "Show the progress of the current update"
-				  ),
-		download_update("",
-					    "download_update",
-					    "Download the available update"
-					    ),
-		install_update("",
-					   "install_update",
-					   "Install an update: with a path, install that local bundle "
-					   "via the service (blocking); without, advance an ADU-staged "
-					   "download"
-					   ),
-		install_path("install_path",
-					 "Optional local update bundle path for --install_update",
-					 false,
-					 "",
-					 "absolute filesystem path",
-					 this->cmd
-					 ),
-		arg_detach("",
-				   "detach",
-				   "With --install_update <path>: start the install and return "
-				   "immediately with the session id instead of blocking"
-				   ),
-		arg_serial("",
-				   "serial",
-				   "Send log output to the serial console (modifier, like --debug)"
-				   ),
-		install_progress("",
-						 "install_progress",
-						 "Show the progress of the current install"
-						 ),
-		cancel_install_arg("",
-						   "cancel_install",
-						   "Best-effort cancel of the install for the given session_id",
-						   false,
-						   0,
-						   "session_id (uint32)"
-						   ),
-		set_app_state_bad("",
-			    "set_app_state_bad",
-				"Mark application A or B bad",
-				false,
-			    'c',
-				"accepted states: A or B"
-			    ),
-		is_app_state_bad("",
-			    "is_app_state_bad",
-				"Check application state for bad",
-				false,
-			    'a',
-				"accepted states: A or B"
-			    ),
-		set_fw_state_bad("",
-			    "set_fw_state_bad",
-				"Mark firmware A or B bad",
-				false,
-			    'c',
-				"accepted states: A or B"
-			    ),
-		is_fw_state_bad("",
-			    "is_fw_state_bad",
-				"Check firmware state for bad",
-				false,
-			    'a',
-				"accepted states: A or B"
-			    ),
 		return_code(0)
 {
-    this->cmd.add(arg_rollback_update);
-    this->cmd.add(arg_switch_fw_slot);
-    this->cmd.add(arg_switch_app_slot);
-    this->cmd.add(arg_commit_update);
-    this->cmd.add(arg_urs);
-    this->cmd.add(arg_debug);
-    this->cmd.add(get_fw_version);
-    this->cmd.add(get_app_version);
-    this->cmd.add(get_version);
-    this->cmd.add(arg_help);
-    this->cmd.add(apply_update);
-    this->cmd.add(install_update);
-    this->cmd.add(install_path);
-    this->cmd.add(arg_detach);
-    this->cmd.add(arg_serial);
-    this->cmd.add(install_progress);
-    this->cmd.add(cancel_install_arg);
-    this->cmd.add(download_progress);
-    this->cmd.add(download_update);
-    this->cmd.add(notice_update_available);
-    this->cmd.add(set_app_state_bad);
-    this->cmd.add(is_app_state_bad);
-    this->cmd.add(set_fw_state_bad);
-    this->cmd.add(is_fw_state_bad);
-
     this->parse_input(argc, argv);
 }
 
@@ -210,8 +62,8 @@ cli::fs_update_cli::~fs_update_cli()
 
 void cli::fs_update_cli::setup_logging()
 {
-    const bool use_serial = this->arg_serial.isSet();
-    const auto level = this->arg_debug.isSet()
+    const bool use_serial = this->args.serial();
+    const auto level = this->args.debug()
         ? logger::logLevel::DEBUG
         : logger::logLevel::WARNING;
 
@@ -652,11 +504,10 @@ void cli::fs_update_cli::handle_print_version()
 
 void cli::fs_update_cli::handle_print_help()
 {
-    /* Reuse TCLAP's own usage formatter so --help prints exactly the USAGE
-     * block already shown on a parse error (helpAndVersion is disabled on the
-     * CmdLine, so the built-in --help switch is not registered). */
-    TCLAP::StdOutput output;
-    output.usage(this->cmd);
+    /* The parser's own formatter, so --help prints exactly the USAGE block a
+     * parse error shows. Rendered to a string first and written here, which is
+     * what lets tests/golden/help.txt pin it without a board. */
+    cli_io::write_stdout(this->args.usage_text());
     this->return_code = 0;
 }
 
@@ -940,7 +791,7 @@ void cli::fs_update_cli::handle_install_progress()
 void cli::fs_update_cli::handle_cancel_install()
 {
 #if BUILD_DBUS_SUPPORT
-    const uint32_t sid = this->cancel_install_arg.getValue();
+    const uint32_t sid = this->args.cancel_session_id();
     if (sid == 0) {
         cli_io::write_stderr("--cancel_install requires a non-zero session_id\n");
         this->return_code =
@@ -1284,22 +1135,22 @@ void cli::fs_update_cli::handle_apply_update()
 
 void cli::fs_update_cli::handle_set_app_state_bad()
 {
-    this->set_application_state_bad(this->set_app_state_bad.getValue());
+    this->set_application_state_bad(this->args.app_state_to_set());
 }
 
 void cli::fs_update_cli::handle_is_app_state_bad()
 {
-    this->is_application_state_bad(this->is_app_state_bad.getValue());
+    this->is_application_state_bad(this->args.app_state_to_query());
 }
 
 void cli::fs_update_cli::handle_set_fw_state_bad()
 {
-    this->set_firmware_state_bad(this->set_fw_state_bad.getValue());
+    this->set_firmware_state_bad(this->args.fw_state_to_set());
 }
 
 void cli::fs_update_cli::handle_is_fw_state_bad()
 {
-    this->is_firmware_state_bad(this->is_fw_state_bad.getValue());
+    this->is_firmware_state_bad(this->args.fw_state_to_query());
 }
 
 // ---------------------------------------------------------------------------
@@ -1308,113 +1159,93 @@ void cli::fs_update_cli::handle_is_fw_state_bad()
 
 void cli::fs_update_cli::parse_input(int argc, const char **argv)
 {
-    this->cmd.parse(argc, argv);
+    const cli::ParseResult parsed = this->args.parse(argc, argv);
 
-    /* --help short-circuits before setup_logging(): printing usage must not
-     * construct the updater (FSUpdate→UBoot) or touch hardware. Placed after
-     * parse() so an unknown argument still raises the usual PARSE ERROR —
-     * which only holds because PathValueArg declines option-like tokens; the
-     * stock positional would absorb them and turn a typo into a bare-path
-     * rejection. */
-    if (this->arg_help.isSet())
+    /* Everything up to setup_logging() must stay hardware-free: printing usage
+     * or rejecting a bad argument must not construct the updater (FSUpdate ->
+     * UBoot), which fails on a board whose boot environment is unreadable. */
+    switch (parsed.kind)
     {
+    case cli::ParseResult::Kind::parse_error:
+        /* The parser's own wording, on the streams it used: banner to stderr,
+         * usage to stdout. */
+        cli_io::write_stderr(this->args.error_banner());
+        cli_io::write_stdout(this->args.usage_text());
+        this->return_code = parsed.rc;
+        return;
+
+    case cli::ParseResult::Kind::help:
         this->handle_print_help();
         return;
+
+    case cli::ParseResult::Kind::guard_error:
+        cli_io::write_stderr(parsed.install_outcome.error + "\n");
+        this->return_code = parsed.rc;
+        return;
+
+    case cli::ParseResult::Kind::ok:
+    case cli::ParseResult::Kind::version_only:
+    case cli::ParseResult::Kind::combo_error:
+        break;
     }
 
-    /* Install-surface pre-check via the HW-free classifier: the bare-path
-     * rule (the global install positional is only valid with
-     * --install_update) and the --detach guard run BEFORE setup_logging
-     * constructs the FSUpdate/HW path. Mutual exclusion across all actions
-     * stays with the dispatch loop below. */
-    {
-        cli::RawFlags rf;
-        rf.install_update_set = this->install_update.isSet();
-        rf.install_path_set   = this->install_path.isSet();
-        rf.install_path       = this->install_path.isSet()
-                                  ? this->install_path.getValue()
-                                  : std::string{};
-        rf.detach = this->arg_detach.isSet();
+    this->install_outcome = parsed.install_outcome;
 
-        const cli::ParseOutcome po = cli::classify(rf);
-        if (po.kind != cli::ParseOutcome::Kind::ok)
-        {
-            cli_io::write_stderr(po.error + "\n");
-            /* An unusable path is a file-not-found (61), not an argument-combo
-             * error (65) — script callers key on 61 for a bad bundle path. */
-            this->return_code = (po.kind == cli::ParseOutcome::Kind::bad_path)
-                ? static_cast<int>(UPDATER_CLI_VALIDATION::UPDATE_FILE_NOT_FOUND)
-                : static_cast<int>(UPDATER_CLI_VALIDATION::INCOMPATIBLE_ARG_COMBO);
-            return;
-        }
-        this->install_outcome = po;
-    }
-
+    /* The verdict is known before this point, but acting on it early would move
+     * the no-argument and bad-combination paths ahead of updater construction
+     * and change what they return on a board that cannot construct it. That is
+     * a separate question from extracting the seam. */
     this->setup_logging();
 
-    /* Dispatch table: maps each action flag to its handler.
-     * --debug and --serial are modifiers, and --detach only qualifies a local
-     * install — none of them are actions. All action flags below are mutually
-     * exclusive.
-     */
-    struct ActionEntry {
-        TCLAP::Arg* arg;
-        void (fs_update_cli::*handler)();
-    };
-
-    const std::array<ActionEntry, 19> actions = {{
-        {&arg_commit_update,       &fs_update_cli::commit_update},
-        {&arg_urs,                 &fs_update_cli::print_update_reboot_state},
-        {&get_app_version,         &fs_update_cli::print_current_application_version},
-        {&get_fw_version,          &fs_update_cli::print_current_firmware_version},
-        {&get_version,             &fs_update_cli::handle_print_version},
-        {&notice_update_available, &fs_update_cli::handle_is_update_available},
-        {&download_update,         &fs_update_cli::handle_download_update},
-        {&download_progress,       &fs_update_cli::handle_download_progress},
-        {&install_update,          &fs_update_cli::handle_install_update},
-        {&install_progress,        &fs_update_cli::handle_install_progress},
-        {&cancel_install_arg,      &fs_update_cli::handle_cancel_install},
-        {&apply_update,            &fs_update_cli::handle_apply_update},
-        {&arg_rollback_update,     &fs_update_cli::rollback_update},
-        {&arg_switch_fw_slot,      &fs_update_cli::switch_firmware_slot},
-        {&arg_switch_app_slot,     &fs_update_cli::switch_application_slot},
-        {&set_app_state_bad,       &fs_update_cli::handle_set_app_state_bad},
-        {&is_app_state_bad,        &fs_update_cli::handle_is_app_state_bad},
-        {&set_fw_state_bad,        &fs_update_cli::handle_set_fw_state_bad},
-        {&is_fw_state_bad,         &fs_update_cli::handle_is_fw_state_bad},
-    }};
-
-    void (fs_update_cli::*matched_handler)() = nullptr;
-    std::size_t action_count = 0;
-
-    for (const auto& entry : actions)
+    switch (parsed.kind)
     {
-        if (entry.arg->isSet())
-        {
-            matched_handler = entry.handler;
-            ++action_count;
-        }
-    }
-
-    switch (cli::dispatch_verdict(action_count))
-    {
-    case cli::DispatchVerdict::version_only:
+    case cli::ParseResult::Kind::version_only:
         this->handle_print_version();
         cli_io::write_stdout("No argument given, nothing done. Use --help to get all commands.\n");
         break;
-    case cli::DispatchVerdict::run:
-        (this->*matched_handler)();
-        break;
-    case cli::DispatchVerdict::combo_error:
+
+    case cli::ParseResult::Kind::combo_error:
         cli_io::write_stderr("Wrong combination or set of variables. Please refer --help or manual\n");
-        this->return_code = static_cast<int>(UPDATER_CLI_VALIDATION::INCOMPATIBLE_ARG_COMBO);
+        this->return_code = parsed.rc;
         break;
+
+    case cli::ParseResult::Kind::ok:
+        this->dispatch(parsed.command);
+        break;
+
+    case cli::ParseResult::Kind::parse_error:
+    case cli::ParseResult::Kind::help:
+    case cli::ParseResult::Kind::guard_error:
+        break; /* returned above */
     }
 }
 
-// ---------------------------------------------------------------------------
-// Utilities
-// ---------------------------------------------------------------------------
+void cli::fs_update_cli::dispatch(cli::Command command)
+{
+    switch (command)
+    {
+    case cli::Command::commit_update:       this->commit_update(); break;
+    case cli::Command::update_reboot_state: this->print_update_reboot_state(); break;
+    case cli::Command::application_version: this->print_current_application_version(); break;
+    case cli::Command::firmware_version:    this->print_current_firmware_version(); break;
+    case cli::Command::print_version:       this->handle_print_version(); break;
+    case cli::Command::is_update_available: this->handle_is_update_available(); break;
+    case cli::Command::download_update:     this->handle_download_update(); break;
+    case cli::Command::download_progress:   this->handle_download_progress(); break;
+    case cli::Command::install_update:      this->handle_install_update(); break;
+    case cli::Command::install_progress:    this->handle_install_progress(); break;
+    case cli::Command::cancel_install:      this->handle_cancel_install(); break;
+    case cli::Command::apply_update:        this->handle_apply_update(); break;
+    case cli::Command::rollback_update:     this->rollback_update(); break;
+    case cli::Command::switch_fw_slot:      this->switch_firmware_slot(); break;
+    case cli::Command::switch_app_slot:     this->switch_application_slot(); break;
+    case cli::Command::set_app_state_bad:   this->handle_set_app_state_bad(); break;
+    case cli::Command::is_app_state_bad:    this->handle_is_app_state_bad(); break;
+    case cli::Command::set_fw_state_bad:    this->handle_set_fw_state_bad(); break;
+    case cli::Command::is_fw_state_bad:     this->handle_is_fw_state_bad(); break;
+    case cli::Command::none:                break; /* not reachable: Kind::ok implies an action */
+    }
+}
 
 int cli::fs_update_cli::getReturnCode() const
 {

@@ -15,8 +15,10 @@
 #              guard_error   a surface guard rejected it after a clean parse
 #   command  the action selected, or - when none
 #   actions  action-flag count feeding the mutual-exclusion verdict
-#   rc       process exit code. MEASURED against the real binary on target
-#            hardware unless marked (design) — see "Not measured" below.
+#   rc       the exit code the parse layer settles on its own, measured against
+#            a real binary. "--" wherever the answer is not the parse layer's:
+#            for a dispatchable command the handler owns the outcome, so the
+#            code there says nothing about parsing.
 #   verdict  intended  the behaviour is wanted and must survive the cut
 #            tolerated the behaviour is an accident of the current parser;
 #                      the cut may change it, but only deliberately
@@ -57,15 +59,15 @@ x --install_update             | ok           | install_update | 1 | -- | tolera
 #     falls out of unsigned extraction. NOT run on hardware — it makes a real
 #     cancel call.
 --is_app_state_bad toolong     | parse_error  | -              | 0 | 1  | intended
---is_app_state_bad Z           | ok           | is_app_state_bad | 1 | 53 | tolerated
+--is_app_state_bad Z           | ok           | is_app_state_bad | 1 | -- | tolerated
 #   ^ no constraint is attached; "accepted states: A or B" is help text only, so
 #     the value reaches the handler and is rejected there.
---is_app_state_bad A           | ok           | is_app_state_bad | 1 | 0 | intended
+--is_app_state_bad A           | ok           | is_app_state_bad | 1 | -- | intended
 
 # --- Dispatch counting -------------------------------------------------------
 --serial                       | version_only | -              | 0 | 0  | intended
 --debug --serial               | version_only | -              | 0 | 0  | intended
---apply_update --commit_update | parse_error  | -              | 2 | 65 | intended
+--apply_update --commit_update | combo_error  | -              | 2 | 65 | intended
 #   ^ two actions: rejected by the mutual-exclusion verdict, no handler runs.
 
 # --- Install surface guards --------------------------------------------------
@@ -75,8 +77,8 @@ x                              | guard_error  | -              | 0 | 65 | intend
 
 # --- Baseline: one entry per live action flag --------------------------------
 # rc is (design) for anything that mutates state — see "Not measured".
---version                      | ok | print_version        | 1 | 0  | intended
---firmware_version             | ok | firmware_version     | 1 | 0  | intended
+--version                      | ok | print_version        | 1 | -- | intended
+--firmware_version             | ok | firmware_version     | 1 | -- | intended
 --application_version          | ok | application_version  | 1 | -- | intended
 --update_reboot_state          | ok | update_reboot_state  | 1 | -- | intended
 --is_update_available          | ok | is_update_available  | 1 | -- | intended

@@ -78,6 +78,7 @@ set(SOURCES
     src/main.cpp
     src/cli/cli.cpp
     src/cli/cli_classify.cpp
+    src/cli/cli_args.cpp
     src/cli/SynchronizedSerial.cpp
     src/logger/LoggerSinkSerial.cpp
 )
