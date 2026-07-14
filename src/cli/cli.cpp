@@ -119,7 +119,8 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
 					 "Optional local update bundle path for --install_update",
 					 false,
 					 "",
-					 "absolute filesystem path"
+					 "absolute filesystem path",
+					 this->cmd
 					 ),
 		arg_detach("",
 				   "detach",
@@ -1311,7 +1312,10 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
 
     /* --help short-circuits before setup_logging(): printing usage must not
      * construct the updater (FSUpdate→UBoot) or touch hardware. Placed after
-     * parse() so unknown arguments still raise the usual PARSE ERROR. */
+     * parse() so an unknown argument still raises the usual PARSE ERROR —
+     * which only holds because PathValueArg declines option-like tokens; the
+     * stock positional would absorb them and turn a typo into a bare-path
+     * rejection. */
     if (this->arg_help.isSet())
     {
         this->handle_print_help();

@@ -9,6 +9,7 @@
 #include "SynchronizedSerial.h"
 #include "../logger/LoggerSinkSerial.h"
 #include "cli_classify.h"
+#include "path_value_arg.h"
 
 #include <string>
 #include <stdexcept>
@@ -48,8 +49,10 @@ namespace cli
 		 * (InstallLocal, blocking); without it, --install_update advances an
 		 * ADU-staged download (StartInstall). install_path is an optional
 		 * global positional — the bare-path rule (parse_input) rejects it unless
-		 * --install_update is also set. */
-		TCLAP::UnlabeledValueArg<std::string> install_path;
+		 * --install_update is also set. PathValueArg additionally declines
+		 * option-like tokens, so an unknown flag stays an unknown flag instead
+		 * of being absorbed here. */
+		cli::PathValueArg install_path;
 		/* Async install opt-in: kick InstallLocal and return immediately
 		 * with the session_id instead of blocking on the terminal verdict. */
 		TCLAP::SwitchArg arg_detach;
