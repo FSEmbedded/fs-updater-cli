@@ -1,0 +1,109 @@
+# argv corpus — the behavioural pin for the parser.
+#
+# Every line is one invocation and the outcome it must produce. The point of the
+# file is the eventual parser replacement: the replacement is correct when it
+# reproduces this table, and every disagreement is a decision someone has to make
+# on purpose rather than discover in the field.
+#
+# Format:  argv | kind | command | actions | rc | verdict
+#
+#   kind     what the parse layer concluded:
+#              ok            an action is dispatchable
+#              help          usage requested
+#              version_only  no action given
+#              parse_error   the parser itself rejected the input
+#              guard_error   a surface guard rejected it after a clean parse
+#   command  the action selected, or - when none
+#   actions  action-flag count feeding the mutual-exclusion verdict
+#   rc       process exit code. MEASURED against the real binary on target
+#            hardware unless marked (design) — see "Not measured" below.
+#   verdict  intended  the behaviour is wanted and must survive the cut
+#            tolerated the behaviour is an accident of the current parser;
+#                      the cut may change it, but only deliberately
+#
+# (= main + the unknown-flag fix + the empty-value fix).
+
+# --- Unknown input -----------------------------------------------------------
+# Absorbing an unknown flag into the install positional was a live defect; the
+# parser reports these itself again.
+--definitely-not-a-real-flag   | parse_error  | -              | 0 | 1  | intended
+--commit_update --bogus        | parse_error  | -              | 0 | 1  | intended
+-ab                            | parse_error  | -              | 0 | 1  | intended
+
+# --- Divergence surface vs. a getopt-style parser -----------------------------
+# These pass today only because this parser matches long names exactly and takes
+# its value from the next token. A getopt_long port accepts all three by default
+# and cannot be told not to, so each one is a decision at the cut, not a bug.
+--install_up x                 | parse_error  | -              | 0 | 1  | tolerated
+--cancel_install=5             | parse_error  | -              | 0 | 1  | tolerated
+# Operand-before-option ordering is accepted here; getopt_long permutes unless
+# POSIXLY_CORRECT is set, which changes which token is the operand.
+x --install_update             | ok           | install_update | 1 | -- | tolerated
+
+# --- Value handling ----------------------------------------------------------
+# An empty value used to keep the argument's default and act on it. Rejected now.
+--is_app_state_bad ""          | parse_error  | -              | 0 | 1  | intended
+--cancel_install ""            | parse_error  | -              | 0 | 1  | intended
+--cancel_install               | parse_error  | -              | 0 | 1  | intended
+--is_app_state_bad             | parse_error  | -              | 0 | 1  | intended
+# Type conversion is the standard library's, not the parser's — a hand-written
+# port inherits none of it and must reimplement each of these on purpose.
+--cancel_install abc           | parse_error  | -              | 0 | 1  | intended
+--cancel_install 5x            | parse_error  | -              | 0 | 1  | intended
+--cancel_install 0x10          | parse_error  | -              | 0 | 1  | tolerated
+--cancel_install 99999999999   | parse_error  | -              | 0 | 1  | intended
+--cancel_install -1            | ok           | cancel_install | 1 | -- | tolerated
+#   ^ -1 converts to 4294967295 and reaches the handler. Nobody chose this; it
+#     falls out of unsigned extraction. NOT run on hardware — it makes a real
+#     cancel call.
+--is_app_state_bad toolong     | parse_error  | -              | 0 | 1  | intended
+--is_app_state_bad Z           | ok           | is_app_state_bad | 1 | 53 | tolerated
+#   ^ no constraint is attached; "accepted states: A or B" is help text only, so
+#     the value reaches the handler and is rejected there.
+--is_app_state_bad A           | ok           | is_app_state_bad | 1 | 0 | intended
+
+# --- Dispatch counting -------------------------------------------------------
+--serial                       | version_only | -              | 0 | 0  | intended
+--debug --serial               | version_only | -              | 0 | 0  | intended
+--apply_update --commit_update | parse_error  | -              | 2 | 65 | intended
+#   ^ two actions: rejected by the mutual-exclusion verdict, no handler runs.
+
+# --- Install surface guards --------------------------------------------------
+x                              | guard_error  | -              | 0 | 65 | intended
+--detach                       | guard_error  | -              | 0 | 65 | intended
+--install_update ""            | guard_error  | -              | 0 | 61 | intended
+
+# --- Baseline: one entry per live action flag --------------------------------
+# rc is (design) for anything that mutates state — see "Not measured".
+--version                      | ok | print_version        | 1 | 0  | intended
+--firmware_version             | ok | firmware_version     | 1 | 0  | intended
+--application_version          | ok | application_version  | 1 | -- | intended
+--update_reboot_state          | ok | update_reboot_state  | 1 | -- | intended
+--is_update_available          | ok | is_update_available  | 1 | -- | intended
+--download_progress            | ok | download_progress    | 1 | -- | intended
+--install_progress             | ok | install_progress     | 1 | -- | intended
+--download_update              | ok | download_update      | 1 | -- | intended
+--install_update               | ok | install_update       | 1 | -- | intended
+--apply_update                 | ok | apply_update         | 1 | -- | intended
+--commit_update                | ok | commit_update        | 1 | -- | intended
+--rollback_update              | ok | rollback_update      | 1 | -- | intended
+--switch_fw_slot               | ok | switch_fw_slot       | 1 | -- | intended
+--switch_app_slot              | ok | switch_app_slot      | 1 | -- | intended
+--set_app_state_bad A          | ok | set_app_state_bad    | 1 | -- | intended
+--set_fw_state_bad A           | ok | set_fw_state_bad     | 1 | -- | intended
+--is_fw_state_bad A            | ok | is_fw_state_bad      | 1 | -- | intended
+--cancel_install 5             | ok | cancel_install       | 1 | -- | intended
+-h                             | help | -                  | 0 | 0  | intended
+--help                         | help | -                  | 0 | 0  | intended
+
+# --- Not measured ------------------------------------------------------------
+# rc is "--" wherever the outcome depends on hardware state or would mutate it.
+# Those rows pin the parse layer only, which is all the parser owes; the exit
+# code there belongs to the handler.
+#
+# Two rows above were run on hardware before this boundary was drawn, and should
+# not have been: bare `--install_update` (cloud-advance; returned 48 "installation
+# finished" with nothing staged) and `--cancel_install -1` (a real cancel call).
+# Neither changed board state — verified idle, update=0000 — but neither is a
+# read-only probe. Do not re-run this corpus against a live board; the native
+# test is the way it is meant to be exercised.

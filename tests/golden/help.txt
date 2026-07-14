@@ -1,0 +1,103 @@
+
+USAGE: 
+
+   fs-updater  [-h] [--application_version] [--apply_update]
+               [--commit_update] [--debug] [--detach] [--download_progress]
+               [--download_update] [--firmware_version]
+               [--install_progress] [--install_update]
+               [--is_update_available] [--rollback_update] [--serial]
+               [--switch_app_slot] [--switch_fw_slot]
+               [--update_reboot_state] [--version] [--cancel_install
+               <session_id (uint32)>] [--is_app_state_bad <accepted states:
+               A or B>] [--is_fw_state_bad <accepted states: A or B>]
+               [--set_app_state_bad <accepted states: A or B>]
+               [--set_fw_state_bad <accepted states: A or B>]
+               [install_path]
+
+
+Where: 
+
+   --rollback_update
+     Rollback of the last installed update (must be started before commit
+     update)
+
+   --switch_fw_slot
+     Switch from active firmware slot to the inactive (apply update
+     required)
+
+   --switch_app_slot
+     Switch from active to the inactive application slot. (apply update
+     required)
+
+   --commit_update
+     Confirm success of installation, rollback, switch or fail. Run after
+     boot and waits for application response
+
+   --update_reboot_state
+     Get state of update
+
+   --debug
+     Enable debug output
+
+   --firmware_version
+     Show current firmware version
+
+   --application_version
+     Show current application version
+
+   --version
+     Print cli version
+
+   -h,  --help
+     Display usage information and exit
+
+   --apply_update
+     Apply update installation, rollback or switch to other slot. Reboot to
+     the updated slot.
+
+   --install_update
+     Install an update: with a path, install that local bundle via the
+     service (blocking); without, advance an ADU-staged download
+
+   --detach
+     With --install_update <path>: start the install and return immediately
+     with the session id instead of blocking
+
+   --serial
+     Send log output to the serial console (modifier, like --debug)
+
+   --install_progress
+     Show the progress of the current install
+
+   --cancel_install <session_id (uint32)>
+     Best-effort cancel of the install for the given session_id
+
+   --download_progress
+     Show the progress of the current update
+
+   --download_update
+     Download the available update
+
+   --is_update_available
+     Check update available on the server
+
+   --set_app_state_bad <accepted states: A or B>
+     Mark application A or B bad
+
+   --is_app_state_bad <accepted states: A or B>
+     Check application state for bad
+
+   --set_fw_state_bad <accepted states: A or B>
+     Mark firmware A or B bad
+
+   --is_fw_state_bad <accepted states: A or B>
+     Check firmware state for bad
+
+   --,  --ignore_rest
+     Ignores the rest of the labeled arguments following this flag.
+
+   install_path <absolute filesystem path>
+     Optional local update bundle path for --install_update
+
+   F&S Update Framework CLI
+
