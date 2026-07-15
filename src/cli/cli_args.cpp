@@ -183,6 +183,7 @@ ParseResult CliArgs::parse(int argc, const char **argv)
 	std::size_t distinct_actions = 0;
 	Command matched_command = Command::none;
 	bool has_operand = false;
+	bool help_requested = false;
 
 	for (;;)
 	{
@@ -208,6 +209,17 @@ ParseResult CliArgs::parse(int argc, const char **argv)
 			 * either: getopt_long returns -1 at the "--" instead of yielding
 			 * what follows, so the post-loop scan collects those. */
 			const std::string token = (raw_token != nullptr) ? raw_token : "";
+
+			/* A lone "-" is rejected as a path; only this branch rejects it,
+			 * the post-loop scan accepts dash-prefixed operands. */
+			if (token == "-")
+			{
+				m_banner = banner_for(token, "unrecognized option");
+				result.kind = ParseResult::Kind::parse_error;
+				result.rc = 1;
+				return result;
+			}
+
 			if (has_operand)
 			{
 				m_banner = banner_for(token, "an install path may be given at most once");
@@ -265,8 +277,12 @@ ParseResult CliArgs::parse(int argc, const char **argv)
 
 		if (spec.kind == ArgKind::help)
 		{
-			result.kind = ParseResult::Kind::help;
-			return result;
+			/* Do not return yet: the previous parser scanned the whole line
+			 * before honouring --help, so an error anywhere else in argv
+			 * (unknown option, missing value, a bundled "-hx") still wins.
+			 * Checked once after the loop, ahead of classify(). */
+			help_requested = true;
+			continue;
 		}
 
 		if (spec.kind == ArgKind::modifier)
@@ -277,7 +293,18 @@ ParseResult CliArgs::parse(int argc, const char **argv)
 			continue;
 		}
 
-		/* action_switch or action_value from here. */
+		/* action_switch or action_value from here. Repeating the same action
+		 * is rejected outright (found during review, not a default
+		 * acceptance): the previous parser's per-Arg "already set" tracking
+		 * did the same, unlike the modifiers above. */
+		if (seen[static_cast<std::size_t>(index)])
+		{
+			m_banner = banner_for(raw_token != nullptr ? raw_token : spec.name, "already given, must not repeat");
+			result.kind = ParseResult::Kind::parse_error;
+			result.rc = 1;
+			return result;
+		}
+
 		if (spec.kind == ArgKind::action_value)
 		{
 			/* An empty value ("--flag ''" or "--flag=") is rejected. */
@@ -326,11 +353,8 @@ ParseResult CliArgs::parse(int argc, const char **argv)
 
 		if (spec.command == Command::install_update) m_install_update_set = true;
 
-		if (!seen[static_cast<std::size_t>(index)])
-		{
-			seen[static_cast<std::size_t>(index)] = true;
-			++distinct_actions;
-		}
+		seen[static_cast<std::size_t>(index)] = true;
+		++distinct_actions;
 		matched_command = spec.command;
 	}
 
@@ -353,6 +377,14 @@ ParseResult CliArgs::parse(int argc, const char **argv)
 		has_operand = true;
 		m_install_path_set = true;
 		m_install_path = token;
+	}
+
+	/* Full argv is now known error-free — honour a --help seen anywhere,
+	 * ahead of classify(), matching the previous parser's ordering. */
+	if (help_requested)
+	{
+		result.kind = ParseResult::Kind::help;
+		return result;
 	}
 
 	RawFlags flags;

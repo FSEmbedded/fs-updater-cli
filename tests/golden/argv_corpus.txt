@@ -87,6 +87,35 @@ x y                            | parse_error  | -              | 0 | 1  | intend
 #     the value reaches the handler and is rejected there.
 --is_app_state_bad A           | ok           | is_app_state_bad | 1 | -- | intended
 
+# --- Ordering: errors, help and repeats --------------------------------------
+# --help does not end the scan: the rest of argv is still read, and a later
+# error wins.
+--help --bogus                 | parse_error  | -                | 0 | 1  | intended
+# Order matters only in the other direction, and already worked correctly
+# before this fix (the error is hit before --help is ever reached) — pinned so
+# a future change cannot regress it silently.
+--bogus --help                 | parse_error  | -                | 0 | 1  | intended
+--help --cancel_install        | parse_error  | -                | 0 | 1  | intended
+# Bundled short option: getopt_long resolves 'h' first, then 'x' on the same
+# token — without the fix above, 'h' returned before 'x' was ever seen.
+-hx                            | parse_error  | -                | 0 | 1  | intended
+# An extra operand alongside --help is ignored: help is honoured before
+# classify(), which would reject a bare positional via the bare-path rule, runs.
+--help x                       | help         | -                | 0 | 0  | intended
+# A lone "-" is always a non-option to getopt_long, but the previous parser's
+# is_option_like("-") declined it as a path. Fixed: rejected as an
+# unrecognized argument again, before a literal "--".
+-                              | parse_error  | -                | 0 | 1  | intended
+# The same "-" is a legitimate operand once "--" has ended option parsing.
+--install_update -- -          | ok           | install_update   | 1 | -- | intended
+# Repeating a switch action used to silently dedup to one action instead of
+# erroring. Fixed: rejected, matching the previous parser's per-Arg
+# "already set" check.
+--commit_update --commit_update | parse_error | -                | 0 | 1  | intended
+# Repeating a value action used to silently keep only the last value with no
+# error at all — a session-swap footgun for --cancel_install. Fixed: rejected.
+--cancel_install 5 --cancel_install 6 | parse_error | -           | 0 | 1  | intended
+
 # --- Dispatch counting -------------------------------------------------------
 --serial                       | version_only | -              | 0 | 0  | intended
 --debug --serial               | version_only | -              | 0 | 0  | intended

@@ -69,11 +69,14 @@ namespace cli
 	};
 
 	/**
-	 * Owns one getopt_long parse. Independent instances are fully safe now —
-	 * unlike the previous parser, there is no process-global registration
-	 * state, so a second CliArgs is not a first the caller shares by accident.
-	 * parse() still resets its own state at entry, since a caller (tests) may
-	 * reuse one instance across several parses.
+	 * Owns one getopt_long parse. Unlike the previous parser, there is no
+	 * per-instance registration state, so a second CliArgs is not a first the
+	 * caller shares by accident — sequential reuse (tests parsing more than
+	 * once) is safe, since parse() resets its own state at entry. This does
+	 * NOT extend to concurrent or interleaved use: getopt_long itself drives
+	 * process-global state (optind/opterr), so two parse() calls racing on
+	 * different threads, or any other in-process getopt_long/getopt caller
+	 * active at the same time, are not safe.
 	 */
 	class CliArgs
 	{
