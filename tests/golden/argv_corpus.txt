@@ -21,9 +21,7 @@
 #            code there says nothing about parsing.
 #   verdict  intended  the behaviour is wanted and must survive the cut
 #            tolerated the behaviour is an accident of the current parser;
-#                      the cut may change it, but only deliberately
-#
-# (= main + the unknown-flag fix + the empty-value fix).
+#                      it may change, but only deliberately
 
 # --- Unknown input -----------------------------------------------------------
 # Absorbing an unknown flag into the install positional was a live defect; the
@@ -33,15 +31,37 @@
 -ab                            | parse_error  | -              | 0 | 1  | intended
 
 # --- Divergence surface vs. a getopt-style parser -----------------------------
-# These pass today only because this parser matches long names exactly and takes
-# its value from the next token. A getopt_long port accepts all three by default
-# and cannot be told not to, so each one is a decision at the cut, not a bug.
---install_up x                 | parse_error  | -              | 0 | 1  | tolerated
---cancel_install=5             | parse_error  | -              | 0 | 1  | tolerated
+# Abbreviations are rejected on purpose: exact_long_match() checks every
+# long-option match, including ones getopt_long itself would resolve
+# unambiguously.
+--install_up x                 | parse_error  | -              | 0 | 1  | intended
+# "--flag=value" is accepted for value-taking flags, the GNU convention.
+--cancel_install=5             | ok           | cancel_install | 1 | -- | intended
+# The "=value" acceptance above does not extend to switch/modifier flags —
+# they are declared no_argument in the option table, so getopt_long itself
+# rejects a "=value" suffix on them. No extra code; this falls out of the
+# table for free.
+--debug=x                      | parse_error  | -              | 0 | 1  | intended
+--install_update=/path         | parse_error  | -              | 0 | 1  | intended
+# The empty-value rule applies to the "=value" form too, not just
+# "--flag value".
+--cancel_install=              | parse_error  | -              | 0 | 1  | intended
+--is_app_state_bad=A           | ok           | is_app_state_bad | 1 | -- | intended
 # Operand-before-option ordering is accepted here; getopt_long permutes unless
-# POSIXLY_CORRECT is set, which changes which token is the operand.
+# POSIXLY_CORRECT is set, but this parser's optstring leading '-' returns
+# operands in argv order and is immune to the environment either way —
+# pinned by Operands.OrderingImmuneToPosixlyCorrect.
 x --install_update             | ok           | install_update | 1 | -- | tolerated
---debug --debug                | parse_error  | -              | 0 | 1  | tolerated
+# Repeating a modifier is accepted; only actions and help reject a repeat.
+--debug --debug                | version_only | -              | 0 | 0  | tolerated
+# A required-value option consumes the very next token unconditionally, even
+# one that looks like another flag — getopt_long does not special-case this.
+# The value then fails parse_u32 on its own merits (not digits-only).
+--cancel_install --debug       | parse_error  | -              | 0 | 1  | intended
+# A second operand has nowhere to go — the bare-path rule already limits the install
+# path to one positional; a second one is rejected outright rather than
+# silently discarded.
+x y                            | parse_error  | -              | 0 | 1  | intended
 
 # --- Value handling ----------------------------------------------------------
 # An empty value used to keep the argument's default and act on it. Rejected now.
@@ -53,12 +73,14 @@ x --install_update             | ok           | install_update | 1 | -- | tolera
 # port inherits none of it and must reimplement each of these on purpose.
 --cancel_install abc           | parse_error  | -              | 0 | 1  | intended
 --cancel_install 5x            | parse_error  | -              | 0 | 1  | intended
---cancel_install 0x10          | parse_error  | -              | 0 | 1  | tolerated
+# Decimal digits only, over the full token: "0x10" is rejected.
+--cancel_install 0x10          | parse_error  | -              | 0 | 1  | intended
 --cancel_install 99999999999   | parse_error  | -              | 0 | 1  | intended
---cancel_install -1            | ok           | cancel_install | 1 | -- | tolerated
-#   ^ -1 converts to 4294967295 and reaches the handler. Nobody chose this; it
-#     falls out of unsigned extraction. NOT run on hardware — it makes a real
-#     cancel call.
+# A fix, not a re-pin of the old behaviour: TCLAP's unsigned extraction
+# silently wrapped "-1" to 4294967295 and dispatched a real cancel call;
+# parse_u32 rejects any leading '-' outright, closing that
+# silent-wraparound footgun.
+--cancel_install -1            | parse_error  | -              | 0 | 1  | intended
 --is_app_state_bad toolong     | parse_error  | -              | 0 | 1  | intended
 --is_app_state_bad Z           | ok           | is_app_state_bad | 1 | -- | tolerated
 #   ^ no constraint is attached; "accepted states: A or B" is help text only, so
@@ -75,6 +97,12 @@ x --install_update             | ok           | install_update | 1 | -- | tolera
 x                              | guard_error  | -              | 0 | 65 | intended
 --detach                       | guard_error  | -              | 0 | 65 | intended
 --install_update ""            | guard_error  | -              | 0 | 61 | intended
+# "--" is the POSIX end of options: getopt_long returns -1 at it instead of
+# yielding further operands, so what follows is collected in a dedicated pass,
+# under the same single-operand limit. The bare-path rule still applies: a path with no
+# --install_update is rejected.
+-- x                           | guard_error  | -              | 0 | 65 | intended
+--install_update -- x          | ok           | install_update | 1 | -- | intended
 
 # --- Baseline: one entry per live action flag --------------------------------
 # rc is (design) for anything that mutates state — see "Not measured".

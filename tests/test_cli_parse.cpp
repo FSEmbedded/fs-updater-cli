@@ -12,6 +12,7 @@
 
 #include <gtest/gtest.h>
 
+#include <cstdlib>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -160,4 +161,79 @@ TEST(UsageText, MatchesTheGoldenByteForByte)
 	ASSERT_EQ(got.kind, cli::ParseResult::Kind::help);
 
 	EXPECT_EQ(parser().usage_text(), read_file(FSUP_GOLDEN_HELP));
+}
+
+/* getopt_long has no process-global registration state (unlike TCLAP, which
+ * threw on a second CliArgs construction). These use their own local
+ * instances rather than the shared parser() singleton, since the whole point
+ * is to show instances do not interfere with each other. */
+TEST(CliArgsLifecycle, TwoInstancesParseIndependently)
+{
+	cli::CliArgs a;
+	cli::CliArgs b;
+
+	const char *argv_a[] = {"fs-updater", "--debug"};
+	const char *argv_b[] = {"fs-updater", "--serial"};
+
+	const cli::ParseResult result_a = a.parse(2, argv_a);
+	const cli::ParseResult result_b = b.parse(2, argv_b);
+
+	EXPECT_EQ(result_a.kind, cli::ParseResult::Kind::version_only);
+	EXPECT_TRUE(a.debug());
+	EXPECT_FALSE(a.serial());
+
+	EXPECT_EQ(result_b.kind, cli::ParseResult::Kind::version_only);
+	EXPECT_FALSE(b.debug());
+	EXPECT_TRUE(b.serial());
+}
+
+/* parse() resets both its own member state and getopt's optind at entry, so a
+ * second parse on the same instance is not contaminated by the first — the
+ * property tests already rely on (ArgvCorpus shares one static instance
+ * across every row). */
+TEST(CliArgsLifecycle, RepeatedParseIsStateless)
+{
+	cli::CliArgs instance;
+
+	const char *argv_first[] = {"fs-updater", "--debug", "--serial"};
+	const cli::ParseResult first = instance.parse(3, argv_first);
+	EXPECT_EQ(first.kind, cli::ParseResult::Kind::version_only);
+	EXPECT_TRUE(instance.debug());
+	EXPECT_TRUE(instance.serial());
+
+	const char *argv_second[] = {"fs-updater", "--version"};
+	const cli::ParseResult second = instance.parse(2, argv_second);
+
+	EXPECT_FALSE(instance.debug());
+	EXPECT_FALSE(instance.serial());
+	EXPECT_EQ(second.kind, cli::ParseResult::Kind::ok);
+	EXPECT_EQ(second.command, cli::Command::print_version);
+}
+
+/* optstring's leading '-' (RETURN_IN_ORDER) is documented to take precedence
+ * over POSIXLY_CORRECT — this guarantees that a caller's
+ * environment cannot silently change which token is the operand. */
+TEST(Operands, OrderingImmuneToPosixlyCorrect)
+{
+	::setenv("POSIXLY_CORRECT", "1", 1);
+
+	cli::CliArgs instance;
+	const char *argv[] = {"fs-updater", "x", "--install_update"};
+	const cli::ParseResult result = instance.parse(3, argv);
+
+	::unsetenv("POSIXLY_CORRECT");
+
+	EXPECT_EQ(result.kind, cli::ParseResult::Kind::ok);
+	EXPECT_EQ(result.command, cli::Command::install_update);
+	EXPECT_EQ(result.action_count, 1u);
+}
+
+TEST(Operands, SecondOperandRejected)
+{
+	cli::CliArgs instance;
+	const char *argv[] = {"fs-updater", "x", "y"};
+	const cli::ParseResult result = instance.parse(3, argv);
+
+	EXPECT_EQ(result.kind, cli::ParseResult::Kind::parse_error);
+	EXPECT_EQ(result.rc, 1);
 }

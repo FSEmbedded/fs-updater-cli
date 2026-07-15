@@ -334,6 +334,27 @@ ParseResult CliArgs::parse(int argc, const char **argv)
 		matched_command = spec.command;
 	}
 
+	/* A literal "--" makes getopt_long return -1 immediately, regardless of
+	 * RETURN_IN_ORDER: it does not keep returning code 1 for what follows.
+	 * optind is left pointing at the first token after it, so any remaining
+	 * operands still need the same single-operand handling as the ones
+	 * getopt_long did return via code 1 above. */
+	for (int i = optind; i < argc; ++i)
+	{
+		const char *token_ptr = argv_copy[static_cast<std::size_t>(i)];
+		const std::string token = (token_ptr != nullptr) ? token_ptr : "";
+		if (has_operand)
+		{
+			m_banner = banner_for(token, "an install path may be given at most once");
+			result.kind = ParseResult::Kind::parse_error;
+			result.rc = 1;
+			return result;
+		}
+		has_operand = true;
+		m_install_path_set = true;
+		m_install_path = token;
+	}
+
 	RawFlags flags;
 	flags.install_update_set = m_install_update_set;
 	flags.install_path_set   = m_install_path_set;
@@ -377,23 +398,110 @@ ParseResult CliArgs::parse(int argc, const char **argv)
 	return result;
 }
 
-/* Placeholder shape pending the hand-pinned golden (B4.2) — table-driven so
- * option text has one source, but the exact byte layout is not yet the
- * contract; tests/golden/help.txt is rewritten by hand once this settles. */
+namespace
+{
+	/* One bracketed synopsis token per option, in table order — the same
+	 * source usage_text()'s "Where:" block and help.txt both read from, so
+	 * the three cannot drift apart. */
+	std::string synopsis_token(const OptionSpec &spec)
+	{
+		if (spec.kind == ArgKind::help) return "[-h]";
+
+		std::string tok = "[--";
+		tok += spec.name;
+		if (spec.value_name != nullptr)
+		{
+			tok += " <";
+			tok += spec.value_name;
+			tok += ">";
+		}
+		tok += "]";
+		return tok;
+	}
+
+	/* Plain whitespace word-wrap — no <sstream>/<iostream>, which this code
+	 * does not use, just find()/substr() over the description
+	 * strings the option table already holds. */
+	std::string wrap_paragraph(const std::string &text, const std::string &indent, std::size_t width)
+	{
+		std::string out;
+		std::string line = indent;
+		bool at_line_start = true;
+		std::size_t pos = 0;
+
+		while (pos < text.size())
+		{
+			std::size_t next = text.find(' ', pos);
+			if (next == std::string::npos) next = text.size();
+			const std::string word = text.substr(pos, next - pos);
+			pos = next + 1;
+
+			const std::size_t needed = (at_line_start ? 0 : 1) + word.size();
+			if (!at_line_start && line.size() + needed > width)
+			{
+				out += line;
+				out += "\n";
+				line = indent;
+				at_line_start = true;
+			}
+			if (!at_line_start) line += " ";
+			line += word;
+			at_line_start = false;
+		}
+		out += line;
+		out += "\n";
+		return out;
+	}
+}
+
 std::string CliArgs::usage_text()
 {
 	std::string text;
 	text.reserve(2048);
 
-	text += "\nUSAGE:\n\n   fs-updater [options] [install_path]\n\nWhere:\n\n";
+	text += "\nUSAGE:\n\n";
+
+	std::vector<std::string> tokens;
+	tokens.reserve(kOptions.size() + 2);
+	for (const auto &spec : kOptions) tokens.push_back(synopsis_token(spec));
+	tokens.emplace_back("[--]");
+	tokens.emplace_back("[install_path]");
+
+	const std::string first_prefix = "   fs-updater ";
+	const std::string cont_prefix(first_prefix.size(), ' ');
+	constexpr std::size_t kWidth = 79;
+
+	std::string line = first_prefix;
+	bool at_line_start = true;
+	for (const auto &tok : tokens)
+	{
+		const std::size_t needed = (at_line_start ? 0 : 1) + tok.size();
+		if (!at_line_start && line.size() + needed > kWidth)
+		{
+			text += line;
+			text += "\n";
+			line = cont_prefix;
+			at_line_start = true;
+		}
+		if (!at_line_start) line += " ";
+		line += tok;
+		at_line_start = false;
+	}
+	text += line;
+	text += "\n\n";
+
+	text += "Where:\n\n";
+
+	constexpr std::size_t kDescWidth = 79;
+	const std::string kDescIndent = "     ";
 
 	for (const auto &spec : kOptions)
 	{
 		if (spec.kind == ArgKind::help)
 		{
-			text += "   -h, --help\n     ";
-			text += spec.help;
-			text += "\n\n";
+			text += "   -h, --help\n";
+			text += wrap_paragraph(spec.help, kDescIndent, kDescWidth);
+			text += "\n";
 			continue;
 		}
 
@@ -405,18 +513,32 @@ std::string CliArgs::usage_text()
 			text += spec.value_name;
 			text += ">";
 		}
-		text += "\n     ";
-		text += spec.help;
-		text += "\n\n";
+		text += "\n";
+		text += wrap_paragraph(spec.help, kDescIndent, kDescWidth);
+		text += "\n";
 	}
+
+	text += "   --\n";
+	text += wrap_paragraph(
+		"Ends option parsing: every token after this one is the install path, "
+		"even one that starts with '-'.",
+		kDescIndent, kDescWidth);
+	text += "\n";
 
 	text += "   ";
 	text += kInstallPathName;
 	text += " <";
 	text += kInstallPathTypeDesc;
-	text += ">\n     ";
-	text += kInstallPathHelp;
-	text += "\n\n   F&S Update Framework CLI\n\n";
+	text += ">\n";
+	text += wrap_paragraph(
+		std::string(kInstallPathHelp) +
+			". The state-taking flags above (--set_app_state_bad, "
+			"--is_app_state_bad, --set_fw_state_bad, --is_fw_state_bad) accept "
+			"any single character at this layer; the accepted values (A or B) "
+			"are checked by the command, not the parser.",
+		kDescIndent, kDescWidth);
+
+	text += "\n   F&S Update Framework CLI\n\n";
 
 	return text;
 }
