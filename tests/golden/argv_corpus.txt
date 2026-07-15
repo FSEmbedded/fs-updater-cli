@@ -41,6 +41,7 @@
 # Operand-before-option ordering is accepted here; getopt_long permutes unless
 # POSIXLY_CORRECT is set, which changes which token is the operand.
 x --install_update             | ok           | install_update | 1 | -- | tolerated
+--debug --debug                | parse_error  | -              | 0 | 1  | tolerated
 
 # --- Value handling ----------------------------------------------------------
 # An empty value used to keep the argument's default and act on it. Rejected now.
