@@ -15,6 +15,7 @@ set(TEST_COMPILE_OPTIONS -Wall -Wextra -Wpedantic)
 set(TEST_SOURCES
     test_fs_updater_error.cpp
     test_cli_classify.cpp
+    test_arg_scan.cpp
     ${CMAKE_SOURCE_DIR}/src/cli/cli_classify.cpp
 )
 
