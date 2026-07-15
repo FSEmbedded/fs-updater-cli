@@ -43,6 +43,13 @@ add_test(NAME fs_updater_cli_tests COMMAND fs_updater_cli_tests)
 # from the same sysroot the cross build compiles against — a vendored copy could
 # drift in version, and since it renders the usage text itself, the golden would
 # then pin bytes the shipped binary never prints.
+#
+# Two sysroot conventions to cover: the SDK_ROOT glob below serves the native
+# test flow (scripts/build.sh test), which invokes CMake directly with no
+# toolchain file. The Yocto recipe build (bitbake do_configure) instead sets
+# CMAKE_TOOLCHAIN_FILE, which points CMAKE_FIND_ROOT_PATH at recipe-sysroot —
+# SDK_ROOT is not part of that environment, so find_path() is the fallback
+# that actually resolves there (tclap is already populated in that sysroot).
 if(NOT DEFINED TCLAP_INCLUDE)
     file(GLOB _sysroot_includes "$ENV{SDK_ROOT}/sysroots/*/usr/include")
     foreach(_candidate ${_sysroot_includes})
@@ -51,6 +58,10 @@ if(NOT DEFINED TCLAP_INCLUDE)
             break()
         endif()
     endforeach()
+endif()
+
+if(NOT TCLAP_INCLUDE OR NOT EXISTS "${TCLAP_INCLUDE}/tclap/CmdLine.h")
+    find_path(TCLAP_INCLUDE NAMES tclap/CmdLine.h)
 endif()
 
 if(NOT TCLAP_INCLUDE OR NOT EXISTS "${TCLAP_INCLUDE}/tclap/CmdLine.h")
