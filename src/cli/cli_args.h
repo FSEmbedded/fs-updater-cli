@@ -70,7 +70,7 @@ namespace cli
 
 	/**
 	 * Owns one getopt_long parse. Independent instances are fully safe now —
-	 * unlike the TCLAP predecessor, there is no process-global registration
+	 * unlike the previous parser, there is no process-global registration
 	 * state, so a second CliArgs is not a first the caller shares by accident.
 	 * parse() still resets its own state at entry, since a caller (tests) may
 	 * reuse one instance across several parses.

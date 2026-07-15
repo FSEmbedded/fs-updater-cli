@@ -104,7 +104,6 @@ set_target_properties(fs_updater_cli PROPERTIES
 #
 # Deviation: -fno-exceptions and -fno-rtti are NOT applied.
 # fs-updater-lib throws exceptions; CLI must catch.
-# TCLAP (header-only) requires RTTI.
 # ==============================================================================
 
 target_compile_options(fs_updater_cli PRIVATE
@@ -112,7 +111,7 @@ target_compile_options(fs_updater_cli PRIVATE
     -Wextra
     -Wpedantic
     # The cli is warning-clean. Gated so a toolchain bump can be
-    # unblocked with -DFSUP_WERROR=OFF. TCLAP/deps are -isystem and exempt.
+    # unblocked with -DFSUP_WERROR=OFF.
     $<$<BOOL:${FSUP_WERROR}>:-Werror>
     # Debug
     $<$<CONFIG:Debug>:-Og -g>

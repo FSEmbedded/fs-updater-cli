@@ -1,10 +1,11 @@
 /* Native unit tests for the HW-free install-surface classifier.
  *
  * classify() owns exactly the install-surface decisions that must hold without
- * touching the parser or the FSUpdate/HW path: the bare-path rule (a bare positional path is
- * only legal together with --install_update), the --detach guard (detach needs
- * a local path), and the local-vs-cloud selection of --install_update [<path>].
- * Mutual exclusion across all actions is the dispatch loop's job, not here. */
+ * touching the parser or the FSUpdate/HW path: the bare-path rule (a bare positional path
+ * is only legal together with --install_update), the --detach guard (detach
+ * needs a local path), and the local-vs-cloud selection of
+ * --install_update [<path>]. Mutual exclusion across all actions is the
+ * dispatch loop's job, not here. */
 #include "cli/cli_classify.h"
 
 #include <gtest/gtest.h>
@@ -246,8 +247,8 @@ TEST(OptionLike, LeadingDashTokensAreOptionLike)
 {
     EXPECT_TRUE(cli::is_option_like("--bogus"));
     EXPECT_TRUE(cli::is_option_like("--definitely-not-a-real-flag"));
-    EXPECT_TRUE(cli::is_option_like("--install_up"));   /* abbreviation: TCLAP has no prefix matching */
-    EXPECT_TRUE(cli::is_option_like("--cancel_install=5")); /* '=' is not this parser's delimiter */
+    EXPECT_TRUE(cli::is_option_like("--install_up"));
+    EXPECT_TRUE(cli::is_option_like("--cancel_install=5"));
     EXPECT_TRUE(cli::is_option_like("-h"));
     EXPECT_TRUE(cli::is_option_like("-"));
 }

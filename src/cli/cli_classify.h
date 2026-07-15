@@ -6,10 +6,10 @@
 /* HW-free classifier for the install surface.
  *
  * classify() turns the raw, already-parsed install flags (RawFlags, from the
- * TCLAP front-end in parse_input) into a ParseOutcome the dispatcher and the
+ * CliArgs front-end in parse_input) into a ParseOutcome the dispatcher and the
  * install handler act on. It owns exactly the install-surface decisions —
  * the bare-path rule, the --detach guard, and the local/cloud mode selection — with NO
- * TCLAP and NO FSUpdate/HW dependency, so they are natively unit-testable.
+ * parser and NO FSUpdate/HW dependency, so they are natively unit-testable.
  *
  * It deliberately does NOT enforce mutual exclusion across all actions: that
  * stays with the dispatch loop in parse_input, which counts every action flag.
@@ -24,7 +24,7 @@ namespace cli
         cloud, /* --install_update        → StartInstall (ADU-staged) */
     };
 
-    /* Install flags extracted from TCLAP after cmd.parse(). */
+    /* Install flags extracted from CliArgs after parse(). */
     struct RawFlags
     {
         bool install_update_set = false; /* --install_update present */
@@ -56,15 +56,14 @@ namespace cli
      * Historical note: this guarded the previous parser's install positional,
      * which accepted any token its labelled args declined — without
      * it, an unknown flag was absorbed as the path and surfaced as a bare-path
-     * violation instead of an unknown option. The getopt_long parser
-     * gets that protection for free from the option/operand distinction
+     * violation instead of an unknown option. The getopt_long parser gets
+     * that protection for free from the option/operand distinction
      * getopt_long itself makes, so this function is no longer called from the
      * parsing path; it is kept (untouched, cli_classify.* stays byte-identical
      * across the cut) for its own unit coverage.
      *
      * A path that genuinely starts with '-' must be given as "./-name", the
-     * usual convention; "--" cannot serve as the escape here because the
-     * positional is not ignoreable. */
+     * usual convention. */
     [[nodiscard]] bool is_option_like(const std::string& token);
 
     /* Verdict of the action dispatch: action flags are mutually exclusive,
