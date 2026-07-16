@@ -116,11 +116,11 @@ enum class UPDATER_SETGET_UPDATE_STATE : int{
 };
 
 enum class UPDATER_CLI_VALIDATION : int{
-    INVALID_UPDATE_TYPE       = 60,  // retired placeholder (was --update_type)
+    INVALID_UPDATE_TYPE       = 60,  // unused; value reserved so the rest don't shift
     UPDATE_FILE_NOT_FOUND     = 61,
-    MISSING_ENV_UPDATE_STICK  = 62,  // retired placeholder (was --automatic)
-    MISSING_ENV_UPDATE_FILE   = 63,  // retired placeholder (was --automatic)
-    UPDATE_TYPE_WITHOUT_FILE  = 64,  // retired placeholder (was --update_type)
+    MISSING_ENV_UPDATE_STICK  = 62,  // unused; value reserved so the rest don't shift
+    MISSING_ENV_UPDATE_FILE   = 63,  // unused; value reserved so the rest don't shift
+    UPDATE_TYPE_WITHOUT_FILE  = 64,  // unused; value reserved so the rest don't shift
     INCOMPATIBLE_ARG_COMBO    = 65,
     INSTALL_BUSY              = 66,  // another install/download already in flight
     PERMISSION_DENIED         = 67   // polkit / bus-policy rejected the call

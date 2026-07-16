@@ -1,10 +1,8 @@
 /* The parser's behavioural pin.
  *
- * These read tests/golden/*, rather than restating them, so the files stay the
- * single statement of the contract. That is the point: the parser is due to be
- * replaced, and the replacement is correct exactly when it still makes these
- * files pass. A table copied into this source could drift from the file the
- * reviewers of that cut will actually read.
+ * These read tests/golden/*, rather than restating them, so the files stay
+ * the single statement of the contract — a table copied into this source
+ * could drift from the golden file.
  *
  * Everything here runs without a board: the argument surface does not depend
  * on the class that owns the handlers. */
