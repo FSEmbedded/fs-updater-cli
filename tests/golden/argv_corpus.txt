@@ -1,9 +1,9 @@
 # argv corpus — the behavioural pin for the parser.
 #
-# Every line is one invocation and the outcome it must produce. The point of the
-# file is the eventual parser replacement: the replacement is correct when it
-# reproduces this table, and every disagreement is a decision someone has to make
-# on purpose rather than discover in the field.
+# Every line is one invocation and the outcome it must produce. This table is
+# the parser's behavioural contract: a change to the parser is correct only
+# when it still reproduces this table, and every disagreement is a decision
+# someone has to make on purpose rather than discover in the field.
 #
 # Format:  argv | kind | command | actions | rc | verdict
 #
