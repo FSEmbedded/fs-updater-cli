@@ -233,30 +233,3 @@ TEST(InstallStartErrorCode, MapsEachCallError)
     EXPECT_EQ(cli::install_start_error_code(CallError::other),      49);
 }
 
-/* --- is_option_like: guarded the previous parser's global install
- * positional against absorbing an unknown flag as the path — that parser's
- * unlabelled positional argument type accepted any non-blank token, so
- * without this predicate `fs-updater --bogus` parsed "successfully" with
- * install_path="--bogus" and was reported as a bare-path violation ("a path
- * argument is only valid with --install_update", rc 65) instead of an unknown
- * option. The getopt_long parser makes this distinction
- * itself, so is_option_like() is no longer called from the parsing path; kept
- * here for its own coverage (cli_classify.* stays byte-identical across the
- * cut). */
-TEST(OptionLike, LeadingDashTokensAreOptionLike)
-{
-    EXPECT_TRUE(cli::is_option_like("--bogus"));
-    EXPECT_TRUE(cli::is_option_like("--definitely-not-a-real-flag"));
-    EXPECT_TRUE(cli::is_option_like("--install_up"));
-    EXPECT_TRUE(cli::is_option_like("--cancel_install=5"));
-    EXPECT_TRUE(cli::is_option_like("-h"));
-    EXPECT_TRUE(cli::is_option_like("-"));
-}
-
-TEST(OptionLike, PathsAndValuesAreNotOptionLike)
-{
-    EXPECT_FALSE(cli::is_option_like("/tmp/update.raucb"));
-    EXPECT_FALSE(cli::is_option_like("update.raucb"));
-    EXPECT_FALSE(cli::is_option_like("./-weird-name"));  /* the documented escape for a dashed path */
-    EXPECT_FALSE(cli::is_option_like(""));               /* empty stays classify()'s bad_path case */
-}

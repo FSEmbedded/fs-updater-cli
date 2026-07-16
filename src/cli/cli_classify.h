@@ -51,21 +51,6 @@ namespace cli
 
     [[nodiscard]] ParseOutcome classify(const RawFlags& flags);
 
-    /* True for a token that looks like an option rather than a path.
-     *
-     * Historical note: this guarded the previous parser's install positional,
-     * which accepted any token its labelled args declined — without
-     * it, an unknown flag was absorbed as the path and surfaced as a bare-path
-     * violation instead of an unknown option. The getopt_long parser gets
-     * that protection for free from the option/operand distinction
-     * getopt_long itself makes, so this function is no longer called from the
-     * parsing path; its behaviour was left unchanged across the cut and it is
-     * kept for its own unit coverage.
-     *
-     * A path that genuinely starts with '-' must be given as "./-name", the
-     * usual convention. */
-    [[nodiscard]] bool is_option_like(const std::string& token);
-
     /* Verdict of the action dispatch: action flags are mutually exclusive,
      * modifiers (--debug/--serial/--detach) never count as actions. */
     enum class DispatchVerdict

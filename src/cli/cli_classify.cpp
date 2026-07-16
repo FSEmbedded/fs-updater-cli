@@ -82,11 +82,6 @@ namespace
         return out; /* kind = ok */
     }
 
-    bool is_option_like(const std::string& token)
-    {
-        return !token.empty() && token.front() == '-';
-    }
-
     DispatchVerdict dispatch_verdict(std::size_t action_count)
     {
         if (action_count == 0)

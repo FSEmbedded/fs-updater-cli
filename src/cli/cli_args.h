@@ -106,15 +106,13 @@ namespace cli
 		[[nodiscard]] char fw_state_to_query() const;
 
 		private:
+		/* Only what a caller can still ask for after parse() lives here; the
+		 * install surface leaves through ParseResult::install_outcome and is
+		 * parse()'s own business. */
 		std::string m_banner;
 
 		bool m_debug = false;
 		bool m_serial = false;
-		bool m_detach = false;
-
-		bool m_install_path_set = false;
-		bool m_install_update_set = false;
-		std::string m_install_path;
 
 		std::uint32_t m_cancel_session_id = 0;
 		char m_app_state_to_set = 'c';
