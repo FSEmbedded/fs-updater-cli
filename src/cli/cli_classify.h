@@ -91,4 +91,12 @@ namespace cli
      * type-agnostic install-family terminal code (48 finished / 49 failed) —
      * never a misclassified firmware code. */
     [[nodiscard]] int install_terminal_code(bool success, const std::string& type);
+
+    /* Return code for a GenericException out of a slot switch, by its errno: a
+     * refused switch (EPERM/ECANCELED — the target slot is bad) is state-bad
+     * (54), anything else is a rollback progress error (13). Shared verbatim by
+     * both slot-switch handlers; pure so the branch is testable without the
+     * throw. (Rollback needs no equivalent: those errnos only arise in the
+     * committed-slot-switch path, which rollback never enters.) */
+    [[nodiscard]] int map_slot_switch_errno(int errno_value);
 }

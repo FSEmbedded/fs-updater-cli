@@ -233,3 +233,21 @@ TEST(InstallStartErrorCode, MapsEachCallError)
     EXPECT_EQ(cli::install_start_error_code(CallError::other),      49);
 }
 
+
+/* --- map_slot_switch_errno: a slot switch refused because the target is bad
+ * (EPERM/ECANCELED) is state-bad (54); every other errno is a progress error
+ * (13). This is the errno branch both slot-switch handlers share verbatim; the
+ * throw that carries the errno only happens on hardware, so this is the branch's
+ * only coverage at any level. --- */
+TEST(SlotSwitchErrno, RefusedTargetIsStateBad)
+{
+    EXPECT_EQ(cli::map_slot_switch_errno(EPERM),     54);
+    EXPECT_EQ(cli::map_slot_switch_errno(ECANCELED), 54);
+}
+
+TEST(SlotSwitchErrno, EveryOtherErrnoIsProgressError)
+{
+    EXPECT_EQ(cli::map_slot_switch_errno(EIO),   13);
+    EXPECT_EQ(cli::map_slot_switch_errno(0),     13);
+    EXPECT_EQ(cli::map_slot_switch_errno(ENOENT), 13);
+}

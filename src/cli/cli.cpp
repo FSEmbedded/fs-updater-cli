@@ -183,6 +183,10 @@ void cli::fs_update_cli::rollback_update()
     catch (const fs::GenericException &e)
     {
         cli_io::write_stderr(string("Rollback update progress error: ") + e.what() + " errno: " + std::to_string(e.errorno) + "\n");
+        /* No errno branch here, unlike the slot switches: the EPERM/ECANCELED
+         * "target slot is bad" throws only arise in the committed-slot-switch
+         * path, which a rollback (reached only on an INCOMPLETE_* reboot state)
+         * never enters. A plain progress error is the only reachable outcome. */
         this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_PROGRESS_ERROR);
     }
     catch (const fs::BaseFSUpdateException &e)
@@ -230,17 +234,7 @@ void cli::fs_update_cli::switch_firmware_slot()
     {
         cli_io::write_stderr(string("Rollback firmware progress error: ") + e.what() + " errno : " + std::to_string(e.errorno) + "\n");
 
-        switch (e.errorno)
-        {
-        case EPERM:
-            this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_BAD);
-            break;
-        case ECANCELED:
-            this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_BAD);
-            break;
-        default:
-            this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_PROGRESS_ERROR);
-        }
+        this->return_code = cli::map_slot_switch_errno(e.errorno);
     }
     catch (const fs::BaseFSUpdateException &e)
     {
@@ -283,17 +277,7 @@ void cli::fs_update_cli::switch_application_slot()
     {
         cli_io::write_stderr(string("Rollback application progress error: ") + e.what() + " errno : " + std::to_string(e.errorno) + "\n");
 
-        switch (e.errorno)
-        {
-        case EPERM:
-            this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_BAD);
-            break;
-        case ECANCELED:
-            this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_BAD);
-            break;
-        default:
-            this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_PROGRESS_ERROR);
-        }
+        this->return_code = cli::map_slot_switch_errno(e.errorno);
     }
     catch (const fs::BaseFSUpdateException &e)
     {

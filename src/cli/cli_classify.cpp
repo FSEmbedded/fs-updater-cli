@@ -133,4 +133,16 @@ namespace
         }
         return static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FAILED);
     }
+
+    int map_slot_switch_errno(int errno_value)
+    {
+        /* EPERM/ECANCELED: the lib refused the switch because the target slot
+         * is marked bad — a state error the caller must see as such (54), not a
+         * generic progress failure (13). */
+        if (errno_value == EPERM || errno_value == ECANCELED)
+        {
+            return static_cast<int>(UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_BAD);
+        }
+        return static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_PROGRESS_ERROR);
+    }
 }
