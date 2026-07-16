@@ -59,8 +59,8 @@ namespace cli
      * violation instead of an unknown option. The getopt_long parser gets
      * that protection for free from the option/operand distinction
      * getopt_long itself makes, so this function is no longer called from the
-     * parsing path; it is kept (untouched, cli_classify.* stays byte-identical
-     * across the cut) for its own unit coverage.
+     * parsing path; its behaviour was left unchanged across the cut and it is
+     * kept for its own unit coverage.
      *
      * A path that genuinely starts with '-' must be given as "./-name", the
      * usual convention. */

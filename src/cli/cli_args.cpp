@@ -135,8 +135,43 @@ namespace
 
 	std::string banner_for(const std::string &token, const std::string &reason)
 	{
-		/* Byte-for-byte the previous parser's shape: tests/golden pins it. */
+		/* The previous parser's shape; the continuation indent aligns the reason
+		 * under the token. ErrorBanner in the tests pins it. */
 		return "PARSE ERROR: " + token + "\n             " + reason + "\n\n";
+	}
+
+	/* Why the table says a long token is unusable. getopt_long reports both an
+	 * unknown option and a well-formed flag misused ("--debug=1", an ambiguous
+	 * prefix) as a bare '?', which is too coarse to diagnose. */
+	enum class TokenVerdict
+	{
+		unknown,        /* matches no table name, not even as a prefix */
+		abbreviation,   /* a prefix of at least one name, but not a name */
+		takes_no_value, /* a name, given "=value" it does not accept */
+		exact,          /* a name, used well-formed */
+	};
+
+	TokenVerdict classify_token(const char *token)
+	{
+		if (token == nullptr || token[0] != '-' || token[1] != '-') return TokenVerdict::unknown;
+
+		const char *name = token + 2;
+		std::size_t n = 0;
+		while (name[n] != '\0' && name[n] != '=') ++n;
+		if (n == 0) return TokenVerdict::unknown;
+		const bool has_value = (name[n] == '=');
+
+		for (const auto &spec : kOptions)
+		{
+			if (std::strlen(spec.name) != n || std::strncmp(name, spec.name, n) != 0) continue;
+			return (has_value && spec.kind != ArgKind::action_value) ? TokenVerdict::takes_no_value
+			                                                         : TokenVerdict::exact;
+		}
+		for (const auto &spec : kOptions)
+		{
+			if (std::strncmp(name, spec.name, n) == 0) return TokenVerdict::abbreviation;
+		}
+		return TokenVerdict::unknown;
 	}
 }
 
@@ -233,17 +268,24 @@ ParseResult CliArgs::parse(int argc, const char **argv)
 			continue;
 		}
 
-		if (c == ':')
+		if (c == ':' || c == '?')
 		{
-			m_banner = banner_for(raw_token != nullptr ? raw_token : "?", "missing a required value");
-			result.kind = ParseResult::Kind::parse_error;
-			result.rc = 1;
-			return result;
-		}
+			/* An abbreviation is rejected on its own merits either way: getopt
+			 * resolves a unique prefix and only then misses the value (':'),
+			 * while an ambiguous one never resolves at all ('?') — both must
+			 * name the abbreviation, not the symptom. */
+			const char *token = (raw_token != nullptr) ? raw_token : "?";
+			const TokenVerdict verdict = classify_token(raw_token);
 
-		if (c == '?')
-		{
-			m_banner = banner_for(raw_token != nullptr ? raw_token : "?", "unrecognized option");
+			if (verdict == TokenVerdict::abbreviation)
+				m_banner = banner_for(token, "unknown option (abbreviations are not accepted)");
+			else if (verdict == TokenVerdict::takes_no_value)
+				m_banner = banner_for(token, "option takes no value");
+			else if (c == ':')
+				m_banner = banner_for(token, "missing a required value");
+			else
+				m_banner = banner_for(token, "unrecognized option");
+
 			result.kind = ParseResult::Kind::parse_error;
 			result.rc = 1;
 			return result;
@@ -275,6 +317,23 @@ ParseResult CliArgs::parse(int argc, const char **argv)
 			return result;
 		}
 
+		/* Repeating a flag is rejected outright, as the previous parser's
+		 * per-Arg "already set" tracking did. Modifiers are the one lenient
+		 * exception; help is not (found during review) — so the check
+		 * sits ahead of both branches below and covers actions and help alike. */
+		if (spec.kind != ArgKind::modifier)
+		{
+			if (seen[static_cast<std::size_t>(index)])
+			{
+				m_banner = banner_for(raw_token != nullptr ? raw_token : spec.name,
+					"already given, must not repeat");
+				result.kind = ParseResult::Kind::parse_error;
+				result.rc = 1;
+				return result;
+			}
+			seen[static_cast<std::size_t>(index)] = true;
+		}
+
 		if (spec.kind == ArgKind::help)
 		{
 			/* Do not return yet: the previous parser scanned the whole line
@@ -291,18 +350,6 @@ ParseResult CliArgs::parse(int argc, const char **argv)
 			else if (std::strcmp(spec.name, "serial") == 0) m_serial = true;
 			else if (std::strcmp(spec.name, "detach") == 0) m_detach = true;
 			continue;
-		}
-
-		/* action_switch or action_value from here. Repeating the same action
-		 * is rejected outright (found during review, not a default
-		 * acceptance): the previous parser's per-Arg "already set" tracking
-		 * did the same, unlike the modifiers above. */
-		if (seen[static_cast<std::size_t>(index)])
-		{
-			m_banner = banner_for(raw_token != nullptr ? raw_token : spec.name, "already given, must not repeat");
-			result.kind = ParseResult::Kind::parse_error;
-			result.rc = 1;
-			return result;
 		}
 
 		if (spec.kind == ArgKind::action_value)
@@ -353,7 +400,6 @@ ParseResult CliArgs::parse(int argc, const char **argv)
 
 		if (spec.command == Command::install_update) m_install_update_set = true;
 
-		seen[static_cast<std::size_t>(index)] = true;
 		++distinct_actions;
 		matched_command = spec.command;
 	}

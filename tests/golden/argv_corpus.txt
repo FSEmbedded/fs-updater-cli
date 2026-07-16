@@ -116,6 +116,31 @@ x y                            | parse_error  | -              | 0 | 1  | intend
 # error at all — a session-swap footgun for --cancel_install. Fixed: rejected.
 --cancel_install 5 --cancel_install 6 | parse_error | -           | 0 | 1  | intended
 
+# --- Repeats, aliases and value edge cases -----------------------------------
+# Repeating help is rejected like repeating an action; modifiers stay lenient.
+--help --help                  | parse_error  | -                | 0 | 1  | intended
+-h -h                          | parse_error  | -                | 0 | 1  | intended
+# The previous library registered --ignore_rest as an alias of "--". The alias
+# is not reimplemented: "--" is the POSIX form and stays the only one.
+--ignore_rest                  | parse_error  | -                | 0 | 1  | intended
+# State values: the parser checks one-character syntax only and the command
+# checks the value, so a space reaches the command (which rejects it) while a
+# space-plus-letter is two characters and fails here. The previous library's
+# stream extraction skipped leading blanks and did the opposite in both cases.
+--set_app_state_bad <SP>       | ok           | set_app_state_bad | 1 | -- | intended
+--is_app_state_bad <SP>A       | parse_error  | -                | 0 | 1  | intended
+# An extra operand after "--" was silently discarded before the cut; for an
+# install command that is a footgun, so the single-operand limit applies there
+# too — same rule as without "--".
+--install_update -- x y        | parse_error  | -                | 0 | 1  | intended
+# An ambiguous prefix is refused for the same reason a resolvable one is: the
+# parser never guesses which flag was meant.
+--install                      | parse_error  | -                | 0 | 1  | intended
+# Precedence: a parse error beats help (pinned above), and help beats every
+# later verdict — the mutual-exclusion count and the install-surface guards.
+--help --apply_update --commit_update | help   | -                | 0 | 0  | intended
+--help --detach                | help         | -                | 0 | 0  | intended
+
 # --- Dispatch counting -------------------------------------------------------
 --serial                       | version_only | -              | 0 | 0  | intended
 --debug --serial               | version_only | -              | 0 | 0  | intended

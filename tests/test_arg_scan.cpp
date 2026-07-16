@@ -46,5 +46,7 @@ TEST(ExactMatch, RejectsAbbreviationAcceptsEqualsForm)
 	EXPECT_TRUE(cli::exact_long_match("--debug", "debug"));
 	EXPECT_TRUE(cli::exact_long_match("--debug=x", "debug"));
 	EXPECT_FALSE(cli::exact_long_match("--deb", "debug"));      /* abbreviation */
-	EXPECT_FALSE(cli::exact_long_match("--debugger", "debug")); /* longer name, no prefix hit */
+	/* Rejected by the terminator check, not by the prefix compare: "debugger"
+	 * does start with "debug". Drop that check and this case starts matching. */
+	EXPECT_FALSE(cli::exact_long_match("--debugger", "debug"));
 }

@@ -46,16 +46,16 @@ namespace
 		return out;
 	}
 
-	/* Shared deliberately: the argument library refuses a second instance in
-	 * the same process (see CliArgs). parse() resets between calls. */
+	/* One instance across the rows, to also show parse() really does reset
+	 * between calls (CliArgsLifecycle covers the two-instance case). */
 	cli::CliArgs &parser()
 	{
 		static cli::CliArgs instance;
 		return instance;
 	}
 
-	/* argv[0] matters: the usage block embeds basename(argv[0]), so the golden
-	 * only matches under the name the binary actually ships as. */
+	/* argv[0] is passed for realism only — usage_text() names the binary
+	 * itself rather than deriving it from argv[0]. */
 	std::vector<std::string> argv_of(const std::string &args)
 	{
 		std::vector<std::string> v{"fs-updater"};
@@ -65,6 +65,12 @@ namespace
 		{
 			/* the corpus writes an empty argument as "" */
 			if (tok == "\"\"") tok = "";
+			/* ...and a space as <SP>, since rows are whitespace-split */
+			for (std::string::size_type p = tok.find("<SP>"); p != std::string::npos;
+			     p = tok.find("<SP>", p + 1))
+			{
+				tok.replace(p, 4, " ");
+			}
 			v.push_back(tok);
 		}
 		return v;
@@ -148,6 +154,61 @@ TEST(ArgvCorpus, EveryRowHoldsAsWritten)
 
 	/* Guards against a corpus that silently stopped being read. */
 	EXPECT_GT(checked, 30) << "corpus looks truncated";
+}
+
+/* The banner is what an operator and a scraping script actually see, and the
+ * corpus cannot pin it: its rows carry kind/command/actions/rc, no text. One
+ * case per reason, so a reworded or misrouted diagnosis fails here.
+ *
+ * The reasons are distinct on purpose: the underlying parser reports an
+ * unknown flag, a known flag given a value it does not take, and an ambiguous
+ * prefix all as the same rejection, which is too coarse to act on. */
+TEST(ErrorBanner, NamesTheTokenAndTheReason)
+{
+	struct Case
+	{
+		std::vector<const char *> argv;
+		const char *token;
+		const char *reason;
+	};
+
+	std::vector<Case> cases = {
+		{{"fs-updater", "--definitely-not-a-real-flag"},
+			"--definitely-not-a-real-flag", "unrecognized option"},
+		{{"fs-updater", "--install_up", "x"},
+			"--install_up", "unknown option (abbreviations are not accepted)"},
+		{{"fs-updater", "--install"},  /* ambiguous prefix */
+			"--install", "unknown option (abbreviations are not accepted)"},
+		{{"fs-updater", "--cancel_inst"},  /* abbreviation, value missing too */
+			"--cancel_inst", "unknown option (abbreviations are not accepted)"},
+		{{"fs-updater", "--debug=1"},
+			"--debug=1", "option takes no value"},
+		{{"fs-updater", "--cancel_install"},
+			"--cancel_install", "missing a required value"},
+		{{"fs-updater", "--cancel_install", "abc"},
+			"--cancel_install", "value must be a decimal number, no sign, no overflow"},
+		{{"fs-updater", "--is_app_state_bad", "toolong"},
+			"--is_app_state_bad", "value must be exactly one character"},
+		{{"fs-updater", "--cancel_install", ""},
+			"--cancel_install", "value must not be empty"},
+		{{"fs-updater", "--commit_update", "--commit_update"},
+			"--commit_update", "already given, must not repeat"},
+		{{"fs-updater", "x", "y"},
+			"y", "an install path may be given at most once"},
+		{{"fs-updater", "-"},
+			"-", "unrecognized option"},
+	};
+
+	for (auto &c : cases)
+	{
+		cli::CliArgs instance;
+		const cli::ParseResult got =
+			instance.parse(static_cast<int>(c.argv.size()), c.argv.data());
+
+		ASSERT_EQ(got.kind, cli::ParseResult::Kind::parse_error) << "for: " << c.token;
+		EXPECT_EQ(instance.error_banner(),
+			std::string("PARSE ERROR: ") + c.token + "\n             " + c.reason + "\n\n");
+	}
 }
 
 /* The usage text is produced by the argument library, not by us. The golden was
