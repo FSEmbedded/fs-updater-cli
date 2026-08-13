@@ -115,7 +115,10 @@ enum class UPDATER_APPLY_UPDATE_STATE : int{
 enum class UPDATER_SETGET_UPDATE_STATE : int{
     GETSET_STATE_SUCCESSFUL = 52,
     PASSING_PARAM_UPDATE_STATE_WRONG = 53,
-    UPDATE_STATE_BAD = 54
+    UPDATE_STATE_BAD = 54,
+    /* Slot switch refused: the target slot was never provisioned (no image
+     * file installed). 55 is claimed by UPDATER_UPDATE_REBOOT_STATE. */
+    UPDATE_STATE_UNPROVISIONED = 56
 };
 
 enum class UPDATER_CLI_VALIDATION : int{

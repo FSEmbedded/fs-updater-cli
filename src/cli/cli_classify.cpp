@@ -136,6 +136,13 @@ namespace
 
     int map_slot_switch_errno(int errno_value)
     {
+        /* ENOENT: the lib refused the switch because the target slot was never
+         * provisioned (no image file installed) — distinct from a bad slot
+         * (56, not 54) and from a generic progress failure (13). */
+        if (errno_value == ENOENT)
+        {
+            return static_cast<int>(UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_UNPROVISIONED);
+        }
         /* EPERM/ECANCELED: the lib refused the switch because the target slot
          * is marked bad — a state error the caller must see as such (54), not a
          * generic progress failure (13). */

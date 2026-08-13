@@ -19,6 +19,13 @@ TEST(FsUpdaterError, UnhandledExceptionMatchesProcessAbort)
     EXPECT_EQ(code(UPDATER_FATAL::UNHANDLED_EXCEPTION), 124);
 }
 
+// Scripted callers key on these numbers; renumbering is an interface break.
+TEST(FsUpdaterError, IndeterminateAndUnprovisionedArePinned)
+{
+    EXPECT_EQ(code(UPDATER_UPDATE_REBOOT_STATE::UPDATE_REBOOT_STATE_INDETERMINATE), 55);
+    EXPECT_EQ(code(UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_UNPROVISIONED), 56);
+}
+
 TEST(FsUpdaterError, AllExitCodesAreDistinct)
 {
     const std::set<int> all_codes = {
@@ -61,6 +68,7 @@ TEST(FsUpdaterError, AllExitCodesAreDistinct)
         code(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_FW_ROLLBACK),
         code(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_ROLLBACK),
         code(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_FW_ROLLBACK),
+        code(UPDATER_UPDATE_REBOOT_STATE::UPDATE_REBOOT_STATE_INDETERMINATE),
 
         code(UPDATER_IS_UPDATE_AVAILABLE_STATE::NO_UPDATE_AVAILABLE),
         code(UPDATER_IS_UPDATE_AVAILABLE_STATE::FIRMWARE_UPDATE_AVAILABLE),
@@ -88,6 +96,7 @@ TEST(FsUpdaterError, AllExitCodesAreDistinct)
         code(UPDATER_SETGET_UPDATE_STATE::GETSET_STATE_SUCCESSFUL),
         code(UPDATER_SETGET_UPDATE_STATE::PASSING_PARAM_UPDATE_STATE_WRONG),
         code(UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_BAD),
+        code(UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_UNPROVISIONED),
 
         code(UPDATER_CLI_VALIDATION::INVALID_UPDATE_TYPE),
         code(UPDATER_CLI_VALIDATION::UPDATE_FILE_NOT_FOUND),
@@ -105,7 +114,7 @@ TEST(FsUpdaterError, AllExitCodesAreDistinct)
 
     // Add every new enumerator here too: this set is the whole-table drift
     // guard and does not derive from fs_updater_error.h automatically.
-    EXPECT_EQ(all_codes.size(), 65u);
+    EXPECT_EQ(all_codes.size(), 67u);
 }
 
 TEST(FsUpdaterError, AllExitCodesFitInUnsignedByteSpace)
