@@ -24,6 +24,7 @@ TEST(FsUpdaterError, IndeterminateAndUnprovisionedArePinned)
 {
     EXPECT_EQ(code(UPDATER_UPDATE_REBOOT_STATE::UPDATE_REBOOT_STATE_INDETERMINATE), 55);
     EXPECT_EQ(code(UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_UNPROVISIONED), 56);
+    EXPECT_EQ(code(UPDATER_UPDATE_REBOOT_STATE::ROLLBACK_APP_REBOOT_INDETERMINATE), 57);
 }
 
 TEST(FsUpdaterError, AllExitCodesAreDistinct)
@@ -69,6 +70,7 @@ TEST(FsUpdaterError, AllExitCodesAreDistinct)
         code(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_ROLLBACK),
         code(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_FW_ROLLBACK),
         code(UPDATER_UPDATE_REBOOT_STATE::UPDATE_REBOOT_STATE_INDETERMINATE),
+        code(UPDATER_UPDATE_REBOOT_STATE::ROLLBACK_APP_REBOOT_INDETERMINATE),
 
         code(UPDATER_IS_UPDATE_AVAILABLE_STATE::NO_UPDATE_AVAILABLE),
         code(UPDATER_IS_UPDATE_AVAILABLE_STATE::FIRMWARE_UPDATE_AVAILABLE),
@@ -114,7 +116,7 @@ TEST(FsUpdaterError, AllExitCodesAreDistinct)
 
     // Add every new enumerator here too: this set is the whole-table drift
     // guard and does not derive from fs_updater_error.h automatically.
-    EXPECT_EQ(all_codes.size(), 67u);
+    EXPECT_EQ(all_codes.size(), 68u);
 }
 
 TEST(FsUpdaterError, AllExitCodesFitInUnsignedByteSpace)

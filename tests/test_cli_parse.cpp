@@ -93,7 +93,6 @@ namespace
 		case cli::Command::none:                return "-";
 		case cli::Command::commit_update:       return "commit_update";
 		case cli::Command::update_reboot_state: return "update_reboot_state";
-		case cli::Command::update_reboot_state_raw: return "update_reboot_state_raw";
 		case cli::Command::application_version: return "application_version";
 		case cli::Command::firmware_version:    return "firmware_version";
 		case cli::Command::print_version:       return "print_version";

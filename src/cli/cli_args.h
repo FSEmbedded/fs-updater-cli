@@ -24,7 +24,6 @@ namespace cli
 		none,
 		commit_update,
 		update_reboot_state,
-		update_reboot_state_raw,
 		application_version,
 		firmware_version,
 		print_version,

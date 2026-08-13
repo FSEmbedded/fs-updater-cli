@@ -136,8 +136,8 @@ x y                            | parse_error  | -              | 0 | 1  | intend
 # An ambiguous prefix is refused for the same reason a resolvable one is: the
 # parser never guesses which flag was meant.
 --install                      | parse_error  | -                | 0 | 1  | intended
-# --update_reboot_state is itself a full name AND a prefix of the _raw
-# variant: the exact match must keep winning, the shortened form must not.
+# A shortened form of a full name is rejected even where getopt_long could
+# resolve it unambiguously: the exact name is required.
 --update_reboot_stat           | parse_error  | -                | 0 | 1  | intended
 # Precedence: a parse error beats help (pinned above), and help beats every
 # later verdict — the mutual-exclusion count and the install-surface guards.
@@ -167,7 +167,6 @@ x                              | guard_error  | -              | 0 | 65 | intend
 --firmware_version             | ok | firmware_version     | 1 | -- | intended
 --application_version          | ok | application_version  | 1 | -- | intended
 --update_reboot_state          | ok | update_reboot_state  | 1 | -- | intended
---update_reboot_state_raw      | ok | update_reboot_state_raw | 1 | -- | intended
 --is_update_available          | ok | is_update_available  | 1 | -- | intended
 --download_progress            | ok | download_progress    | 1 | -- | intended
 --install_progress             | ok | install_progress     | 1 | -- | intended

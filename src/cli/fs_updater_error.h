@@ -76,7 +76,11 @@ enum class UPDATER_UPDATE_REBOOT_STATE : int{
     INCOMPLETE_APP_FW_ROLLBACK = 33,
     /* An app update is pending, but whether the reboot into it took effect is
      * unanswerable: no app image is loop-mounted at all (e.g. pre-mount). */
-    UPDATE_REBOOT_STATE_INDETERMINATE = 55
+    UPDATE_REBOOT_STATE_INDETERMINATE = 55,
+    /* An app rollback awaits commit and no app image is loop-mounted. Distinct
+     * from 55 so a pending-update watcher can accept 55 without counting a
+     * rollback as a pending update. */
+    ROLLBACK_APP_REBOOT_INDETERMINATE = 57
 };
 
 enum class UPDATER_IS_UPDATE_AVAILABLE_STATE : int{
@@ -117,7 +121,7 @@ enum class UPDATER_SETGET_UPDATE_STATE : int{
     PASSING_PARAM_UPDATE_STATE_WRONG = 53,
     UPDATE_STATE_BAD = 54,
     /* Slot switch refused: the target slot was never provisioned (no image
-     * file installed). 55 is claimed by UPDATER_UPDATE_REBOOT_STATE. */
+     * file installed). 55 and 57 are claimed by UPDATER_UPDATE_REBOOT_STATE. */
     UPDATE_STATE_UNPROVISIONED = 56
 };
 
