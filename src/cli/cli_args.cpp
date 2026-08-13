@@ -92,6 +92,8 @@ namespace
 			"Confirm success of installation, rollback, switch or fail. Run after boot and waits for application response"},
 		{"update_reboot_state", Role::action, Command::update_reboot_state, ValueKind::none, Slot::none, nullptr,
 			"Get state of update"},
+		{"update_reboot_state_raw", Role::action, Command::update_reboot_state_raw, ValueKind::none, Slot::none, nullptr,
+			"Get state of update from the raw U-Boot variable only, without mount-state refinement (usable before the app image is mounted)"},
 		{"debug", Role::modifier, Command::none, ValueKind::none, Slot::debug, nullptr,
 			"Enable debug output"},
 		{"firmware_version", Role::action, Command::firmware_version, ValueKind::none, Slot::none, nullptr,

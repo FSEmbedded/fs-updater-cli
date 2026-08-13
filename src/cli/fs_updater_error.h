@@ -73,7 +73,10 @@ enum class UPDATER_UPDATE_REBOOT_STATE : int{
     ROLLBACK_APP_FW_REBOOT_PENDING = 30,
     INCOMPLETE_FW_ROLLBACK = 31,
     INCOMPLETE_APP_ROLLBACK = 32,
-    INCOMPLETE_APP_FW_ROLLBACK = 33
+    INCOMPLETE_APP_FW_ROLLBACK = 33,
+    /* An app update is pending, but whether the reboot into it took effect is
+     * unanswerable: no app image is loop-mounted at all (e.g. pre-mount). */
+    UPDATE_REBOOT_STATE_INDETERMINATE = 55
 };
 
 enum class UPDATER_IS_UPDATE_AVAILABLE_STATE : int{

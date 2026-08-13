@@ -60,6 +60,12 @@ namespace cli
 		void print_update_reboot_state();
 
 		/**
+		 * Report the raw U-Boot update_reboot_state without mount-state
+		 * refinement — usable before any app image is loop-mounted.
+		 */
+		void print_update_reboot_state_raw();
+
+		/**
 		 * Print current installed firmware version.
 		 */
 		void print_current_firmware_version();

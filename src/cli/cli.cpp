@@ -183,9 +183,9 @@ void cli::fs_update_cli::rollback_update()
     catch (const fs::GenericException &e)
     {
         cli_io::write_stderr(string("Rollback update progress error: ") + e.what() + " errno: " + std::to_string(e.errorno) + "\n");
-        /* No errno branch here, unlike the slot switches: the EPERM/ECANCELED
-         * "target slot is bad" throws only arise in the committed-slot-switch
-         * path, which a rollback (reached only on an INCOMPLETE_* reboot state)
+        /* No errno branch here, unlike the slot switches: the EPERM/ECANCELED/
+         * ENOENT refusal throws only arise in the committed-slot-switch path,
+         * which a rollback (reached only on an INCOMPLETE_* reboot state)
          * never enters. A plain progress error is the only reachable outcome. */
         this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_PROGRESS_ERROR);
     }
@@ -316,41 +316,59 @@ void cli::fs_update_cli::print_update_reboot_state()
     }
     else if (update_reboot_state == update_definitions::UBootBootstateFlags::INCOMPLETE_FW_UPDATE)
     {
-        if (this->update_handler->is_reboot_complete(true))
+        const fs::RebootCompleteState reboot_state = this->update_handler->is_reboot_complete(true);
+        if (reboot_state == fs::RebootCompleteState::COMPLETE)
         {
             cli_io::write_stdout("Incomplete firmware update. Commit required.\n");
             this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_FW_UPDATE);
         }
-        else
+        else if (reboot_state == fs::RebootCompleteState::PENDING)
         {
             cli_io::write_stdout("Missing reboot after firmware update requested\n");
             this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::UPDATE_REBOOT_PENDING);
         }
+        else
+        {
+            cli_io::write_stdout("Firmware update pending; mounted image state indeterminate (no app image mounted)\n");
+            this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::UPDATE_REBOOT_STATE_INDETERMINATE);
+        }
     }
     else if (update_reboot_state == update_definitions::UBootBootstateFlags::INCOMPLETE_APP_UPDATE)
     {
-        if (this->update_handler->is_reboot_complete(false))
+        const fs::RebootCompleteState reboot_state = this->update_handler->is_reboot_complete(false);
+        if (reboot_state == fs::RebootCompleteState::COMPLETE)
         {
             cli_io::write_stdout("Incomplete application update. Commit required.\n");
             this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_UPDATE);
         }
-        else
+        else if (reboot_state == fs::RebootCompleteState::PENDING)
         {
             cli_io::write_stdout("Missing reboot after application update requested\n");
             this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::UPDATE_REBOOT_PENDING);
         }
+        else
+        {
+            cli_io::write_stdout("Application update pending; mounted image state indeterminate (no app image mounted)\n");
+            this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::UPDATE_REBOOT_STATE_INDETERMINATE);
+        }
     }
     else if (update_reboot_state == update_definitions::UBootBootstateFlags::INCOMPLETE_APP_FW_UPDATE)
     {
-        if (this->update_handler->is_reboot_complete(true))
+        const fs::RebootCompleteState reboot_state = this->update_handler->is_reboot_complete(true);
+        if (reboot_state == fs::RebootCompleteState::COMPLETE)
         {
             cli_io::write_stdout("Incomplete application and firmware update. Commit required.\n");
             this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_FW_UPDATE);
         }
-        else
+        else if (reboot_state == fs::RebootCompleteState::PENDING)
         {
             cli_io::write_stdout("Missing reboot after application and firmware update\n");
             this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::UPDATE_REBOOT_PENDING);
+        }
+        else
+        {
+            cli_io::write_stdout("Application and firmware update pending; mounted image state indeterminate (no app image mounted)\n");
+            this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::UPDATE_REBOOT_STATE_INDETERMINATE);
         }
     }
     else if (update_reboot_state == update_definitions::UBootBootstateFlags::ROLLBACK_FW_REBOOT_PENDING)
@@ -368,15 +386,25 @@ void cli::fs_update_cli::print_update_reboot_state()
     }
     else if (update_reboot_state == update_definitions::UBootBootstateFlags::ROLLBACK_APP_REBOOT_PENDING)
     {
-        if (this->update_handler->pendingUpdateRollback() == false)
+        /* Only this rollback branch probes loop devices; the fw and app+fw
+         * branches decide from the boot environment alone. */
+        try
         {
-            cli_io::write_stdout("Missing reboot after application rollback requested\n");
-            this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::ROLLBACK_APP_REBOOT_PENDING);
+            if (this->update_handler->pendingUpdateRollback() == false)
+            {
+                cli_io::write_stdout("Missing reboot after application rollback requested\n");
+                this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::ROLLBACK_APP_REBOOT_PENDING);
+            }
+            else
+            {
+                cli_io::write_stdout("Incomplete application rollback. Commit requested.\n");
+                this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_ROLLBACK);
+            }
         }
-        else
+        catch (const updater::GetLoopDevices &e)
         {
-            cli_io::write_stdout("Incomplete application rollback. Commit requested.\n");
-            this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_ROLLBACK);
+            cli_io::write_stdout("Application rollback pending; mounted image state indeterminate (no app image mounted)\n");
+            this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::UPDATE_REBOOT_STATE_INDETERMINATE);
         }
     }
     else if (update_reboot_state == update_definitions::UBootBootstateFlags::ROLLBACK_APP_FW_REBOOT_PENDING)
@@ -411,6 +439,71 @@ void cli::fs_update_cli::print_update_reboot_state()
     {
         cli_io::write_stdout("No update pending\n");
         this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::NO_UPDATE_REBOOT_PENDING);
+    }
+}
+
+void cli::fs_update_cli::print_update_reboot_state_raw()
+{
+    /* Raw env-only answer, safe before any app image is loop-mounted: no
+     * is_reboot_complete()/pendingUpdateRollback() refinement, so the
+     * refined-only codes (UPDATE_REBOOT_PENDING, INCOMPLETE_*_ROLLBACK from a
+     * settled *_REBOOT_PENDING, UPDATE_REBOOT_STATE_INDETERMINATE) are never
+     * emitted here. */
+    switch (this->update_handler->get_update_reboot_state())
+    {
+    case update_definitions::UBootBootstateFlags::FAILED_APP_UPDATE:
+        cli_io::write_stdout("Application update failed\n");
+        this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::FAILED_APP_UPDATE);
+        break;
+    case update_definitions::UBootBootstateFlags::FAILED_FW_UPDATE:
+        cli_io::write_stdout("Firmware update failed\n");
+        this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::FAILED_FW_UPDATE);
+        break;
+    case update_definitions::UBootBootstateFlags::FW_UPDATE_REBOOT_FAILED:
+        cli_io::write_stdout("Firmware reboot update failed\n");
+        this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::FW_UPDATE_REBOOT_FAILED);
+        break;
+    case update_definitions::UBootBootstateFlags::INCOMPLETE_FW_UPDATE:
+        cli_io::write_stdout("Incomplete firmware update\n");
+        this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_FW_UPDATE);
+        break;
+    case update_definitions::UBootBootstateFlags::INCOMPLETE_APP_UPDATE:
+        cli_io::write_stdout("Incomplete application update\n");
+        this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_UPDATE);
+        break;
+    case update_definitions::UBootBootstateFlags::INCOMPLETE_APP_FW_UPDATE:
+        cli_io::write_stdout("Incomplete application and firmware update\n");
+        this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_FW_UPDATE);
+        break;
+    case update_definitions::UBootBootstateFlags::ROLLBACK_FW_REBOOT_PENDING:
+        cli_io::write_stdout("Missing reboot after firmware rollback requested\n");
+        this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::ROLLBACK_FW_REBOOT_PENDING);
+        break;
+    case update_definitions::UBootBootstateFlags::ROLLBACK_APP_REBOOT_PENDING:
+        cli_io::write_stdout("Missing reboot after application rollback requested\n");
+        this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::ROLLBACK_APP_REBOOT_PENDING);
+        break;
+    case update_definitions::UBootBootstateFlags::ROLLBACK_APP_FW_REBOOT_PENDING:
+        cli_io::write_stdout("Missing reboot after firmware and application rollback requested\n");
+        this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::ROLLBACK_APP_FW_REBOOT_PENDING);
+        break;
+    case update_definitions::UBootBootstateFlags::INCOMPLETE_FW_ROLLBACK:
+        cli_io::write_stdout("Incomplete firmware rollback. Commit requested.\n");
+        this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_FW_ROLLBACK);
+        break;
+    case update_definitions::UBootBootstateFlags::INCOMPLETE_APP_ROLLBACK:
+        cli_io::write_stdout("Incomplete application rollback. Commit requested.\n");
+        this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_ROLLBACK);
+        break;
+    case update_definitions::UBootBootstateFlags::INCOMPLETE_APP_FW_ROLLBACK:
+        cli_io::write_stdout("Incomplete firmware and application rollback. Commit requested.\n");
+        this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_FW_ROLLBACK);
+        break;
+    case update_definitions::UBootBootstateFlags::NO_UPDATE_REBOOT_PENDING:
+    case update_definitions::UBootBootstateFlags::UNKNOWN_STATE:
+        cli_io::write_stdout("No update pending\n");
+        this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::NO_UPDATE_REBOOT_PENDING);
+        break;
     }
 }
 
@@ -1210,6 +1303,7 @@ void cli::fs_update_cli::dispatch(cli::Command command)
     {
     case cli::Command::commit_update:       this->commit_update(); break;
     case cli::Command::update_reboot_state: this->print_update_reboot_state(); break;
+    case cli::Command::update_reboot_state_raw: this->print_update_reboot_state_raw(); break;
     case cli::Command::application_version: this->print_current_application_version(); break;
     case cli::Command::firmware_version:    this->print_current_firmware_version(); break;
     case cli::Command::print_version:       this->handle_print_version(); break;

@@ -2,11 +2,12 @@
 USAGE:
 
    fs-updater [--rollback_update] [--switch_fw_slot] [--switch_app_slot]
-              [--commit_update] [--update_reboot_state] [--debug]
-              [--firmware_version] [--application_version] [--version] [-h]
-              [--apply_update] [--install_update] [--detach] [--serial]
-              [--install_progress] [--cancel_install <session_id (uint32)>]
-              [--download_progress] [--download_update] [--is_update_available]
+              [--commit_update] [--update_reboot_state]
+              [--update_reboot_state_raw] [--debug] [--firmware_version]
+              [--application_version] [--version] [-h] [--apply_update]
+              [--install_update] [--detach] [--serial] [--install_progress]
+              [--cancel_install <session_id (uint32)>] [--download_progress]
+              [--download_update] [--is_update_available]
               [--set_app_state_bad <accepted states: A or B>]
               [--is_app_state_bad <accepted states: A or B>]
               [--set_fw_state_bad <accepted states: A or B>]
@@ -31,6 +32,10 @@ Where:
 
    --update_reboot_state
      Get state of update
+
+   --update_reboot_state_raw
+     Get state of update from the raw U-Boot variable only, without mount-state
+     refinement (usable before the app image is mounted)
 
    --debug
      Enable debug output
