@@ -1086,25 +1086,18 @@ void cli::fs_update_cli::handle_apply_update()
 
     if (posix_helpers::path_exists(rollback_path.c_str()))
     {
-        const update_definitions::UBootBootstateFlags update_reboot_state =
-            this->update_handler->get_update_reboot_state();
-
-        if (update_reboot_state == update_definitions::UBootBootstateFlags::ROLLBACK_APP_FW_REBOOT_PENDING)
-        {
-            this->update_handler->update_reboot_state(
-                update_definitions::UBootBootstateFlags::INCOMPLETE_APP_FW_ROLLBACK);
-        }
-        else if (update_reboot_state == update_definitions::UBootBootstateFlags::ROLLBACK_FW_REBOOT_PENDING)
-        {
-            this->update_handler->update_reboot_state(
-                update_definitions::UBootBootstateFlags::INCOMPLETE_FW_ROLLBACK);
-        }
-        else if (update_reboot_state == update_definitions::UBootBootstateFlags::ROLLBACK_APP_REBOOT_PENDING)
-        {
-            this->update_handler->update_reboot_state(
-                update_definitions::UBootBootstateFlags::INCOMPLETE_APP_ROLLBACK);
-        }
-
+        /* A prepared rollback needs nothing but the reboot it is waiting for.
+         * Nothing is written here, deliberately: promoting the pending state
+         * to its INCOMPLETE_* counterpart would leave a different durable
+         * state than a reboot happening for any other reason, and those two
+         * must stay indistinguishable.
+         *
+         * The two values are not interchangeable either. The commit accepts an
+         * INCOMPLETE_* rollback unconditionally, while a pending one is
+         * checked against evidence that the reboot really happened. Promoting
+         * before the reboot therefore replaces a verified verdict with an
+         * assumed one, and a reboot that never arrives leaves the state
+         * claiming a rollback that did not take effect. */
         cli_io::write_stdout("Apply rollback update...\n");
 
         if(this->reboot() != 0) {
@@ -1113,11 +1106,6 @@ void cli::fs_update_cli::handle_apply_update()
             this->return_code = static_cast<int>(UPDATER_SYSTEM::REBOOT_FAILED);
         } else {
             this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFUL);
-        }
-
-        if (this->return_code != static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFUL))
-        {
-            this->update_handler->update_reboot_state(update_reboot_state);
         }
     }
     else
