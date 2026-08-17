@@ -56,7 +56,13 @@ enum class UPDATER_COMMIT_STATE : int{
     UPDATE_COMMIT_SUCCESSFUL = 16,
     UPDATE_NOT_NEEDED = 17,
     UPDATE_NOT_ALLOWED_UBOOT_STATE = 18,
-    UPDATE_SYSTEM_ERROR = 19
+    UPDATE_SYSTEM_ERROR = 19,
+    /* The commit settled an install that was interrupted before its target
+     * was ever activated: that update is discarded and the device still runs
+     * the firmware it ran before, so the caller has to install again. Kept
+     * outside the block above because a consumer matching that range as
+     * success would read a discarded update as a confirmed one. */
+    STALLED_INSTALL_SETTLED = 58
 };
 
 enum class UPDATER_UPDATE_REBOOT_STATE : int{

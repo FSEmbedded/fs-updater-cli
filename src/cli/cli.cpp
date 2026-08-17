@@ -113,8 +113,18 @@ void cli::fs_update_cli::commit_update()
 {
     try
     {
+        /* Asked before the commit: afterwards the state is settled and this
+         * window is no longer distinguishable from an ordinary confirmation. */
+        const bool was_stalled = this->update_handler->has_stalled_install();
+
         if (this->update_handler->commit_update() == true)
         {
+            if (was_stalled)
+            {
+                cli_io::write_stdout("Settled an install that was never activated; still running the previous firmware\n");
+                this->return_code = static_cast<int>(UPDATER_COMMIT_STATE::STALLED_INSTALL_SETTLED);
+                return;
+            }
             cli_io::write_stdout("Commit update\n");
             this->return_code = static_cast<int>(UPDATER_COMMIT_STATE::UPDATE_COMMIT_SUCCESSFUL);
         }
