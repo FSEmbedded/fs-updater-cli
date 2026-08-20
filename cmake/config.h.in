@@ -7,6 +7,10 @@
 #define FUS_CLI_VERSION_MINOR @PROJECT_VERSION_MINOR@
 #define FUS_CLI_VERSION_PATCH @PROJECT_VERSION_PATCH@
 
+// Revision this binary was built from. The project version alone cannot tell
+// two builds apart -- it moves per generation, not per change.
+#define FUS_CLI_SOURCE_ID "@FUS_SOURCE_ID@"
+
 // Update version type configuration
 #define UPDATE_VERSION_TYPE_STRING @UPDATE_VERSION_TYPE_STRING@
 #define UPDATE_VERSION_TYPE_UINT64 @UPDATE_VERSION_TYPE_UINT64@

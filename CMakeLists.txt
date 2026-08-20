@@ -14,6 +14,26 @@ set(update_version_type "string" CACHE STRING "Data type for fw/app version")
 
 set(FUS_LIB_DIR "" CACHE PATH "Local fs-updater-lib install prefix (overrides SDK)")
 
+# Source identity reported by --version. The project version moves rarely, so on
+# its own it cannot tell two builds apart; a recipe passes the revision it pinned
+# (-DFUS_SOURCE_ID=${SRCREV}). Falls back to the working tree's own description,
+# and to "unknown" outside a checkout, so the field is never silently empty.
+set(FUS_SOURCE_ID "" CACHE STRING "Source revision baked into --version")
+if(NOT FUS_SOURCE_ID)
+    find_package(Git QUIET)
+    if(GIT_FOUND AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
+        execute_process(
+            COMMAND "${GIT_EXECUTABLE}" describe --always --dirty
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+            OUTPUT_VARIABLE FUS_SOURCE_ID
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET)
+    endif()
+endif()
+if(NOT FUS_SOURCE_ID)
+    set(FUS_SOURCE_ID "unknown")
+endif()
+
 option(BUILD_DBUS_SUPPORT "Build cloud-flow CLI handlers as D-Bus clients" ON)
 option(BUILD_TESTING      "Build unit tests (native build)"                  OFF)
 option(BUILD_MAIN_TARGET  "Build CLI executable (OFF = tests only)"          ON)

@@ -520,7 +520,12 @@ void cli::fs_update_cli::is_firmware_state_bad(const char &state)
 
 void cli::fs_update_cli::handle_print_version()
 {
+    /* The project version marks the generation, not the build: it moves rarely,
+     * so two binaries that differ in behaviour can carry the same number. The
+     * source id names the revision this one came from. The timestamp is the
+     * source date, not the build clock, wherever the build system pins it. */
     cli_io::write_stdout(string("F&S Update Framework CLI Version: ") + FUS_CLI_PROJECT_VERSION
+        + " source: " + FUS_CLI_SOURCE_ID
         + " build at: " + __DATE__ + ", " + __TIME__ + ".\n");
 }
 
