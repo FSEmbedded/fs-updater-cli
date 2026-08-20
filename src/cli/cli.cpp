@@ -1,4 +1,5 @@
 #include "cli.h"
+#include <fs_update_framework/library_source_id.h>
 #include "fs_updater_error.h"
 #include "fs_updater_types.h"
 #include "posix_helpers.h"
@@ -522,10 +523,14 @@ void cli::fs_update_cli::handle_print_version()
 {
     /* The project version marks the generation, not the build: it moves rarely,
      * so two binaries that differ in behaviour can carry the same number. The
-     * source id names the revision this one came from. The timestamp is the
-     * source date, not the build clock, wherever the build system pins it. */
+     * source ids name the revisions this one came from -- the library's is
+     * asked for at runtime, because a shared library can be replaced under a
+     * CLI that was compiled against a different one, and the two are meant to
+     * be pinned as a pair. The timestamp is the source date, not the build
+     * clock, wherever the build system pins it. */
     cli_io::write_stdout(string("F&S Update Framework CLI Version: ") + FUS_CLI_PROJECT_VERSION
-        + " source: " + FUS_CLI_SOURCE_ID
+        + " cli: " + FUS_CLI_SOURCE_ID
+        + " lib: " + fs::library_source_id()
         + " build at: " + __DATE__ + ", " + __TIME__ + ".\n");
 }
 
