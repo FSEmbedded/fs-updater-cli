@@ -70,6 +70,10 @@ build_cross() {
     local cmake_args=("$@")
 
     unset LD_LIBRARY_PATH
+    # Without this the failure is a bare "No such file or directory" from
+    # `source`, which says neither that the location is configurable nor that
+    # only the cross targets need it.
+    [ -f "$SDK_ENV" ] || { echo "cross build needs the SDK: $SDK_ENV not found — set SDK_ROOT, or use the 'test' target for a host build"; exit 1; }
     source "$SDK_ENV"
 
     if [ -n "$LIB_BUILD_DIR" ]; then
