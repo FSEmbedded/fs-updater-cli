@@ -446,6 +446,16 @@ void cli::fs_update_cli::print_update_reboot_state()
         cli_io::write_stdout("Incomplete firmware and application rollback. Commit requested.\n");
         this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_FW_ROLLBACK);
     }
+    else if (update_reboot_state == update_definitions::UBootBootstateFlags::UNKNOWN_STATE)
+    {
+        /* Not idle: the durable state could not be read or holds content this
+         * build cannot interpret. Reported on stderr and with the framework
+         * exit code, so callers that treat only the idle code as "nothing to
+         * do" keep skipping instead of acting on a device whose state is
+         * unknown. */
+        cli_io::write_stderr("Update reboot state is not interpretable; the device state is unknown\n");
+        this->return_code = static_cast<int>(UPDATER_FATAL::UNHANDLED_EXCEPTION);
+    }
     else
     {
         cli_io::write_stdout("No update pending\n");
