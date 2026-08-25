@@ -28,6 +28,10 @@ Options:
   --sanitize        With 'test': run the native suite under ASan/UBSan
                     (separate build_test_san/ dir; cross builds keep the
                     'sanitize' target).
+  --env-config <path>
+                    Build against another fw_env.config instead of the
+                    device's. For test harnesses; the default is unchanged
+                    without it.
 EOF
     exit 1
 }
@@ -43,6 +47,11 @@ while [ $# -gt 0 ]; do
     --uint64)  EXTRA_ARGS+=("-Dupdate_version_type=uint64") ;;
     --lib)     LIB_BUILD_DIR="$(realpath "$2")"; shift ;;
     --no-dbus) EXTRA_ARGS+=("-DBUILD_DBUS_SUPPORT=OFF") ;;
+    --env-config)
+        # Point the build at another fw_env.config. For a harness that drives
+        # this binary against a prepared environment instead of the device's;
+        # the default is baked in and unchanged without this flag.
+        EXTRA_ARGS+=("-DUBOOT_CONFIG_PATH=$(realpath -m "$2")"); shift ;;
     debug | release | sanitize | test | clean)
         if [ -n "$TARGET" ]; then
             echo "Multiple targets specified: $TARGET and $1"

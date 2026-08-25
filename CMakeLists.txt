@@ -191,6 +191,15 @@ if(BUILD_DBUS_SUPPORT)
     target_sources(fs_updater_cli PRIVATE src/cli/fus_dbus_client.cpp)
 endif()
 
+# Which fw_env.config this binary opens. Empty leaves the header's constant
+# standing, so an ordinary build is unchanged; a harness sets it to drive the
+# binary against a prepared environment instead of a device's. The library
+# carries the same option for the units it compiles itself.
+set(UBOOT_CONFIG_PATH "" CACHE STRING "fw_env.config path compiled into this binary")
+if(UBOOT_CONFIG_PATH)
+    target_compile_definitions(fs_updater_cli PRIVATE UBOOT_CONFIG_PATH="${UBOOT_CONFIG_PATH}")
+endif()
+
 # ==============================================================================
 # Install
 # ==============================================================================
