@@ -80,6 +80,55 @@ expect_rc "a settled device is idle"               27  0     0000
 expect_rc "firmware installed, reboot taken"       23  2     0100
 expect_rc "application installed, nothing mounted" 55  3     0001
 
+# The decoder's alphabet, at the client boundary. The library pins these
+# against its own environment doubles; this runs the same values through the
+# shipping binary and a real file, so the answer comes from the parsing that
+# ships rather than from a double's idea of it. Every one of them must reach
+# the recovery answer: a consumer that treats only the settled code as
+# "nothing to do" keeps skipping a device whose state nobody could read.
+#
+# Rows the library's table has and this one cannot: a value with an embedded
+# NUL, which the environment format uses as its own separator, and the
+# multi-kilobyte values, which do not fit the fixture's block.
+decode_row() { # decode_row <name> <raw value>
+    seed 0 0000 update_reboot_state="$2"
+    client --update_reboot_state
+    if [ "$rc" = 124 ]; then
+        echo "PASS: unreadable value rejected -- $1"
+    else
+        echo "FAIL: unreadable value rejected -- $1: want rc 124, got $rc"
+        fails=$((fails + 1))
+    fi
+}
+
+decode_row "out of range 13"      "13"
+decode_row "out of range 14"      "14"
+decode_row "out of range 99"      "99"
+decode_row "out of range 255"     "255"
+decode_row "out of range 256"     "256"
+decode_row "wider than 32 bits"   "4294967296"
+decode_row "wider than 64 bits"   "184467440737095516160"
+decode_row "empty"                ""
+decode_row "space only"           " "
+decode_row "tab only"             "$(printf '\t')"
+decode_row "trailing space"       "2 "
+decode_row "leading space"        " 2"
+decode_row "alphabetic"           "abc"
+decode_row "digit then alpha"     "2abc"
+decode_row "hex prefix"           "0x02"
+decode_row "explicit plus"        "+2"
+decode_row "negative"             "-1"
+decode_row "decimal point"        "2.0"
+decode_row "decimal comma"        "2,0"
+decode_row "leading zero"         "012"
+decode_row "non-ascii digit"      "$(printf '\357\274\220')"
+
+# The table's guard against a silent pass: if seeding stopped working, every
+# row above would keep answering from whatever was written last -- which is
+# also unreadable, so they would all stay green while testing nothing. A
+# canonical value seeded the same way must still decode.
+expect_rc "a canonical value still decodes after the table" 27 0 0000
+
 # A write that cannot be persisted. The environment carries the only record of
 # what the device is doing, so the failure has to be reported rather than
 # assumed, and what is already there has to survive: a half-written environment
