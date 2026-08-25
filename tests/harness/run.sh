@@ -129,6 +129,48 @@ decode_row "non-ascii digit"      "$(printf '\357\274\220')"
 # canonical value seeded the same way must still decode.
 expect_rc "a canonical value still decodes after the table" 27 0 0000
 
+# Which verb refuses which state, and with which code. Measured against this
+# binary rather than assumed; the rows below are the ones that carry meaning
+# beyond "the verb echoes the state it found".
+#
+# Every row seeds the bitfield as all-zero, i.e. the state is set but the
+# precondition its owning arm checks does not hold. That is the shape the
+# terminal refusal exists for.
+expect_verb() { # expect_verb <name> <verb> <want-rc> <state> <bits>
+    seed "$4" "$5"
+    client "$2"
+    if [ "$rc" = "$3" ]; then
+        echo "PASS: $1"
+    else
+        echo "FAIL: $1 -- $2 on state $4: want rc $3, got $rc"
+        fails=$((fails + 1))
+    fi
+}
+
+expect_verb "commit: nothing to do on a settled device" --commit_update   17 0  0000
+expect_verb "commit: a decided firmware rollback finalises" --commit_update 16 7  0000
+expect_verb "commit: an unowned shape is refused by name" --commit_update 18 9  0000
+expect_verb "commit: an unreadable state is refused"      --commit_update 18 zz 0000
+expect_verb "rollback: nothing pending on a settled device" --rollback_update 27 0 0000
+expect_verb "rollback: a pending firmware update is undone" --rollback_update 12 2 0000
+expect_verb "rollback: an indeterminate app rollback is named" --rollback_update 57 8 0000
+expect_verb "rollback: an unreadable state is refused"     --rollback_update 124 zz 0000
+
+# The two cells below are today's behaviour and they are the defect, not the
+# contract: an application rollback with no mountable image cannot be settled
+# by either verb, so the device parks. They are pinned so the fix has to come
+# through here and cannot land unnoticed -- when it does, these two fail and
+# the expectations move.
+expect_verb "commit cannot settle an app rollback with nothing mounted" \
+    --commit_update 19 8 0000
+expect_verb "rollback refuses a pending app update with nothing mounted" \
+    --rollback_update 15 3 0000
+
+# Deliberately absent: --apply_update. Where it has real work it ends in a
+# reboot, and there is no reboot here, so it answers with the system-level
+# failure. That is the harness speaking, not the product, and pinning it would
+# pin the emulation.
+
 # A write that cannot be persisted. The environment carries the only record of
 # what the device is doing, so the failure has to be reported rather than
 # assumed, and what is already there has to survive: a half-written environment
