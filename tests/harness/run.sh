@@ -38,12 +38,13 @@ printf '%s 0x0000 0x2000\n' "$ENV_BIN" > "$FIXTURE/fw_env.config"
 
 fails=0
 
-seed() { # seed <state> <update-bits> [extra k=v...]
+seed() { # seed <state> <update-bits> [override k=v...]
     _state=$1; _bits=$2; shift 2
     python3 "$MKENV" build "$ENV_BIN" \
         update_reboot_state="$_state" update="$_bits" \
-        'BOOT_ORDER=A B' 'BOOT_ORDER_OLD=A B' BOOT_A_LEFT=3 BOOT_B_LEFT=3 \
-        application=A 'rauc_cmd=rauc.slot=A' 'console=ttymxc1,115200' "$@"
+        'BOOT_ORDER=A B' 'BOOT_ORDER_OLD=A B' BOOT_B_LEFT=3 \
+        application=A 'rauc_cmd=rauc.slot=A' 'console=ttymxc1,115200' \
+        BOOT_A_LEFT=3 "$@"
 }
 
 client() { # client <args...> -> sets rc, out
@@ -78,6 +79,34 @@ expect_rc "a settled device is idle"               27  0     0000
 # that maps state to code cannot show this.
 expect_rc "firmware installed, reboot taken"       23  2     0100
 expect_rc "application installed, nothing mounted" 55  3     0001
+
+# A write that cannot be persisted. The environment carries the only record of
+# what the device is doing, so the failure has to be reported rather than
+# assumed, and what is already there has to survive: a half-written environment
+# is worse than an unchanged one, because the next read cannot tell the
+# difference between a value and a casualty.
+#
+# The write is provoked by a spent boot budget on a settled device -- the one
+# branch that puts the budget back, and the only write an otherwise idle client
+# makes.
+expect_write_refused() { # expect_write_refused <name> <want-rc>
+    seed 0 0000 BOOT_A_LEFT=1
+    chmod 0444 "$ENV_BIN"
+    client --commit_update
+    chmod 0644 "$ENV_BIN"
+    _left=$(python3 "$MKENV" read "$ENV_BIN" 2>/dev/null | sed -n 's/^BOOT_A_LEFT=//p')
+    _ok=1
+    [ "$rc" = "$2" ] || { echo "      want rc $2, got $rc"; _ok=0; }
+    [ "$_left" = "1" ] || { echo "      the refused write left BOOT_A_LEFT=$_left"; _ok=0; }
+    if [ "$_ok" -eq 1 ]; then
+        echo "PASS: $1"
+    else
+        echo "FAIL: $1"
+        fails=$((fails + 1))
+    fi
+}
+
+expect_write_refused "a write that cannot be persisted is reported, not assumed" 19
 
 if [ "$fails" -ne 0 ]; then
     echo "environment harness: $fails case(s) FAILED"
