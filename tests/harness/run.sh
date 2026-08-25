@@ -77,8 +77,17 @@ expect_rc "a settled device is idle"               27  0     0000
 # client asks whether the reboot happened and whether the image is mounted, so
 # the same stored state yields different answers on different evidence. A stub
 # that maps state to code cannot show this.
-expect_rc "firmware installed, reboot taken"       23  2     0100
+expect_rc "firmware installed, reboot taken"       23  2     0010
 expect_rc "application installed, nothing mounted" 55  3     0001
+
+# The bitfield is [fw_A][app_A][fw_B][app_B]; running on A, an install's target
+# is B. The query does not consult it at all -- the derived answer comes from
+# the stored state and the boot and mount evidence -- so the same state answers
+# the same way whichever digits are set. Pinned because a reader seeing a
+# bitfield in a fixture will otherwise assume it is what produced the answer.
+expect_rc "the query ignores the bitfield (target digit set)" 23 2 0010
+expect_rc "the query ignores the bitfield (wrong digit set)" 23 2 0100
+expect_rc "the query ignores the bitfield (no digit set)"    23 2 0000
 
 # The decoder's alphabet, at the client boundary. The library pins these
 # against its own environment doubles; this runs the same values through the
@@ -155,6 +164,15 @@ expect_verb "rollback: nothing pending on a settled device" --rollback_update 27
 expect_verb "rollback: a pending firmware update is undone" --rollback_update 12 2 0000
 expect_verb "rollback: an indeterminate app rollback is named" --rollback_update 57 8 0000
 expect_verb "rollback: an unreadable state is refused"     --rollback_update 124 zz 0000
+
+# With the target's firmware digit actually set, the commit reaches the arm
+# that owns the state and settles an install whose target was never activated
+# -- the boot order still leads with the running slot, so nothing ever booted
+# what was installed. It answers with its own code rather than the ordinary
+# success, which is the whole point of that code: a backend told "committed"
+# would record a discarded update as a confirmed one.
+expect_verb "commit: an install whose target never booted settles distinctly" \
+    --commit_update 58 2 0010
 
 # The two cells below are today's behaviour and they are the defect, not the
 # contract: an application rollback with no mountable image cannot be settled
