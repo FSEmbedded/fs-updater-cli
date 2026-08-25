@@ -5,7 +5,11 @@
 
 SynchronizedSerial::SynchronizedSerial()
 {
-    UBoot::UBoot uboot_handler("/etc/fw_env.config");
+    /* The same environment the rest of the client reads. Spelling the path
+     * here as a literal defeated the header's override, so a build pointed at
+     * another environment still opened this one -- and on a host without it,
+     * the client failed in its constructor before reaching any verb. */
+    UBoot::UBoot uboot_handler(UBOOT_CONFIG_PATH);
     const std::string console = util::split(util::split(uboot_handler.getVariable("console"),'=').back(), ',').at(0);
     const std::string dev_path = std::string("/dev/") + console;
     this->serial_fd = ::open(dev_path.c_str(), O_WRONLY | O_NOCTTY | O_CLOEXEC);
