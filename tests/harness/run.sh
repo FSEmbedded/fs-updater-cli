@@ -72,7 +72,16 @@ trap 'status=$?; restore_fixture; exit $status' EXIT
 trap 'restore_fixture; exit 130' INT
 trap 'restore_fixture; exit 143' TERM HUP
 
+# The summary used to count failures only, so a run that never reached half the
+# file -- an early return, a block left behind by an edit -- would still have
+# ended in the sentence that says everything passed. The total is declared here
+# and checked against what actually ran. It has to be bumped when a case is
+# added, and that is the point: a case count nobody maintains cannot notice a
+# case that disappears.
+EXPECTED_CASES=45
+
 fails=0
+passes=0
 
 # A seed that fails has to stop the run. Without `set -e` its status was
 # dropped, and the case then measured whatever the previous case had left
@@ -127,6 +136,7 @@ out_names() { # out_names <substring>
 
 verdict() { # verdict <name> <context> -- reads $_why
     if [ -z "$_why" ]; then
+        passes=$((passes + 1))
         echo "PASS: $1"
     else
         echo "FAIL: $1 -- $2: $_why"
@@ -332,8 +342,13 @@ expect_write_refused() { # expect_write_refused <name> <want-rc>
 
 expect_write_refused "a write that cannot be persisted is reported, not assumed" 19
 
-if [ "$fails" -ne 0 ]; then
-    echo "environment harness: $fails case(s) FAILED"
+ran=$((passes + fails))
+if [ "$ran" -ne "$EXPECTED_CASES" ]; then
+    echo "environment harness: $ran case(s) ran, $EXPECTED_CASES expected"
     exit 1
 fi
-echo "environment harness: all cases passed"
+if [ "$fails" -ne 0 ]; then
+    echo "environment harness: $fails of $ran case(s) FAILED"
+    exit 1
+fi
+echo "environment harness: $passes/$EXPECTED_CASES cases passed"
