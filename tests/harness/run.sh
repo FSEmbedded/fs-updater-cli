@@ -78,7 +78,7 @@ trap 'restore_fixture; exit 143' TERM HUP
 # and checked against what actually ran. It has to be bumped when a case is
 # added, and that is the point: a case count nobody maintains cannot notice a
 # case that disappears.
-EXPECTED_CASES=45
+EXPECTED_CASES=47
 
 fails=0
 passes=0
@@ -200,7 +200,8 @@ expect_rc "application installed, nothing mounted" 55  3     0001
 # the stored state and the boot and mount evidence -- so the same state answers
 # the same way whichever digits are set. Pinned because a reader seeing a
 # bitfield in a fixture will otherwise assume it is what produced the answer.
-expect_rc "the query ignores the bitfield (target digit set)" 23 2 0010
+# The target-digit member of the comparison is the first row above; repeating it
+# here under a second name only made one product change look like two.
 expect_rc "the query ignores the bitfield (wrong digit set)" 23 2 0100
 expect_rc "the query ignores the bitfield (no digit set)"    23 2 0000
 
@@ -269,6 +270,8 @@ expect_verb() { # expect_verb <name> <verb> <want-rc> <state> <bits> [override k
 
 expect_verb "commit: nothing to do on a settled device" --commit_update   17 0  0000
 expect_verb "commit: a decided firmware rollback finalises" --commit_update 16 7  0000
+expect_verb "commit: an incomplete install with nothing in flight is refused" \
+    --commit_update 18 2 0000
 expect_verb_named "commit: an unowned shape is refused by name" --commit_update 18 \
     'no arm settles update_reboot_state=9' 9 0000
 expect_verb_named "commit: an unreadable state is refused" --commit_update 18 \
@@ -294,6 +297,12 @@ expect_verb "commit: an install whose target never booted settles distinctly" \
     --commit_update 58 2 0010
 expect_verb "commit: the settle keys on one uncommitted digit, not on the target" \
     --commit_update 58 2 1000
+expect_verb "commit: an install whose target never booted settles, running the other slot" \
+    --commit_update 58 2 0010 'BOOT_ORDER=B A' 'BOOT_ORDER_OLD=B A' \
+    application=B 'rauc_cmd=rauc.slot=B'
+expect_verb "commit: still one digit and not the target, running the other slot" \
+    --commit_update 58 2 1000 'BOOT_ORDER=B A' 'BOOT_ORDER_OLD=B A' \
+    application=B 'rauc_cmd=rauc.slot=B'
 
 # Two uncommitted firmware digits never reach that arm at all. The value is
 # validated where the variable is read, and a bitfield claiming two firmware
