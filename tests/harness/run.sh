@@ -311,8 +311,14 @@ expect_verb "commit: nothing to do on a settled device" --commit_update   17 0  
 expect_verb "commit: a decided firmware rollback finalises" --commit_update 16 7  0000
 expect_verb "commit: an incomplete install with nothing in flight is refused" \
     --commit_update 18 2 0000
-expect_verb_named "commit: an unowned shape is refused by name" --commit_update 18 \
-    'no arm settles update_reboot_state=9' 9 0000
+# The refusal has to say WHICH of the two reasons it is. This shape is the
+# second one -- state 9 has an arm, the arm wants both slots uncommitted, and
+# the bitfield is settled -- and a caller can only act on the reason, not on
+# "not allowed". The state number alone leaves the two indistinguishable.
+expect_verb_named "commit: an owned state whose slot precondition fails says what it wanted" \
+    --commit_update 18 \
+    'update_reboot_state=9 has an arm, but its slot precondition does not hold; it expects an uncommitted firmware and application slot' \
+    9 0000
 expect_verb_named "commit: an unreadable state is refused" --commit_update 18 \
     'holds uninterpretable content: "zz"' zz 0000
 expect_verb "rollback: nothing pending on a settled device" --rollback_update 27 0 0000
