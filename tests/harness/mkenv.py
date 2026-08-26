@@ -44,8 +44,12 @@ if __name__ == "__main__":
     if sys.argv[1] == "build":
         pairs = dict(a.split("=", 1) for a in sys.argv[3:])
         build(sys.argv[2], pairs)
+    elif sys.argv[1] == "size":
+        # The environment's size belongs to the format, so the driver asks for
+        # it rather than repeating the number in its own configuration line.
+        print("%#x" % ENV_SIZE)
     elif sys.argv[1] == "read":
         for k, v in sorted(read(sys.argv[2]).items()):
             print("%s=%s" % (k, v))
     else:
-        raise SystemExit("usage: mkenv.py build <file> k=v...  |  read <file>")
+        raise SystemExit("usage: mkenv.py build <file> k=v...  |  read <file>  |  size")

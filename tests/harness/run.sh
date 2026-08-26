@@ -39,12 +39,26 @@ for f in "$QEMU" "$CLIENT" "$MKENV"; do
     [ -e "$f" ] || { echo "harness: missing $f" >&2; exit 2; }
 done
 
-for c in python3 timeout; do
+for c in python3 timeout flock; do
     command -v "$c" >/dev/null || { echo "harness: missing $c" >&2; exit 2; }
 done
 
-mkdir -p "$FIXTURE"
-FIXTURE=$(CDPATH='' cd -- "$FIXTURE" && pwd)
+# One case takes the environment's write permission away and requires the write
+# to be refused. Root ignores the permission, so under root that case fails for
+# a reason that has nothing to do with the product.
+[ "$(id -u)" -ne 0 ] || {
+    echo "harness: run as an ordinary user; root defeats the write-refusal case" >&2
+    exit 2
+}
+
+mkdir -p "$FIXTURE" 2>/dev/null || {
+    echo "harness: cannot create the fixture directory $FIXTURE" >&2
+    exit 2
+}
+FIXTURE=$(CDPATH='' cd -- "$FIXTURE" && pwd) || {
+    echo "harness: cannot enter the fixture directory" >&2
+    exit 2
+}
 
 if ! grep -qaF -- "$FIXTURE/fw_env.config" "$CLIENT"; then
     echo "harness: $CLIENT does not carry $FIXTURE/fw_env.config" >&2
@@ -52,14 +66,24 @@ if ! grep -qaF -- "$FIXTURE/fw_env.config" "$CLIENT"; then
     exit 2
 fi
 
+# The environment writer takes this lock before every write, and it waits for
+# it rather than failing. Asking only whether the file can be created answers
+# the wrong question: a lock somebody else holds passes that check and then
+# stalls the first case. Take it the same way the writer does, non-blocking,
+# and give it straight back -- and open it for append, because truncating a
+# file another process is using is not a probe.
 LOCK=/var/lock/fw_printenv.lock
-if ! ( : > "$LOCK" ) 2>/dev/null; then
-    echo "harness: cannot create $LOCK, which the environment writer takes" >&2
+if ! ( flock -n 9 ) 9>>"$LOCK" 2>/dev/null; then
+    if [ -e "$LOCK" ]; then
+        echo "harness: $LOCK is held; another environment writer is running" >&2
+    else
+        echo "harness: cannot create $LOCK, which the environment writer takes" >&2
+    fi
     exit 2
 fi
 
 ENV_BIN="$FIXTURE/env.bin"
-printf '%s 0x0000 0x2000\n' "$ENV_BIN" > "$FIXTURE/fw_env.config"
+printf '%s 0x0000 %s\n' "$ENV_BIN" "$(python3 "$MKENV" size)" > "$FIXTURE/fw_env.config"
 
 # One case takes the environment's write permission away on purpose. Dying
 # between that and its restore leaves a fixture nothing can seed again -- and
