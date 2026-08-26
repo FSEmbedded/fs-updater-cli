@@ -165,14 +165,31 @@ expect_verb "rollback: a pending firmware update is undone" --rollback_update 12
 expect_verb "rollback: an indeterminate app rollback is named" --rollback_update 57 8 0000
 expect_verb "rollback: an unreadable state is refused"     --rollback_update 124 zz 0000
 
-# With the target's firmware digit actually set, the commit reaches the arm
-# that owns the state and settles an install whose target was never activated
-# -- the boot order still leads with the running slot, so nothing ever booted
-# what was installed. It answers with its own code rather than the ordinary
-# success, which is the whole point of that code: a backend told "committed"
-# would record a discarded update as a confirmed one.
+# With a single uncommitted firmware digit set, the commit reaches the arm that
+# owns the state and settles an install whose target was never activated -- the
+# boot order still leads with the running slot, so nothing ever booted what was
+# installed. It answers with its own code rather than the ordinary success,
+# which is the whole point of that code: a backend told "committed" would record
+# a discarded update as a confirmed one.
+#
+# What that arm keys on is *one* uncommitted firmware digit, either slot's, and
+# not the target's: the two rows below differ only in which slot carries it and
+# answer the same, and repeating both from the other running slot answers the
+# same again. The running slot does not enter into it.
 expect_verb "commit: an install whose target never booted settles distinctly" \
     --commit_update 58 2 0010
+expect_verb "commit: the settle keys on one uncommitted digit, not on the target" \
+    --commit_update 58 2 1000
+
+# Two uncommitted firmware digits never reach that arm at all. The value is
+# validated where the variable is read, and a bitfield claiming two firmware
+# slots in flight is refused there as out of contract, so the commit ends in the
+# generic error of the read path rather than in any state arm -- which also
+# makes the arm's own two-in-flight guard unreachable from here. This is the
+# family where an unacceptable bitfield jams the commit and every install after
+# it.
+expect_verb "an ambiguous bitfield is refused on read, before any arm" \
+    --commit_update 19 2 1010
 
 # The two cells below are today's behaviour and they are the defect, not the
 # contract: an application rollback with no mountable image cannot be settled
