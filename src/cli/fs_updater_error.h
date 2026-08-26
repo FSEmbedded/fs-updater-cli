@@ -62,7 +62,14 @@ enum class UPDATER_COMMIT_STATE : int{
      * the firmware it ran before, so the caller has to install again. Kept
      * outside the block above because a consumer matching that range as
      * success would read a discarded update as a confirmed one. */
-    STALLED_INSTALL_SETTLED = 58
+    STALLED_INSTALL_SETTLED = 58,
+    /* The commit consumed a durable state that no current flow writes: the
+     * device carried it in from a superseded firmware or an environment edit,
+     * and it is now settled to the current model. Distinct from an ordinary
+     * confirmation because nothing was confirmed -- a fleet that cannot tell
+     * the two apart cannot see that one of its devices arrived with a state
+     * from an older generation. */
+    LEGACY_STATE_MIGRATED = 59
 };
 
 enum class UPDATER_UPDATE_REBOOT_STATE : int{

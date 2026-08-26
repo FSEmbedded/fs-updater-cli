@@ -117,7 +117,7 @@ trap 'restore_fixture; exit 143' TERM HUP
 # and checked against what actually ran. It has to be bumped when a case is
 # added, and that is the point: a case count nobody maintains cannot notice a
 # case that disappears.
-EXPECTED_CASES=47
+EXPECTED_CASES=48
 
 fails=0
 passes=0
@@ -311,6 +311,17 @@ expect_verb "commit: nothing to do on a settled device" --commit_update   17 0  
 expect_verb "commit: a decided firmware rollback finalises" --commit_update 16 7  0000
 expect_verb "commit: an incomplete install with nothing in flight is refused" \
     --commit_update 18 2 0000
+# Nothing writes this state, so a device carrying it got it from outside. It used
+# to be a dead end: its acknowledge predicate wanted the running slot uncommitted,
+# which is the opposite of what the state means, so every verb refused. Meanwhile
+# the consuming layer counts its code among the failed ones and calls commit to
+# settle it on every boot, and the deadline timer reboots on the failure. It has
+# to settle from any shape, which is what this case measures.
+# The answer is its own code, not an ordinary confirmation: nothing was
+# confirmed here, a legacy value was migrated, and a fleet that cannot tell the
+# two apart cannot see that a device arrived carrying an older generation.
+expect_verb "commit: an induced failed-reboot state is migrated, and says so" \
+    --commit_update 59 1 0000
 # The refusal has to say WHICH of the two reasons it is. This shape is the
 # second one -- state 9 has an arm, the arm wants both slots uncommitted, and
 # the bitfield is settled -- and a caller can only act on the reason, not on
