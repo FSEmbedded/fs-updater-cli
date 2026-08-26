@@ -54,6 +54,10 @@ TEST(FsUpdaterError, AllExitCodesAreDistinct)
         code(UPDATER_COMMIT_STATE::UPDATE_NOT_NEEDED),
         code(UPDATER_COMMIT_STATE::UPDATE_NOT_ALLOWED_UBOOT_STATE),
         code(UPDATER_COMMIT_STATE::UPDATE_SYSTEM_ERROR),
+        /* Both sit outside the 16/17 block and were outside this guard too:
+         * the settled stalled install has been missing since it was added. */
+        code(UPDATER_COMMIT_STATE::STALLED_INSTALL_SETTLED),
+        code(UPDATER_COMMIT_STATE::LEGACY_STATE_MIGRATED),
 
         code(UPDATER_UPDATE_REBOOT_STATE::FAILED_APP_UPDATE),
         code(UPDATER_UPDATE_REBOOT_STATE::FAILED_FW_UPDATE),
@@ -116,7 +120,7 @@ TEST(FsUpdaterError, AllExitCodesAreDistinct)
 
     // Add every new enumerator here too: this set is the whole-table drift
     // guard and does not derive from fs_updater_error.h automatically.
-    EXPECT_EQ(all_codes.size(), 68u);
+    EXPECT_EQ(all_codes.size(), 70u);
 }
 
 TEST(FsUpdaterError, AllExitCodesFitInUnsignedByteSpace)
