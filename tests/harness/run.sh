@@ -113,13 +113,14 @@ client() { # client <args...> -> sets rc, out
     fi
 }
 
-expect_rc() { # expect_rc <name> <want> <state> <bits>
-    seed "$3" "$4"
+expect_rc() { # expect_rc <name> <want> <state> <bits> [override k=v...]
+    _n=$1; _w=$2; _s=$3; _b=$4; shift 4
+    seed "$_s" "$_b" "$@"
     client --update_reboot_state
-    if [ "$rc" = "$2" ]; then
-        echo "PASS: $1"
+    if [ "$rc" = "$_w" ]; then
+        echo "PASS: $_n"
     else
-        echo "FAIL: $1 -- seeded state $3 bits $4: want rc $2, got $rc"
+        echo "FAIL: $_n -- seeded state $_s bits $_b: want rc $_w, got $rc"
         echo "      $(printf '%s' "$out" | tail -n 1)"
         fails=$((fails + 1))
     fi
@@ -136,7 +137,20 @@ expect_rc "a settled device is idle"               27  0     0000
 # client asks whether the reboot happened and whether the image is mounted, so
 # the same stored state yields different answers on different evidence. A stub
 # that maps state to code cannot show this.
+#
+# The first two rows are that claim, and they are one variable apart. Same
+# stored state, same bitfield; in the second the boot order leads with a slot
+# other than the running one while the previous order is still recorded -- what
+# an install writes and a reboot then consumes. So the same device state is
+# reported as awaiting a commit in one case and as still owing its reboot in
+# the other, on evidence alone. (The derivation also requires both boot budgets
+# untouched; a spent budget does not move this answer by itself.)
+#
+# The mount side of the same question is out of reach here: nothing loop-mounts
+# an application image under user-mode emulation. This pair covers the boot
+# order, not the mount.
 expect_rc "firmware installed, reboot taken"       23  2     0010
+expect_rc "firmware installed, reboot still owed"  26  2     0010 'BOOT_ORDER=B A'
 expect_rc "application installed, nothing mounted" 55  3     0001
 
 # The bitfield is [fw_A][app_A][fw_B][app_B]; running on A, an install's target
@@ -204,13 +218,15 @@ expect_rc "a canonical value still decodes after the table" 27 0 0000
 # Every row seeds the bitfield as all-zero, i.e. the state is set but the
 # precondition its owning arm checks does not hold. That is the shape the
 # terminal refusal exists for.
-expect_verb() { # expect_verb <name> <verb> <want-rc> <state> <bits>
-    seed "$4" "$5"
-    client "$2"
-    if [ "$rc" = "$3" ]; then
-        echo "PASS: $1"
+expect_verb() { # expect_verb <name> <verb> <want-rc> <state> <bits> [override k=v...]
+    _n=$1; _v=$2; _w=$3; _s=$4; _b=$5; shift 5
+    seed "$_s" "$_b" "$@"
+    client "$_v"
+    if [ "$rc" = "$_w" ]; then
+        echo "PASS: $_n"
     else
-        echo "FAIL: $1 -- $2 on state $4: want rc $3, got $rc"
+        echo "FAIL: $_n -- $_v on state $_s: want rc $_w, got $rc"
+        echo "      $(printf '%s' "$out" | tail -n 1)"
         fails=$((fails + 1))
     fi
 }
