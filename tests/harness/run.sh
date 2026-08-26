@@ -113,24 +113,56 @@ client() { # client <args...> -> sets rc, out
     fi
 }
 
-expect_rc() { # expect_rc <name> <want> <state> <bits> [override k=v...]
-    _n=$1; _w=$2; _s=$3; _b=$4; shift 4
-    seed "$_s" "$_b" "$@"
-    client --update_reboot_state
-    if [ "$rc" = "$_w" ]; then
-        echo "PASS: $_n"
+# Some of these codes carry very little on their own. The recovery answer and
+# the write-path error are what the client says for a whole family of failures
+# -- an environment that is corrupt, or missing entirely, produces both -- so a
+# case that checks only the number has shown that something went wrong, not
+# that the thing it seeded went wrong. Where the product prints a line naming
+# the mechanism, the case requires that line too, and for a rejected value the
+# line quotes the value: the case then also proves the binary read what this
+# run seeded rather than what an earlier one left behind.
+out_names() { # out_names <substring>
+    printf '%s' "$out" | grep -qF -- "$1"
+}
+
+verdict() { # verdict <name> <context> -- reads $_why
+    if [ -z "$_why" ]; then
+        echo "PASS: $1"
     else
-        echo "FAIL: $_n -- seeded state $_s bits $_b: want rc $_w, got $rc"
+        echo "FAIL: $1 -- $2: $_why"
         echo "      $(printf '%s' "$out" | tail -n 1)"
         fails=$((fails + 1))
     fi
 }
 
+judge() { # judge <want-rc> <want-line> -- sets $_why
+    _why=""
+    [ "$rc" = "$1" ] || _why="want rc $1, got $rc"
+    if [ -n "$2" ] && ! out_names "$2"; then
+        _why="${_why:+$_why; }nothing in the output named: $2"
+    fi
+}
+
+expect_rc_named() { # <name> <want> <want-line> <state> <bits> [override k=v...]
+    _n=$1; _w=$2; _l=$3; _s=$4; _b=$5; shift 5
+    seed "$_s" "$_b" "$@"
+    client --update_reboot_state
+    judge "$_w" "$_l"
+    verdict "$_n" "seeded state $_s bits $_b"
+}
+
+expect_rc() { # expect_rc <name> <want> <state> <bits> [override k=v...]
+    _en=$1; _ew=$2; shift 2
+    expect_rc_named "$_en" "$_ew" "" "$@"
+}
+
 # The read is total over what the storage can hold: a value outside the
 # alphabet must answer the recovery code rather than idle, or a consumer that
 # treats only idle as "nothing to do" keeps skipping a device nobody can read.
-expect_rc "an unreadable value is not idle"        124 9x   0000
-expect_rc "garbage is not idle"                    124 abc  0000
+expect_rc_named "an unreadable value is not idle" 124 \
+    'holds uninterpretable content: "9x"' 9x 0000
+expect_rc_named "garbage is not idle" 124 \
+    'holds uninterpretable content: "abc"' abc 0000
 expect_rc "a settled device is idle"               27  0     0000
 
 # The derived answers. The stored value alone does not determine the code: the
@@ -173,14 +205,8 @@ expect_rc "the query ignores the bitfield (no digit set)"    23 2 0000
 # NUL, which the environment format uses as its own separator, and the
 # multi-kilobyte values, which do not fit the fixture's block.
 decode_row() { # decode_row <name> <raw value>
-    seed 0 0000 update_reboot_state="$2"
-    client --update_reboot_state
-    if [ "$rc" = 124 ]; then
-        echo "PASS: unreadable value rejected -- $1"
-    else
-        echo "FAIL: unreadable value rejected -- $1: want rc 124, got $rc"
-        fails=$((fails + 1))
-    fi
+    expect_rc_named "unreadable value rejected -- $1" 124 \
+        "holds uninterpretable content: \"$2\"" 0 0000 update_reboot_state="$2"
 }
 
 decode_row "out of range 13"      "13"
@@ -218,27 +244,30 @@ expect_rc "a canonical value still decodes after the table" 27 0 0000
 # Every row seeds the bitfield as all-zero, i.e. the state is set but the
 # precondition its owning arm checks does not hold. That is the shape the
 # terminal refusal exists for.
-expect_verb() { # expect_verb <name> <verb> <want-rc> <state> <bits> [override k=v...]
-    _n=$1; _v=$2; _w=$3; _s=$4; _b=$5; shift 5
+expect_verb_named() { # <name> <verb> <want-rc> <want-line> <state> <bits> [override k=v...]
+    _n=$1; _v=$2; _w=$3; _l=$4; _s=$5; _b=$6; shift 6
     seed "$_s" "$_b" "$@"
     client "$_v"
-    if [ "$rc" = "$_w" ]; then
-        echo "PASS: $_n"
-    else
-        echo "FAIL: $_n -- $_v on state $_s: want rc $_w, got $rc"
-        echo "      $(printf '%s' "$out" | tail -n 1)"
-        fails=$((fails + 1))
-    fi
+    judge "$_w" "$_l"
+    verdict "$_n" "$_v on state $_s"
+}
+
+expect_verb() { # expect_verb <name> <verb> <want-rc> <state> <bits> [override k=v...]
+    _en=$1; _ev=$2; _ew=$3; shift 3
+    expect_verb_named "$_en" "$_ev" "$_ew" "" "$@"
 }
 
 expect_verb "commit: nothing to do on a settled device" --commit_update   17 0  0000
 expect_verb "commit: a decided firmware rollback finalises" --commit_update 16 7  0000
-expect_verb "commit: an unowned shape is refused by name" --commit_update 18 9  0000
-expect_verb "commit: an unreadable state is refused"      --commit_update 18 zz 0000
+expect_verb_named "commit: an unowned shape is refused by name" --commit_update 18 \
+    'no arm settles update_reboot_state=9' 9 0000
+expect_verb_named "commit: an unreadable state is refused" --commit_update 18 \
+    'holds uninterpretable content: "zz"' zz 0000
 expect_verb "rollback: nothing pending on a settled device" --rollback_update 27 0 0000
 expect_verb "rollback: a pending firmware update is undone" --rollback_update 12 2 0000
 expect_verb "rollback: an indeterminate app rollback is named" --rollback_update 57 8 0000
-expect_verb "rollback: an unreadable state is refused"     --rollback_update 124 zz 0000
+expect_verb_named "rollback: an unreadable state is refused" --rollback_update 124 \
+    'holds uninterpretable content: "zz"' zz 0000
 
 # With a single uncommitted firmware digit set, the commit reaches the arm that
 # owns the state and settles an install whose target was never activated -- the
@@ -263,8 +292,8 @@ expect_verb "commit: the settle keys on one uncommitted digit, not on the target
 # makes the arm's own two-in-flight guard unreachable from here. This is the
 # family where an unacceptable bitfield jams the commit and every install after
 # it.
-expect_verb "an ambiguous bitfield is refused on read, before any arm" \
-    --commit_update 19 2 1010
+expect_verb_named "an ambiguous bitfield is refused on read, before any arm" \
+    --commit_update 19 'does not allowed content: "per-bit validation" instead:1010' 2 1010
 
 # The two cells below are today's behaviour and they are the defect, not the
 # contract: an application rollback with no mountable image cannot be settled
@@ -296,15 +325,9 @@ expect_write_refused() { # expect_write_refused <name> <want-rc>
     client --commit_update
     chmod 0644 "$ENV_BIN"
     _left=$(python3 "$MKENV" read "$ENV_BIN" 2>/dev/null | sed -n 's/^BOOT_A_LEFT=//p')
-    _ok=1
-    [ "$rc" = "$2" ] || { echo "      want rc $2, got $rc"; _ok=0; }
-    [ "$_left" = "1" ] || { echo "      the refused write left BOOT_A_LEFT=$_left"; _ok=0; }
-    if [ "$_ok" -eq 1 ]; then
-        echo "PASS: $1"
-    else
-        echo "FAIL: $1"
-        fails=$((fails + 1))
-    fi
+    judge "$2" "Cannot write U-Boot Env"
+    [ "$_left" = "1" ] || _why="${_why:+$_why; }the refused write left BOOT_A_LEFT=$_left"
+    verdict "$1" "a commit that has to put the boot budget back"
 }
 
 expect_write_refused "a write that cannot be persisted is reported, not assumed" 19
