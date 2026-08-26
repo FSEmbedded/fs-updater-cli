@@ -16,6 +16,13 @@
 # emulation -- the emulator ships with the SDK. Nothing boots, and no kernel
 # is involved.
 #
+# Two preconditions the cases cannot report for themselves, so both are checked
+# before any of them run: the fixture directory has to be the one the two build
+# steps were pointed at, because the path is compiled in rather than passed --
+# otherwise every case seeds one file and measures another -- and the lock the
+# environment writer takes has to be creatable, or every write verb answers with
+# a generic error that reads as a product failure.
+#
 # Usage: run.sh <fixture-dir> <client-binary> <lib-build-dir> <sdk-root>
 set -u
 
@@ -33,6 +40,20 @@ for f in "$QEMU" "$CLIENT" "$MKENV"; do
 done
 
 mkdir -p "$FIXTURE"
+FIXTURE=$(CDPATH='' cd -- "$FIXTURE" && pwd)
+
+if ! grep -qaF -- "$FIXTURE/fw_env.config" "$CLIENT"; then
+    echo "harness: $CLIENT does not carry $FIXTURE/fw_env.config" >&2
+    echo "harness: rebuild both halves with --env-config $FIXTURE/fw_env.config" >&2
+    exit 2
+fi
+
+LOCK=/var/lock/fw_printenv.lock
+if ! ( : > "$LOCK" ) 2>/dev/null; then
+    echo "harness: cannot create $LOCK, which the environment writer takes" >&2
+    exit 2
+fi
+
 ENV_BIN="$FIXTURE/env.bin"
 printf '%s 0x0000 0x2000\n' "$ENV_BIN" > "$FIXTURE/fw_env.config"
 
