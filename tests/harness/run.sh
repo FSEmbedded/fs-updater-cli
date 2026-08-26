@@ -39,6 +39,10 @@ for f in "$QEMU" "$CLIENT" "$MKENV"; do
     [ -e "$f" ] || { echo "harness: missing $f" >&2; exit 2; }
 done
 
+for c in python3 timeout; do
+    command -v "$c" >/dev/null || { echo "harness: missing $c" >&2; exit 2; }
+done
+
 mkdir -p "$FIXTURE"
 FIXTURE=$(CDPATH='' cd -- "$FIXTURE" && pwd)
 
@@ -57,22 +61,56 @@ fi
 ENV_BIN="$FIXTURE/env.bin"
 printf '%s 0x0000 0x2000\n' "$ENV_BIN" > "$FIXTURE/fw_env.config"
 
+# One case takes the environment's write permission away on purpose. Dying
+# between that and its restore leaves a fixture nothing can seed again -- and
+# the next run would spend its cases on a stale environment rather than on the
+# product. Give the permission back however this run ends.
+restore_fixture() {
+    if [ -e "$ENV_BIN" ]; then chmod 0644 "$ENV_BIN" 2>/dev/null || true; fi
+}
+trap 'status=$?; restore_fixture; exit $status' EXIT
+trap 'restore_fixture; exit 130' INT
+trap 'restore_fixture; exit 143' TERM HUP
+
 fails=0
 
+# A seed that fails has to stop the run. Without `set -e` its status was
+# dropped, and the case then measured whatever the previous case had left
+# behind: for the decode table, twenty-one consecutive rows all expecting the
+# same recovery code, a seed that stops working part-way through keeps every
+# later row green while it tests nothing at all.
 seed() { # seed <state> <update-bits> [override k=v...]
     _state=$1; _bits=$2; shift 2
     python3 "$MKENV" build "$ENV_BIN" \
         update_reboot_state="$_state" update="$_bits" \
         'BOOT_ORDER=A B' 'BOOT_ORDER_OLD=A B' BOOT_B_LEFT=3 \
         application=A 'rauc_cmd=rauc.slot=A' 'console=ttymxc1,115200' \
-        BOOT_A_LEFT=3 "$@"
+        BOOT_A_LEFT=3 "$@" && return 0
+    echo "harness: cannot seed state $_state bits $_bits into $ENV_BIN" >&2
+    echo "harness: the cases after this one would have measured a stale fixture" >&2
+    exit 2
 }
 
+# No case may wait forever. The environment writer takes a *blocking* lock, so
+# a concurrent write from anywhere on the machine, or an earlier run still
+# alive, stalls a case with no output and no end.
+#
+# The kill signal is not a detail. An expiry has to be unmistakable for an
+# answer, and the ordinary expiry status is 124 -- the exact code most of the
+# cases below expect. Killed instead, the run reports 137, which no verb here
+# produces, so a hang can never be read as a pass.
+CASE_TIMEOUT=30
+
 client() { # client <args...> -> sets rc, out
-    out=$("$QEMU" -L "$SYSROOT" \
+    out=$(timeout --signal=KILL "$CASE_TIMEOUT" "$QEMU" -L "$SYSROOT" \
         -E LD_LIBRARY_PATH="$LIBDIR:$SYSROOT/usr/lib:$SYSROOT/lib" \
         "$CLIENT" "$@" 2>&1)
     rc=$?
+    if [ "$rc" -eq 137 ]; then
+        echo "harness: no answer within ${CASE_TIMEOUT}s from: $*" >&2
+        echo "harness: something holds $LOCK, or an earlier run is still alive" >&2
+        exit 2
+    fi
 }
 
 expect_rc() { # expect_rc <name> <want> <state> <bits>
