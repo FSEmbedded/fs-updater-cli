@@ -81,6 +81,16 @@ enum class UPDATER_UPDATE_REBOOT_STATE : int{
     INCOMPLETE_APP_FW_UPDATE = 25,
     UPDATE_REBOOT_PENDING = 26,
     NO_UPDATE_REBOOT_PENDING = 27,
+    /* The six rollback answers are three pairs, not six states: each rollback
+     * state reports the first code while its reboot is outstanding and the
+     * second once the commit is requested. So 31 and 32 are reached from the
+     * live rollback states 7 and 8, not only from the states of the same name.
+     *
+     * 30 and 33 are the exception: both come only from the combined rollback,
+     * which no flow writes in the shipped configuration. They are unreachable
+     * today and kept because a device from an earlier generation can still
+     * report them.
+     */
     ROLLBACK_FW_REBOOT_PENDING = 28,
     ROLLBACK_APP_REBOOT_PENDING = 29,
     ROLLBACK_APP_FW_REBOOT_PENDING = 30,
