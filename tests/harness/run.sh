@@ -66,6 +66,21 @@ if ! grep -qaF -- "$FIXTURE/fw_env.config" "$CLIENT"; then
     exit 2
 fi
 
+# The client links the library statically as it is built here, so the string
+# just checked is the whole answer for this run. The library carries its own
+# copy of the same path, and that copy is what would decide the moment the
+# linking changes -- it sits first on the library path used below. Holding it
+# to the same rule while it is there to check keeps this guard from quietly
+# covering half of what the header promises.
+for lib in "$LIBDIR"/libfs_updater.so*; do
+    [ -e "$lib" ] || continue
+    grep -qaF -- "$FIXTURE/fw_env.config" "$lib" || {
+        echo "harness: $lib does not carry $FIXTURE/fw_env.config" >&2
+        echo "harness: the two halves were built against different fixtures" >&2
+        exit 2
+    }
+done
+
 # The environment writer takes this lock before every write, and it waits for
 # it rather than failing. Asking only whether the file can be created answers
 # the wrong question: a lock somebody else holds passes that check and then
