@@ -132,7 +132,7 @@ trap 'restore_fixture; exit 143' TERM HUP
 # and checked against what actually ran. It has to be bumped when a case is
 # added, and that is the point: a case count nobody maintains cannot notice a
 # case that disappears.
-EXPECTED_CASES=56
+EXPECTED_CASES=61
 
 fails=0
 passes=0
@@ -402,6 +402,47 @@ expect_verb_named "query: a slot marked bad answers 1 and says the query ran" \
 # riding on the application one. Firmware B is index 2 of [fw_A][app_A][fw_B][app_B].
 expect_verb_named "query: the firmware twin answers the same way" \
     --is_fw_state_bad=B 52 '1' 0 0020
+
+# The setters had no case here at all, and that is how a defect reached a
+# device: every row above reads the field, none of them writes it, so what the
+# marking verbs leave behind rested on a single bench measurement. The verbs
+# answer with a code and print nothing, so the code alone would say only that
+# something ran -- the assertion that carries the meaning is the field
+# afterwards.
+expect_verb_writes() { # <name> <verb> <want-rc> <state> <bits> <want-bits-after>
+    _n=$1; _v=$2; _w=$3; _s=$4; _b=$5; _a=$6
+    seed "$_s" "$_b"
+    client "$_v"
+    _bits_now=$(python3 "$MKENV" read "$ENV_BIN" 2>/dev/null | sed -n 's/^update=//p')
+    judge "$_w" ""
+    [ "$_bits_now" = "$_a" ] || _why="${_why:+$_why; }want update $_a, got $_bits_now"
+    verdict "$_n" "seeded state $_s bits $_b, ran $_v"
+}
+
+expect_verb_writes "mark: a committed application slot becomes bad" \
+    --set_app_state_bad=B 52 0 0000 0002
+expect_verb_writes "mark: the firmware twin writes its own digit" \
+    --set_fw_state_bad=B 52 0 0000 0020
+
+# The one that matters. A slot can be marked while an update is in flight on it
+# -- the boot guard does exactly that when the trials run out -- and the two
+# facts are independent, so the mark must not take the other one with it. It
+# used to: the digit was replaced rather than the bit set, the pending-update
+# predicate then answered false, and the revert took a path that reaches a
+# different end state. Nothing at this level held that.
+expect_verb_writes "mark: a slot in flight keeps that fact when it is marked bad" \
+    --set_app_state_bad=B 52 3 0001 0003
+
+# Marking twice must stage nothing: a caller that marks on every boot would
+# otherwise write the bootloader environment on every boot.
+expect_verb_writes "mark: a slot that is already bad is left alone" \
+    --set_app_state_bad=B 52 0 0002 0002
+
+# And the reader side of the same digit, at the product level: settling an
+# application rollback clears the in-flight bit and leaves the verdict. The
+# commit that does it is the one the boot guard's revert reaches.
+expect_verb_writes "commit: settling a rollback keeps a verdict on the slot" \
+    --commit_update 16 8 0003 0002
 
 # With a single uncommitted firmware digit set, the commit reaches the arm that
 # owns the state and settles an install whose target was never activated -- the
