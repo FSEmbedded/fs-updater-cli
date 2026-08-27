@@ -409,23 +409,39 @@ void cli::fs_update_cli::print_update_reboot_state()
     else if (update_reboot_state == update_definitions::UBootBootstateFlags::ROLLBACK_APP_REBOOT_PENDING)
     {
         /* Only this rollback branch probes loop devices; the fw and app+fw
-         * branches decide from the boot environment alone. */
+         * branches decide from the boot environment alone. The three outcomes
+         * come from the same classification the commit's precondition reads,
+         * so the code reported here and the verb that leads out cannot
+         * disagree about the same device. */
         try
         {
-            if (this->update_handler->pendingUpdateRollback() == false)
+            switch (this->update_handler->classify_app_rollback())
             {
+            case updater::Bootstate::AppRollbackOutcome::REBOOT_OUTSTANDING:
                 cli_io::write_stdout("Missing reboot after application rollback requested\n");
                 this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::ROLLBACK_APP_REBOOT_PENDING);
-            }
-            else
-            {
+                break;
+
+            case updater::Bootstate::AppRollbackOutcome::COMMIT_REQUESTED:
                 cli_io::write_stdout("Incomplete application rollback. Commit requested.\n");
                 this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_ROLLBACK);
+                break;
+
+            case updater::Bootstate::AppRollbackOutcome::INDETERMINATE:
+                /* Reported, not refused: the commit accepts this shape. Its own
+                 * code, because a caller that cannot tell it from a landed
+                 * reboot cannot tell that the image needs attention. */
+                cli_io::write_stdout("Application rollback pending; mounted image state indeterminate (no app image mounted)\n");
+                this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::ROLLBACK_APP_REBOOT_INDETERMINATE);
+                break;
             }
         }
         catch (const updater::GetLoopDevices &e)
         {
-            cli_io::write_stdout("Application rollback pending; mounted image state indeterminate (no app image mounted)\n");
+            /* The evidence could not be read at all -- a different thing from
+             * "nothing is mounted", and the same answer, because neither can
+             * say whether the reboot happened. */
+            cli_io::write_stdout("Application rollback pending; mounted image state indeterminate (loop devices unreadable)\n");
             this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::ROLLBACK_APP_REBOOT_INDETERMINATE);
         }
     }

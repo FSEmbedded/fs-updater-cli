@@ -117,7 +117,7 @@ trap 'restore_fixture; exit 143' TERM HUP
 # and checked against what actually ran. It has to be bumped when a case is
 # added, and that is the point: a case count nobody maintains cannot notice a
 # case that disappears.
-EXPECTED_CASES=48
+EXPECTED_CASES=49
 
 fails=0
 passes=0
@@ -334,7 +334,17 @@ expect_verb_named "commit: an unreadable state is refused" --commit_update 18 \
     'holds uninterpretable content: "zz"' zz 0000
 expect_verb "rollback: nothing pending on a settled device" --rollback_update 27 0 0000
 expect_verb "rollback: a pending firmware update is undone" --rollback_update 12 2 0000
-expect_verb "rollback: an indeterminate app rollback is named" --rollback_update 57 8 0000
+expect_verb_named "rollback: an indeterminate app rollback is named" --rollback_update 57 \
+    'no app image mounted' 8 0000
+
+# The same state, answered without the probe. A running application slot still
+# marked uncommitted is the rollback's own record that it was enacted, so the
+# bitfield settles the question first -- which is why this row answers "commit
+# requested" where the row above answers "indeterminate", on the same state and
+# the same (empty) set of loop devices. The digit is the RUNNING slot's: the
+# fixture runs A, so index 1 of [fw_A][app_A][fw_B][app_B].
+expect_verb "rollback: the bitfield decides an app rollback before the mount is asked" \
+    --rollback_update 32 8 0100
 expect_verb_named "rollback: an unreadable state is refused" --rollback_update 124 \
     'holds uninterpretable content: "zz"' zz 0000
 
@@ -370,13 +380,12 @@ expect_verb "commit: still one digit and not the target, running the other slot"
 expect_verb_named "an ambiguous bitfield is refused on read, before any arm" \
     --commit_update 19 'does not allowed content: "per-bit validation" instead:1010' 2 1010
 
-# The two cells below are today's behaviour and they are the defect, not the
-# contract: an application rollback with no mountable image cannot be settled
-# by either verb, so the device parks. They are pinned so the fix has to come
-# through here and cannot land unnoticed -- when it does, these two fail and
-# the expectations move.
-expect_verb "commit cannot settle an app rollback with nothing mounted" \
-    --commit_update 19 8 0000
+# An application rollback whose image will not mount is settled by the commit,
+# on the evidence that the slot switch already happened. Both cases name the
+# line that produces the answer, not only the number: a code alone cannot say
+# which mechanism reached it.
+expect_verb_named "commit: an app rollback with nothing mounted is settled" \
+    --commit_update 16 'Commit update' 8 0000
 expect_verb "rollback refuses a pending app update with nothing mounted" \
     --rollback_update 15 3 0000
 
