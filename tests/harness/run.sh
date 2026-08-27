@@ -97,6 +97,21 @@ if ! ( flock -n 9 ) 9>>"$LOCK" 2>/dev/null; then
     exit 2
 fi
 
+# The mount evidence comes from the REAL /sys/class/block: the binary runs under
+# user-mode emulation, and sysfs is not part of the emulated root. With no loop
+# device bound anywhere on this machine the mount question answers "nothing
+# mounted", which is what the derived cases below are written against. Bind one
+# -- a snap, a mounted image, an unrelated build -- and those cases silently
+# measure a different shape: the indeterminate answers become "reboot taken" or
+# "reboot still owed", and they do it without any case naming a reason. Held
+# here rather than assumed, because the run cannot tell the two apart afterwards.
+for _loop_backing in /sys/class/block/loop*/loop/backing_file; do
+    [ -r "$_loop_backing" ] || continue
+    echo "harness: $_loop_backing is readable -- a loop device is bound on this host" >&2
+    echo "harness: the mount-evidence cases would measure a different shape; detach it first" >&2
+    exit 2
+done
+
 ENV_BIN="$FIXTURE/env.bin"
 printf '%s 0x0000 %s\n' "$ENV_BIN" "$(python3 "$MKENV" size)" > "$FIXTURE/fw_env.config"
 
@@ -117,7 +132,7 @@ trap 'restore_fixture; exit 143' TERM HUP
 # and checked against what actually ran. It has to be bumped when a case is
 # added, and that is the point: a case count nobody maintains cannot notice a
 # case that disappears.
-EXPECTED_CASES=52
+EXPECTED_CASES=56
 
 fails=0
 passes=0
@@ -345,6 +360,32 @@ expect_verb_named "rollback: an indeterminate app rollback is named" --rollback_
 # fixture runs A, so index 1 of [fw_A][app_A][fw_B][app_B].
 expect_verb "rollback: the bitfield decides an app rollback before the mount is asked" \
     --rollback_update 32 8 0100
+
+# The shortcut reads the RUNNING slot only, and it reads a bit, not a digit.
+#
+# A '3' is uncommitted AND bad at once. Nothing in this tree writes one, and no
+# commit path settles one, but the validator accepts it -- so a device can carry
+# it, and what the shortcut then does is a contract rather than an accident: on
+# the running slot it satisfies the uncommitted bit and decides the answer
+# without a probe; on the target slot it does not enter into this question at
+# all, and the mount evidence still decides. Both rows would answer the same as
+# their plain-digit siblings if the check ever became an equality on '1'.
+expect_verb "rollback: a bad-and-uncommitted running digit still feeds the shortcut" \
+    --rollback_update 32 8 0300
+expect_verb "rollback: the target's digit does not feed the running slot's shortcut" \
+    --rollback_update 57 8 0003
+
+# An unacceptable bitfield is refused where the variable is read, before any
+# classification runs -- the state is never even asked about. Pinned at state 8
+# because that is the arm which reaches a probe: an out-of-contract field must
+# not get as far as deciding what is mounted.
+#
+# On the status verb this is the recovery code. The same throw reaches a
+# different number through a mutating verb -- that verb's own handler maps it to
+# its system error -- which is why the row names the verb it was measured on
+# rather than the state alone.
+expect_rc_named "an unacceptable bitfield is refused before the state is classified" 124 \
+    'does not allowed content: "per-bit validation" instead:1010' 8 1010
 expect_verb_named "rollback: an unreadable state is refused" --rollback_update 124 \
     'holds uninterpretable content: "zz"' zz 0000
 
@@ -400,8 +441,17 @@ expect_verb_named "an ambiguous bitfield is refused on read, before any arm" \
 # which mechanism reached it.
 expect_verb_named "commit: an app rollback with nothing mounted is settled" \
     --commit_update 16 'Commit update' 8 0000
-expect_verb "rollback refuses a pending app update with nothing mounted" \
-    --rollback_update 15 3 0000
+
+# NOT the mount behaviour its old name claimed. Under user-mode emulation there
+# is no /etc/rauc/system.conf -- neither in the SDK sysroot nor on the host --
+# so the collaborator the rollback path builds raises before any mount is
+# consulted, and the verb answers with the system-level error. Pinning the line
+# is what keeps that visible: with a RAUC fixture present this same seed settles
+# instead of refusing, so the number alone would have gone on meaning the
+# opposite of what it was read to mean. Measuring the mount half needs that
+# fixture and is out of scope here.
+expect_verb_named "rollback: a pending app update stops at the missing RAUC configuration" \
+    --rollback_update 15 'RAUC config file not found' 3 0000
 
 # Deliberately absent: --apply_update. Where it has real work it ends in a
 # reboot, and there is no reboot here, so it answers with the system-level
@@ -429,6 +479,29 @@ expect_write_refused() { # expect_write_refused <name> <want-rc>
 }
 
 expect_write_refused "a write that cannot be persisted is reported, not assumed" 19
+
+# The same failure on the arm that settles an application rollback, which is a
+# heavier write: it clears a slot digit, puts BOTH boot budgets back and clears
+# the state, and it does all of that in one transaction. A partial write here
+# would leave a device whose durable record says one thing and whose budgets say
+# another -- worse than the refusal, because the next read cannot tell that
+# anything was lost. The seed is the shape whose precondition the commit now
+# accepts, so this exercises the path that changed rather than the one that
+# always refused.
+expect_rollback_write_refused() { # <name> <want-rc>
+    seed 8 0000
+    chmod 0444 "$ENV_BIN"
+    client --commit_update
+    chmod 0644 "$ENV_BIN"
+    _state_after=$(python3 "$MKENV" read "$ENV_BIN" 2>/dev/null | sed -n 's/^update_reboot_state=//p')
+    _bits_after=$(python3 "$MKENV" read "$ENV_BIN" 2>/dev/null | sed -n 's/^update=//p')
+    judge "$2" "Cannot write U-Boot Env"
+    [ "$_state_after" = "8" ] || _why="${_why:+$_why; }the refused write left update_reboot_state=$_state_after"
+    [ "$_bits_after" = "0000" ] || _why="${_why:+$_why; }the refused write left update=$_bits_after"
+    verdict "$1" "a rollback commit whose write cannot be persisted"
+}
+
+expect_rollback_write_refused "a refused rollback commit leaves the state it could not settle" 19
 
 ran=$((passes + fails))
 if [ "$ran" -ne "$EXPECTED_CASES" ]; then
