@@ -117,7 +117,7 @@ trap 'restore_fixture; exit 143' TERM HUP
 # and checked against what actually ran. It has to be bumped when a case is
 # added, and that is the point: a case count nobody maintains cannot notice a
 # case that disappears.
-EXPECTED_CASES=49
+EXPECTED_CASES=52
 
 fails=0
 passes=0
@@ -347,6 +347,20 @@ expect_verb "rollback: the bitfield decides an app rollback before the mount is 
     --rollback_update 32 8 0100
 expect_verb_named "rollback: an unreadable state is refused" --rollback_update 124 \
     'holds uninterpretable content: "zz"' zz 0000
+
+# The two query verbs answer on stdout and in the exit code, and both halves are
+# pinned here: the line is the answer, the code says the query ran. The code
+# used to be the constructor's 0 -- the only verb in this table whose success
+# was 0, next to twenty-odd whose success is not, and indistinguishable from a
+# verb that set nothing at all.
+expect_verb_named "query: a slot that is not bad answers 0 and says the query ran" \
+    --is_app_state_bad=B 52 '0' 0 0000
+expect_verb_named "query: a slot marked bad answers 1 and says the query ran" \
+    --is_app_state_bad=B 52 '1' 0 0002
+# The firmware query keeps the same contract and gets its own row rather than
+# riding on the application one. Firmware B is index 2 of [fw_A][app_A][fw_B][app_B].
+expect_verb_named "query: the firmware twin answers the same way" \
+    --is_fw_state_bad=B 52 '1' 0 0020
 
 # With a single uncommitted firmware digit set, the commit reaches the arm that
 # owns the state and settles an install whose target was never activated -- the

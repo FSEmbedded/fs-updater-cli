@@ -528,7 +528,13 @@ void cli::fs_update_cli::is_application_state_bad(const char &state)
     }
     else
     {
+        /* The answer is the line on stdout; the code says the query ran, the
+         * way its setter counterpart does. Leaving it at the constructor's 0
+         * made a successful query indistinguishable from every other verb's
+         * silence, and put the only verb in this table whose success is 0 next
+         * to twenty-odd whose success is not. */
         cli_io::write_stdout(std::to_string(this->update_handler->is_update_state_bad(state, application_update_state)) + "\n");
+        this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::GETSET_STATE_SUCCESSFUL);
     }
 }
 
@@ -548,7 +554,9 @@ void cli::fs_update_cli::is_firmware_state_bad(const char &state)
     }
     else
     {
+        /* Same contract as the application query above. */
         cli_io::write_stdout(std::to_string(this->update_handler->is_update_state_bad(state, firmware_update_state)) + "\n");
+        this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::GETSET_STATE_SUCCESSFUL);
     }
 }
 
