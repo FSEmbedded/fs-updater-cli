@@ -205,13 +205,15 @@ void cli::fs_update_cli::rollback_update()
     catch (const fs::GenericException &e)
     {
         cli_io::write_stderr(string("Rollback update progress error: ") + e.what() + " errno: " + std::to_string(e.errorno) + "\n");
-        /* No errno branch here, unlike the slot switches: every refusal is
-         * answered with the plain progress error. A rollback does reach the
-         * committed-slot-switch path -- a state that says an update is in
-         * flight with a bitfield that says nothing is falls through to it --
-         * so the refusal arrives in the message and not in the code. Whether
-         * it should also reach the code is undecided. */
-        this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_PROGRESS_ERROR);
+        /* Same mapper as the slot switches, because a rollback reaches the same
+         * refusals: a state that says an update is in flight with a bitfield
+         * that says nothing is does not take the pending arm, it falls through
+         * to the committed-slot-switch verdict. Answering those refusals with
+         * the plain progress error made one library decision arrive as two
+         * different codes depending on which door the caller used. Refusals
+         * this mapper does not name still answer 13, so nothing that already
+         * relied on a code loses it. */
+        this->return_code = cli::map_slot_switch_errno(e.errorno);
     }
     catch (const fs::BaseFSUpdateException &e)
     {

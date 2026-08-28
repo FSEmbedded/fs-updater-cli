@@ -132,7 +132,7 @@ trap 'restore_fixture; exit 143' TERM HUP
 # and checked against what actually ran. It has to be bumped when a case is
 # added, and that is the point: a case count nobody maintains cannot notice a
 # case that disappears.
-EXPECTED_CASES=63
+EXPECTED_CASES=64
 
 fails=0
 passes=0
@@ -508,13 +508,22 @@ expect_verb_named "commit: an app rollback with nothing mounted is settled" \
 # error either. The state says an application update is in flight and the
 # bitfield says nothing is, so the pending arm is not taken and this seed reaches
 # the committed-slot-switch verdict instead -- where the target slot has no image
-# under user-mode emulation. The line is that verdict; the code is the rollback
-# handler's plain progress error, which is what it makes of every refusal errno,
-# so the two halves say different things and both are pinned. With a RAUC fixture
+# under user-mode emulation. Line and code now say the same thing: the rollback
+# door maps the refusal errnos exactly as the switch doors do, so one library
+# decision no longer arrives as two different codes depending on which door the
+# caller used. It answered 13 until that mapper was shared. With a RAUC fixture
 # present this same seed settles instead of refusing; measuring the mount half
 # needs that fixture and is out of scope here.
 expect_verb_named "rollback: a settled bitfield sends a pending state to the switch verdict" \
-    --rollback_update 13 'slot B was never provisioned' 3 0000
+    --rollback_update 56 'slot B was never provisioned' 3 0000
+
+# The mapper's other branch, at the same door. A rollback whose target slot is
+# marked bad is refused with EPERM, which reaches the caller as the state
+# error (54), not as a generic progress failure (13). Both
+# branches are pinned here so the shared mapper cannot be half-adopted: a change
+# that reverted one of them would leave the other green.
+expect_verb_named "rollback: a target slot marked bad is refused as a state error" \
+    --rollback_update 54 'not allowed' 2 0020
 
 # Deliberately absent: --apply_update. Where it has real work it ends in a
 # reboot, and there is no reboot here, so it answers with the system-level
