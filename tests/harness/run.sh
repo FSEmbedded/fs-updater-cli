@@ -132,7 +132,7 @@ trap 'restore_fixture; exit 143' TERM HUP
 # and checked against what actually ran. It has to be bumped when a case is
 # added, and that is the point: a case count nobody maintains cannot notice a
 # case that disappears.
-EXPECTED_CASES=62
+EXPECTED_CASES=63
 
 fails=0
 passes=0
@@ -417,9 +417,9 @@ expect_verb_named "query: the firmware twin answers the same way" \
 # answer with a code and print nothing, so the code alone would say only that
 # something ran -- the assertion that carries the meaning is the field
 # afterwards.
-expect_verb_writes() { # <name> <verb> <want-rc> <state> <bits> <want-bits-after>
-    _n=$1; _v=$2; _w=$3; _s=$4; _b=$5; _a=$6
-    seed "$_s" "$_b"
+expect_verb_writes() { # <name> <verb> <want-rc> <state> <bits> <want-bits-after> [override k=v...]
+    _n=$1; _v=$2; _w=$3; _s=$4; _b=$5; _a=$6; shift 6
+    seed "$_s" "$_b" "$@"
     client "$_v"
     _bits_now=$(python3 "$MKENV" read "$ENV_BIN" 2>/dev/null | sed -n 's/^update=//p')
     judge "$_w" ""
@@ -440,6 +440,19 @@ expect_verb_writes "mark: the firmware twin writes its own digit" \
 # different end state. Nothing at this level held that.
 expect_verb_writes "mark: a slot in flight keeps that fact when it is marked bad" \
     --set_app_state_bad=B 52 3 0001 0003
+
+# The other direction of the same independence, at the door an operator uses.
+# A slot can be marked bad after it booted -- the guard does it when the trials
+# run out -- and the commit that follows must not undo that verdict. The commit
+# path used to write the committed digit as a literal, so it cleared both facts
+# at once: the device came out of the update reporting a slot as good that had
+# been condemned while running, and the switch verbs would then admit it.
+#
+# The success predicate reads the boot order and never the digit, so this arm is
+# reached with the mark standing.
+expect_verb_writes "commit: a firmware update settles without clearing the slot's verdict" \
+    --commit_update 16 2 0030 0020 \
+    'rauc_cmd=rauc.slot=B' 'BOOT_ORDER=B A' 'BOOT_ORDER_OLD=A B'
 
 # Marking twice must stage nothing: a caller that marks on every boot would
 # otherwise write the bootloader environment on every boot.
