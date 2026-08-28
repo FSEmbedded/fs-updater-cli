@@ -205,10 +205,12 @@ void cli::fs_update_cli::rollback_update()
     catch (const fs::GenericException &e)
     {
         cli_io::write_stderr(string("Rollback update progress error: ") + e.what() + " errno: " + std::to_string(e.errorno) + "\n");
-        /* No errno branch here, unlike the slot switches: the EPERM/ECANCELED/
-         * ENOENT refusal throws only arise in the committed-slot-switch path,
-         * which a rollback (reached only on an INCOMPLETE_* reboot state)
-         * never enters. A plain progress error is the only reachable outcome. */
+        /* No errno branch here, unlike the slot switches: every refusal is
+         * answered with the plain progress error. A rollback does reach the
+         * committed-slot-switch path -- a state that says an update is in
+         * flight with a bitfield that says nothing is falls through to it --
+         * so the refusal arrives in the message and not in the code. Whether
+         * it should also reach the code is undecided. */
         this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_PROGRESS_ERROR);
     }
     catch (const fs::BaseFSUpdateException &e)

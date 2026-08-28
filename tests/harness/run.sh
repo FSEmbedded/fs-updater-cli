@@ -132,7 +132,7 @@ trap 'restore_fixture; exit 143' TERM HUP
 # and checked against what actually ran. It has to be bumped when a case is
 # added, and that is the point: a case count nobody maintains cannot notice a
 # case that disappears.
-EXPECTED_CASES=61
+EXPECTED_CASES=62
 
 fails=0
 passes=0
@@ -375,6 +375,14 @@ expect_verb "rollback: a bad-and-uncommitted running digit still feeds the short
 expect_verb "rollback: the target's digit does not feed the running slot's shortcut" \
     --rollback_update 57 8 0003
 
+# The switch verb decides the target slot before it builds the collaborator that
+# would install to it. This fixture has no RAUC configuration -- the shape of a
+# device that was never provisioned -- so with the decision made afterwards the
+# operator is told a configuration is missing where the answerable problem is
+# the target slot. The digit is the TARGET slot's: the fixture runs A.
+expect_verb_named "switch: an unprovisioned target names the slot, not the missing configuration" \
+    --switch_app_slot 56 'slot B was never provisioned' 0 0000
+
 # An unacceptable bitfield is refused where the variable is read, before any
 # classification runs -- the state is never even asked about. Pinned at state 8
 # because that is the arm which reaches a probe: an out-of-contract field must
@@ -483,16 +491,17 @@ expect_verb_named "an ambiguous bitfield is refused on read, before any arm" \
 expect_verb_named "commit: an app rollback with nothing mounted is settled" \
     --commit_update 16 'Commit update' 8 0000
 
-# NOT the mount behaviour its old name claimed. Under user-mode emulation there
-# is no /etc/rauc/system.conf -- neither in the SDK sysroot nor on the host --
-# so the collaborator the rollback path builds raises before any mount is
-# consulted, and the verb answers with the system-level error. Pinning the line
-# is what keeps that visible: with a RAUC fixture present this same seed settles
-# instead of refusing, so the number alone would have gone on meaning the
-# opposite of what it was read to mean. Measuring the mount half needs that
-# fixture and is out of scope here.
-expect_verb_named "rollback: a pending app update stops at the missing RAUC configuration" \
-    --rollback_update 15 'RAUC config file not found' 3 0000
+# NOT the mount behaviour its old name claimed, and no longer the collaborator's
+# error either. The state says an application update is in flight and the
+# bitfield says nothing is, so the pending arm is not taken and this seed reaches
+# the committed-slot-switch verdict instead -- where the target slot has no image
+# under user-mode emulation. The line is that verdict; the code is the rollback
+# handler's plain progress error, which is what it makes of every refusal errno,
+# so the two halves say different things and both are pinned. With a RAUC fixture
+# present this same seed settles instead of refusing; measuring the mount half
+# needs that fixture and is out of scope here.
+expect_verb_named "rollback: a settled bitfield sends a pending state to the switch verdict" \
+    --rollback_update 13 'slot B was never provisioned' 3 0000
 
 # Deliberately absent: --apply_update. Where it has real work it ends in a
 # reboot, and there is no reboot here, so it answers with the system-level
