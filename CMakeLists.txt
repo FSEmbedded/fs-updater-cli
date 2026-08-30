@@ -39,6 +39,7 @@ option(BUILD_TESTING      "Build unit tests (native build)"                  OFF
 option(BUILD_MAIN_TARGET  "Build CLI executable (OFF = tests only)"          ON)
 option(FSUP_WERROR        "Treat compiler warnings as errors (-Werror)"      ON)
 option(ENABLE_SANITIZERS  "Enable ASan and UBSan (native test builds)"       OFF)
+option(BUILD_FUZZING      "Build the libFuzzer target (needs clang)"         OFF)
 
 # Validate options
 if(NOT OPTIMIZE_FOR MATCHES "^(SIZE|SPEED)$")
@@ -74,9 +75,17 @@ configure_file(cmake/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config.h)
 # Tests-only mode (skip CLI executable when cross-compile libs unavailable)
 # ==============================================================================
 
-if(BUILD_TESTING AND NOT BUILD_MAIN_TARGET)
-    enable_testing()
-    add_subdirectory(tests)
+# The fuzz target shares this early return: like the tests it needs neither the
+# CLI executable nor the cross-compile libraries, and building it through the
+# ordinary path would drag both in.
+if((BUILD_TESTING OR BUILD_FUZZING) AND NOT BUILD_MAIN_TARGET)
+    if(BUILD_TESTING)
+        enable_testing()
+        add_subdirectory(tests)
+    endif()
+    if(BUILD_FUZZING)
+        add_subdirectory(fuzz)
+    endif()
     return()
 endif()
 

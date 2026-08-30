@@ -16,6 +16,13 @@ Targets:
   release     Cross-compile Release build (-Os, LTO)
   sanitize    Cross-compile Debug build with ASan + UBSan
   test        Native build + run unit tests
+  fuzz        Native libFuzzer build (requires clang) + a short smoke run
+              per target against fuzz/seed_corpus/; for an actual fuzzing
+              session run the built binary directly, e.g.
+              build_fuzz/fuzz/fuzz_cli_args -max_total_time=300
+              build_fuzz/corpus_cli_args fuzz/seed_corpus/cli_args
+              (new inputs land in the first directory, never in
+              seed_corpus/)
   clean       Remove all build directories
 
 Options:
@@ -52,7 +59,7 @@ while [ $# -gt 0 ]; do
         # this binary against a prepared environment instead of the device's;
         # the default is baked in and unchanged without this flag.
         EXTRA_ARGS+=("-DUBOOT_CONFIG_PATH=$(realpath -m "$2")"); shift ;;
-    debug | release | sanitize | test | clean)
+    debug | release | sanitize | test | fuzz | clean)
         if [ -n "$TARGET" ]; then
             echo "Multiple targets specified: $TARGET and $1"
             usage
@@ -122,6 +129,57 @@ build_test() {
     "$ctest_bin" --output-on-failure
 }
 
+build_fuzz() {
+    local build_dir="$PROJECT_ROOT/build_fuzz"
+    local cmake_args=("$@")
+
+    command -v clang++ >/dev/null 2>&1 || {
+        echo "clang++ not found — libFuzzer needs clang (gcc has no -fsanitize=fuzzer)"
+        exit 1
+    }
+
+    # Same SDK-first-then-fallback resolution as build_test(): cmake does not
+    # care which compiler it is told to drive.
+    local cmake_bin="$SDK_CMAKE"
+    if [ ! -x "$cmake_bin" ]; then
+        cmake_bin="$(command -v cmake 2>/dev/null)" || { echo "cmake not found"; exit 1; }
+    fi
+
+    # Neither the parser nor the classifier touches D-Bus, so this build needs
+    # none of the cross libraries the CLI executable does.
+    mkdir -p "$build_dir" && cd "$build_dir"
+    "$cmake_bin" \
+        -DCMAKE_BUILD_TYPE=Debug \
+        -DCMAKE_C_COMPILER=clang \
+        -DCMAKE_CXX_COMPILER=clang++ \
+        -DBUILD_TESTING=OFF \
+        -DBUILD_MAIN_TARGET=OFF \
+        -DBUILD_FUZZING=ON \
+        -DBUILD_DBUS_SUPPORT=OFF \
+        "${cmake_args[@]}" \
+        "$PROJECT_ROOT"
+    make -j"$(nproc)"
+
+    echo
+    echo "=== fuzz smoke run (10s/target against the seed corpus) ==="
+    # Derived from the sources rather than listed here: a target added to
+    # fuzz/CMakeLists.txt but forgotten in this loop would be built and never
+    # run, which is the quiet half of a gate that does not gate.
+    local t work_corpus
+    for src in "$PROJECT_ROOT"/fuzz/fuzz_*.cpp; do
+        t="$(basename "$src" .cpp)"
+        echo "--- $t ---"
+        # The first positional directory is libFuzzer's read-write corpus;
+        # findings land there, never in the curated seed corpus under git.
+        work_corpus="$build_dir/corpus_${t#fuzz_}"
+        mkdir -p "$work_corpus"
+        "./fuzz/$t" -max_total_time=10 "$work_corpus" \
+            "$PROJECT_ROOT/fuzz/seed_corpus/${t#fuzz_}" \
+            || { echo "$t: FAILED (see output above)"; exit 1; }
+    done
+    echo "fuzz smoke run: PASS"
+}
+
 case "$TARGET" in
 debug)
     build_cross -DCMAKE_BUILD_TYPE=Debug "${EXTRA_ARGS[@]}"
@@ -137,8 +195,12 @@ sanitize)
 test)
     build_test "${EXTRA_ARGS[@]}"
     ;;
+fuzz)
+    build_fuzz "${EXTRA_ARGS[@]}"
+    ;;
 clean)
-    rm -rf "$PROJECT_ROOT/build" "$PROJECT_ROOT/build_test" "$PROJECT_ROOT/build_test_san"
+    rm -rf "$PROJECT_ROOT/build" "$PROJECT_ROOT/build_test" "$PROJECT_ROOT/build_test_san" \
+        "$PROJECT_ROOT/build_fuzz"
     echo "Build directories removed."
     ;;
 *)
