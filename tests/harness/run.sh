@@ -476,8 +476,12 @@ expect_verb_writes "commit: settling a rollback keeps a verdict on the slot" \
 # not the target's: the two rows below differ only in which slot carries it and
 # answer the same, and repeating both from the other running slot answers the
 # same again. The running slot does not enter into it.
-expect_verb "commit: an install whose target never booted settles distinctly" \
-    --commit_update 58 2 0010
+# The code alone does not say the slot was quarantined -- it says the arm was
+# reached. This row asserts the write as well: the interrupted digit loses its
+# in-flight bit and gains the bad mark, which is what makes the discarded slot
+# unbootable rather than merely unconfirmed.
+expect_verb_writes "commit: an install whose target never booted settles distinctly" \
+    --commit_update 58 2 0010 0020
 expect_verb "commit: the settle keys on one uncommitted digit, not on the target" \
     --commit_update 58 2 1000
 expect_verb "commit: an install whose target never booted settles, running the other slot" \
