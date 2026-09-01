@@ -132,7 +132,7 @@ trap 'restore_fixture; exit 143' TERM HUP
 # and checked against what actually ran. It has to be bumped when a case is
 # added, and that is the point: a case count nobody maintains cannot notice a
 # case that disappears.
-EXPECTED_CASES=64
+EXPECTED_CASES=65
 
 fails=0
 passes=0
@@ -347,6 +347,16 @@ expect_verb_named "commit: an owned state whose slot precondition fails says wha
     9 0000
 expect_verb_named "commit: an unreadable state is refused" --commit_update 18 \
     'holds uninterpretable content: "zz"' zz 0000
+# The boot-order evidence is the same pair used by the reboot-state query's
+# "reboot still owed" case above: the installer already wrote the target
+# order, but the device has not booted into it yet. A commit here used to
+# fall through to the generic system-error arm (19) instead of being refused
+# by name (18) -- same defect class as the two cases above, on the boot-order
+# arm instead of the bitfield arms.
+expect_verb_named "commit: firmware installed but reboot still owed is refused, not a system error" \
+    --commit_update 18 \
+    'firmware update reboot missing' \
+    2 0010 'BOOT_ORDER=B A'
 expect_verb "rollback: nothing pending on a settled device" --rollback_update 27 0 0000
 expect_verb "rollback: a pending firmware update is undone" --rollback_update 12 2 0000
 expect_verb_named "rollback: an indeterminate app rollback is named" --rollback_update 57 \
