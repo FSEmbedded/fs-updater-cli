@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.18)
-project(fs_updater_cli VERSION 2.2.7 LANGUAGES CXX)
+project(fs_updater_cli VERSION 2.2.8 LANGUAGES CXX)
 
 include(GNUInstallDirs)
 
