@@ -14,7 +14,7 @@ Usage: build.sh <target> [options]
 Targets:
   debug       Cross-compile Debug build (default)
   release     Cross-compile Release build (-Os, LTO)
-  sanitize    Cross-compile Debug build with ASan + UBSan
+  sanitize    Cross-compile Debug build with ASan + UBSan (separate build_san/)
   test        Native build + run unit tests
   fuzz        Native libFuzzer build (requires clang) + a short smoke run
               per target against fuzz/seed_corpus/; for an actual fuzzing
@@ -28,7 +28,9 @@ Targets:
 Options:
   --speed           Optimize for speed (-O2) instead of size (-Os)
   --uint64          Use uint64 version type instead of string
-  --lib <build_dir> Use locally built fs-updater-lib from this build directory
+  --lib <build_dir> Use locally built fs-updater-lib from this build directory.
+                    Match the mode: build_san/ for the sanitize target, build/
+                    for the others — the lib archive carries its own flags.
   --no-dbus         Disable D-Bus cloud-flow handlers (BUILD_DBUS_SUPPORT=OFF).
                     On this branch D-Bus is the default; opt out only when
                     the lib is also built --no-dbus.
@@ -82,7 +84,7 @@ if [ -n "${TEST_SUFFIX:-}" ] && [ "$TARGET" != "test" ]; then
 fi
 
 build_cross() {
-    local build_dir="$PROJECT_ROOT/build"
+    local build_dir="$PROJECT_ROOT/build${CROSS_SUFFIX:-}"
     local cmake_args=("$@")
 
     unset LD_LIBRARY_PATH
@@ -93,7 +95,7 @@ build_cross() {
     source "$SDK_ENV"
 
     if [ -n "$LIB_BUILD_DIR" ]; then
-        local lib_install="$PROJECT_ROOT/build/fus_lib_install"
+        local lib_install="$build_dir/fus_lib_install"
         echo "Installing fs-updater-lib from $LIB_BUILD_DIR..."
         "$SDK_CMAKE" --install "$LIB_BUILD_DIR" --prefix "$lib_install"
         cmake_args+=("-DFUS_LIB_DIR=$lib_install")
@@ -188,9 +190,13 @@ release)
     build_cross -DCMAKE_BUILD_TYPE=Release "${EXTRA_ARGS[@]}"
     ;;
 sanitize)
-    build_cross -DCMAKE_BUILD_TYPE=Debug \
-        -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=all" \
-        "${EXTRA_ARGS[@]}"
+    # Own build dir, like the native build_test_san: the sanitized lib archive
+    # cannot be linked into a plain binary, and ENABLE_SANITIZERS is a cache
+    # entry that a later plain configure would not reset. The flags cannot
+    # travel in CMAKE_CXX_FLAGS — the SDK toolchain file overwrites that entry
+    # with FORCE.
+    CROSS_SUFFIX=_san
+    build_cross -DCMAKE_BUILD_TYPE=Debug -DENABLE_SANITIZERS=ON "${EXTRA_ARGS[@]}"
     ;;
 test)
     build_test "${EXTRA_ARGS[@]}"
@@ -199,7 +205,7 @@ fuzz)
     build_fuzz "${EXTRA_ARGS[@]}"
     ;;
 clean)
-    rm -rf "$PROJECT_ROOT/build" "$PROJECT_ROOT/build_test" "$PROJECT_ROOT/build_test_san" \
+    rm -rf "$PROJECT_ROOT/build" "$PROJECT_ROOT/build_san" "$PROJECT_ROOT/build_test" "$PROJECT_ROOT/build_test_san" \
         "$PROJECT_ROOT/build_fuzz"
     echo "Build directories removed."
     ;;

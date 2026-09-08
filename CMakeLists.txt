@@ -38,7 +38,7 @@ option(BUILD_DBUS_SUPPORT "Build cloud-flow CLI handlers as D-Bus clients" ON)
 option(BUILD_TESTING      "Build unit tests (native build)"                  OFF)
 option(BUILD_MAIN_TARGET  "Build CLI executable (OFF = tests only)"          ON)
 option(FSUP_WERROR        "Treat compiler warnings as errors (-Werror)"      ON)
-option(ENABLE_SANITIZERS  "Enable ASan and UBSan (native test builds)"       OFF)
+option(ENABLE_SANITIZERS  "Enable ASan and UBSan (Debug builds)"             OFF)
 option(BUILD_FUZZING      "Build the libFuzzer target (needs clang)"         OFF)
 
 # Validate options
