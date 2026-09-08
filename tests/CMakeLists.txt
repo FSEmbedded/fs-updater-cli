@@ -32,6 +32,10 @@ target_include_directories(fs_updater_cli_tests PRIVATE
 target_link_libraries(fs_updater_cli_tests PRIVATE GTest::gtest_main)
 
 add_test(NAME fs_updater_cli_tests COMMAND fs_updater_cli_tests)
+# Per-case XML: ctest's own JUnit report has one entry for this whole
+# binary, because ctest registers the binary and not the cases.
+set_tests_properties(fs_updater_cli_tests PROPERTIES
+    ENVIRONMENT "GTEST_OUTPUT=xml:${CMAKE_BINARY_DIR}/gtest-fs_updater_cli_tests.xml")
 
 # ---------------------------------------------------------------------------
 # Parse tests
@@ -65,3 +69,5 @@ target_compile_definitions(fs_updater_cli_parse_tests PRIVATE
 target_link_libraries(fs_updater_cli_parse_tests PRIVATE GTest::gtest_main)
 
 add_test(NAME fs_updater_cli_parse_tests COMMAND fs_updater_cli_parse_tests)
+set_tests_properties(fs_updater_cli_parse_tests PROPERTIES
+    ENVIRONMENT "GTEST_OUTPUT=xml:${CMAKE_BINARY_DIR}/gtest-fs_updater_cli_parse_tests.xml")
