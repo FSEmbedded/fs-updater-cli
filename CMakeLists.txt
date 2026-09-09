@@ -41,6 +41,18 @@ option(FSUP_WERROR        "Treat compiler warnings as errors (-Werror)"      ON)
 option(ENABLE_SANITIZERS  "Enable ASan and UBSan (Debug builds)"             OFF)
 option(BUILD_FUZZING      "Build the libFuzzer target (needs clang)"         OFF)
 
+# One working value for the CLI executable -- see the same guard in the library.
+# Its non-D-Bus halves drove the service through files it no longer reads. The
+# fuzz build is the exception and stays legitimate: it builds parsers with
+# BUILD_MAIN_TARGET=OFF, so the executable and its bus client are not part of
+# that build at all.
+if(BUILD_MAIN_TARGET AND NOT BUILD_DBUS_SUPPORT)
+    message(FATAL_ERROR
+        "BUILD_DBUS_SUPPORT=OFF is not a configuration of this CLI: the "
+        "service is reached over the bus, and the file-driven halves are gone. "
+        "(The fuzz target may set it off; it builds no executable.)")
+endif()
+
 # Validate options
 if(NOT OPTIMIZE_FOR MATCHES "^(SIZE|SPEED)$")
     message(FATAL_ERROR "OPTIMIZE_FOR must be SIZE or SPEED, got: ${OPTIMIZE_FOR}")

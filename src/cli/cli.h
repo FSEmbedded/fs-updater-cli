@@ -48,11 +48,6 @@ namespace cli
 		 */
 		void setup_logging();
 
-		/**
-		 * Create rollback marker file in work directory.
-		 * @return true on success, false on failure
-		 */
-		bool create_rollback_marker();
 
 		/**
 		 * Internal function which map the update state to a string.

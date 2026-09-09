@@ -4,9 +4,7 @@
 #include "fs_updater_types.h"
 #include "posix_helpers.h"
 #include "cli_io.h"
-#if BUILD_DBUS_SUPPORT
 #include "fus_dbus_client.h"
-#endif
 #include <cstdlib>
 #include <cstring>
 
@@ -17,7 +15,6 @@
 
 constexpr char FSCLI_DOMAIN[] = "cli";
 
-#if BUILD_DBUS_SUPPORT
 namespace {
 
 /* Idle watchdog for the blocking local install (ms with no progress nor
@@ -40,7 +37,6 @@ void render_install_progress(int pct)
 }
 
 } // namespace
-#endif
 
 constexpr uint32_t firmware_update_state = 0;
 constexpr uint32_t application_update_state = 1;
@@ -85,22 +81,6 @@ void cli::fs_update_cli::setup_logging()
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
-
-bool cli::fs_update_cli::create_rollback_marker()
-{
-#if !BUILD_DBUS_SUPPORT
-    /* Marker reader is non-D-Bus-only; D-Bus builds drive rollback
-     * through the service's Rollback() method, no file involved. */
-    const string work_dir = this->update_handler->get_work_dir();
-    const string marker = posix_helpers::path_join(work_dir, "rollbackUpdate");
-    if (!posix_helpers::create_marker_file(marker.c_str()))
-    {
-        cli_io::write_stderr("Failed to create rollback marker file\n");
-        return false;
-    }
-#endif
-    return true;
-}
 
 // ---------------------------------------------------------------------------
 // Update execution
@@ -194,11 +174,6 @@ void cli::fs_update_cli::rollback_update()
             return;
         }
 
-        if (!this->create_rollback_marker())
-        {
-            this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_PROGRESS_ERROR);
-            return;
-        }
         cli_io::write_stdout("Rollback finished successful. Reboot required.\n");
         this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_SUCCESSFUL);
     }
@@ -247,11 +222,6 @@ void cli::fs_update_cli::switch_firmware_slot()
             cli_io::write_stdout("Start switch firmware slot\n");
             this->update_handler->create_work_dir();
             this->update_handler->rollback_firmware();
-            if (!this->create_rollback_marker())
-            {
-                this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_PROGRESS_ERROR);
-                return;
-            }
             cli_io::write_stdout("Switch firmware slot successful\n");
             this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_SUCCESSFUL);
         }
@@ -290,11 +260,6 @@ void cli::fs_update_cli::switch_application_slot()
             cli_io::write_stdout("Start switch application slot\n");
             this->update_handler->create_work_dir();
             this->update_handler->rollback_application();
-            if (!this->create_rollback_marker())
-            {
-                this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_PROGRESS_ERROR);
-                return;
-            }
             cli_io::write_stdout("Switch application slot successful\n");
             this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_SUCCESSFUL);
         }
@@ -594,7 +559,6 @@ void cli::fs_update_cli::handle_print_help()
 
 void cli::fs_update_cli::handle_is_update_available()
 {
-#if BUILD_DBUS_SUPPORT
     const fus_dbus::CheckUpdateResult info = fus_dbus::check_update_available();
     if (!info.available)
     {
@@ -619,57 +583,10 @@ void cli::fs_update_cli::handle_is_update_available()
         this->return_code =
             static_cast<int>(UPDATER_IS_UPDATE_AVAILABLE_STATE::FIRMWARE_AND_APPLICATION_UPDATE_AVAILABLE);
     }
-#else
-    const string work_dir = this->update_handler->get_work_dir();
-
-    string updateType;
-    if (!posix_helpers::read_file(posix_helpers::path_join(work_dir, "update_type").c_str(), updateType))
-    {
-        cli_io::write_stdout("No updates have been found\n");
-        this->return_code = static_cast<int>(UPDATER_IS_UPDATE_AVAILABLE_STATE::NO_UPDATE_AVAILABLE);
-        return;
-    }
-
-    string updateVersion;
-    if (!posix_helpers::read_file(posix_helpers::path_join(work_dir, "update_version").c_str(), updateVersion))
-    {
-        cli_io::write_stdout("No updates have been found\n");
-        this->return_code = static_cast<int>(UPDATER_IS_UPDATE_AVAILABLE_STATE::NO_UPDATE_AVAILABLE);
-        return;
-    }
-
-    string updateSize;
-    if (!posix_helpers::read_file(posix_helpers::path_join(work_dir, "update_size").c_str(), updateSize))
-    {
-        cli_io::write_stdout("No updates have been found\n");
-        this->return_code = static_cast<int>(UPDATER_IS_UPDATE_AVAILABLE_STATE::NO_UPDATE_AVAILABLE);
-        return;
-    }
-
-    cli_io::write_stdout("A new update is available on the server\n");
-    cli_io::write_stdout("Type: " + updateType + "\n");
-    cli_io::write_stdout("Version: " + updateVersion + "\n");
-    cli_io::write_stdout("Size: " + updateSize + "\n");
-
-    if (updateType == "firmware")
-    {
-        this->return_code = static_cast<int>(UPDATER_IS_UPDATE_AVAILABLE_STATE::FIRMWARE_UPDATE_AVAILABLE);
-    }
-    else if (updateType == "application")
-    {
-        this->return_code = static_cast<int>(UPDATER_IS_UPDATE_AVAILABLE_STATE::APPLICATION_UPDATE_AVAILABLE);
-    }
-    else
-    {
-        this->return_code =
-            static_cast<int>(UPDATER_IS_UPDATE_AVAILABLE_STATE::FIRMWARE_AND_APPLICATION_UPDATE_AVAILABLE);
-    }
-#endif
 }
 
 void cli::fs_update_cli::handle_download_update()
 {
-#if BUILD_DBUS_SUPPORT
     const string dl_state = fus_dbus::get_download_state();
     if (dl_state == "in_progress")
     {
@@ -679,39 +596,10 @@ void cli::fs_update_cli::handle_download_update()
     }
 
     this->return_code = static_cast<int>(UPDATER_DOWNLOAD_UPDATE_STATE::NO_DOWNLOAD_QUEUED);
-#else
-    const string work_dir = this->update_handler->get_work_dir();
-    if (!posix_helpers::path_exists(posix_helpers::path_join(work_dir, "update_type").c_str()) ||
-        !posix_helpers::path_exists(posix_helpers::path_join(work_dir, "update_version").c_str()) ||
-        !posix_helpers::path_exists(posix_helpers::path_join(work_dir, "update_size").c_str()))
-    {
-        this->return_code = static_cast<int>(UPDATER_DOWNLOAD_UPDATE_STATE::NO_DOWNLOAD_QUEUED);
-    }
-    else if (posix_helpers::path_exists(posix_helpers::path_join(work_dir, "downloadUpdate").c_str()))
-    {
-        cli_io::write_stdout("Download in progress...\n");
-        this->return_code = static_cast<int>(UPDATER_DOWNLOAD_UPDATE_STATE::UPDATE_DOWNLOAD_STARTED_BEFORE);
-    }
-    else
-    {
-        const string marker = posix_helpers::path_join(work_dir, "downloadUpdate");
-        if (!posix_helpers::create_marker_file(marker.c_str()))
-        {
-            cli_io::write_stdout("Could not initiate update download...\n");
-            this->return_code = static_cast<int>(UPDATER_DOWNLOAD_UPDATE_STATE::UPDATE_DOWNLOAD_FAILED);
-        }
-        else
-        {
-            cli_io::write_stdout("Download started...\n");
-            this->return_code = static_cast<int>(UPDATER_DOWNLOAD_UPDATE_STATE::UPDATE_DOWNLOAD_STARTED);
-        }
-    }
-#endif
 }
 
 void cli::fs_update_cli::handle_download_progress()
 {
-#if BUILD_DBUS_SUPPORT
     const string dl_state = fus_dbus::get_download_state();
     if (dl_state.empty() || dl_state == "idle")
     {
@@ -740,99 +628,10 @@ void cli::fs_update_cli::handle_download_progress()
         this->return_code =
             static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::UPDATE_DOWNLOAD_FINISHED);
     }
-#else
-    const string work_dir = this->update_handler->get_work_dir();
-    if (!posix_helpers::path_exists(posix_helpers::path_join(work_dir, "downloadUpdate").c_str()))
-    {
-        this->return_code = static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::NO_DOWNLOAD_STARTED);
-        return;
-    }
-
-    uint64_t update_size = 0;
-    string size_str;
-    const string size_path = posix_helpers::path_join(work_dir, "update_size");
-    if (!posix_helpers::read_file(size_path.c_str(), size_str))
-    {
-        cli_io::write_stdout("Update size not available: " + std::to_string(errno) + "\n");
-        this->return_code = static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::NO_DOWNLOAD_STARTED);
-        return;
-    }
-    try
-    {
-        update_size = std::stoull(size_str);
-    }
-    catch (const std::exception &)
-    {
-        cli_io::write_stderr("Update size file contains invalid data\n");
-        this->return_code = static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::NO_DOWNLOAD_STARTED);
-        return;
-    }
-
-    if (update_size == 0)
-    {
-        this->return_code = static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::NO_DOWNLOAD_STARTED);
-        return;
-    }
-
-    const string update_location = posix_helpers::path_join(work_dir, "update_location");
-    const ssize_t loc_size = posix_helpers::file_size(update_location.c_str());
-
-    if (loc_size < 0 || loc_size <= 9)
-    {
-        cli_io::write_stdout("Waiting to start download.\n");
-        this->return_code =
-            static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::UPDATE_DOWNLOAD_WAITING_TO_START);
-        return;
-    }
-
-    string update_file_path;
-    if (!posix_helpers::read_file(update_location.c_str(), update_file_path))
-    {
-        this->return_code =
-            static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::UPDATE_DOWNLOAD_WAITING_TO_START);
-        return;
-    }
-
-    if (!posix_helpers::path_exists(update_file_path.c_str()))
-    {
-        cli_io::write_stderr("Update file: " + update_file_path + " does not exist.\n");
-        this->return_code =
-            static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::UPDATE_DOWNLOAD_WAITING_TO_START);
-        return;
-    }
-
-    const ssize_t filesize_s = posix_helpers::file_size(update_file_path.c_str());
-    if (filesize_s <= 0)
-    {
-        if (filesize_s == 0)
-            cli_io::write_stdout("Size of loaded update: 0...\n");
-        this->return_code = static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::NO_DOWNLOAD_STARTED);
-        return;
-    }
-
-    const uint64_t filesize = static_cast<uint64_t>(filesize_s);
-    cli_io::write_stdout("Size of loaded update: " + std::to_string(filesize) + "...\n");
-
-    const int percent = static_cast<int>((filesize * 100U) / update_size);
-
-    cli_io::write_stdout(std::to_string(filesize) + "/" + std::to_string(update_size) + " -- " + std::to_string(percent) + "%\n");
-
-    if (percent < 100)
-    {
-        this->return_code =
-            static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::UPDATE_DOWNLOAD_IN_PROGRESS);
-    }
-    else
-    {
-        this->return_code =
-            static_cast<int>(UPDATER_DOWNLOAD_PROGRESS_STATE::UPDATE_DOWNLOAD_FINISHED);
-    }
-#endif
 }
 
 void cli::fs_update_cli::handle_install_progress()
 {
-#if BUILD_DBUS_SUPPORT
     const string install_state = fus_dbus::get_install_state();
     if (install_state.empty() || install_state == "idle") {
         this->return_code =
@@ -862,16 +661,10 @@ void cli::fs_update_cli::handle_install_progress()
         this->return_code =
             static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_IN_PROGRESS);
     }
-#else
-    cli_io::write_stderr("D-Bus support not built in\n");
-    this->return_code =
-        static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::NO_INSTALLATION_QUEUED);
-#endif
 }
 
 void cli::fs_update_cli::handle_cancel_install()
 {
-#if BUILD_DBUS_SUPPORT
     const uint32_t sid = this->args.cancel_session_id();
     if (sid == 0) {
         cli_io::write_stderr("--cancel_install requires a non-zero session_id\n");
@@ -890,16 +683,10 @@ void cli::fs_update_cli::handle_cancel_install()
                          "; final outcome via --install_progress.\n");
     this->return_code =
         static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_IN_PROGRESS);
-#else
-    cli_io::write_stderr("D-Bus support not built in\n");
-    this->return_code =
-        static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FAILED);
-#endif
 }
 
 void cli::fs_update_cli::handle_install_update()
 {
-#if BUILD_DBUS_SUPPORT
     /* Local install: --install_update <path> → InstallLocal. Blocking by
      * default (stream progress, return the terminal 0/4/8 ÷ 3/7/11 verdict);
      * --detach returns immediately with the session id. */
@@ -1039,38 +826,6 @@ void cli::fs_update_cli::handle_install_update()
     }
     cli_io::write_stdout("Update installation started.\n");
     this->return_code = static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_IN_PROGRESS);
-#else
-    const string work_dir = this->update_handler->get_work_dir();
-
-    if (posix_helpers::path_exists(posix_helpers::path_join(work_dir, "updateInstalled").c_str()))
-    {
-        cli_io::write_stdout("Update installation finished.\n");
-        this->return_code = static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FINISHED);
-    }
-    else if (!posix_helpers::path_exists(posix_helpers::path_join(work_dir, "update_location").c_str()))
-    {
-        this->return_code = static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::NO_INSTALLATION_QUEUED);
-    }
-    else if (posix_helpers::path_exists(posix_helpers::path_join(work_dir, "installUpdate").c_str()))
-    {
-        cli_io::write_stdout("Update installation in progress.\n");
-        this->return_code = static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_IN_PROGRESS);
-    }
-    else
-    {
-        const string marker = posix_helpers::path_join(work_dir, "installUpdate");
-        if (!posix_helpers::create_marker_file(marker.c_str()))
-        {
-            cli_io::write_stdout("Could not initiate Installation...\n");
-            this->return_code = static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FAILED);
-        }
-        else
-        {
-            cli_io::write_stdout("Update installation started.\n");
-            this->return_code = static_cast<int>(UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_IN_PROGRESS);
-        }
-    }
-#endif
 }
 
 void cli::fs_update_cli::handle_apply_update()
@@ -1078,7 +833,6 @@ void cli::fs_update_cli::handle_apply_update()
     const string work_dir = this->update_handler->get_work_dir();
     const string rollback_path = posix_helpers::path_join(work_dir, "rollbackUpdate");
 
-#if BUILD_DBUS_SUPPORT
     if (fus_dbus::get_install_state() == "finished")
     {
         bool reboot_needed = false;
@@ -1107,41 +861,6 @@ void cli::fs_update_cli::handle_apply_update()
         this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_FAILED);
         return;
     }
-#else
-    const string installed_path = posix_helpers::path_join(work_dir, "updateInstalled");
-    if (posix_helpers::path_exists(installed_path.c_str()))
-    {
-        if (!posix_helpers::path_exists(posix_helpers::path_join(work_dir, "applyUpdate").c_str()) &&
-            !posix_helpers::path_exists(posix_helpers::path_join(work_dir, "downloadUpdate").c_str()))
-        {
-            cli_io::write_stdout("Apply update...\n");
-            if(this->reboot() != 0) {
-                const int saved = errno;
-                cli_io::write_stderr(string("Failed to reboot system: ") + strerror(saved) + "\n");
-                this->return_code = static_cast<int>(UPDATER_SYSTEM::REBOOT_FAILED);
-            } else {
-                this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFUL);
-            }
-        }
-        else
-        {
-            const string apply_marker = posix_helpers::path_join(work_dir, "applyUpdate");
-            if (!posix_helpers::create_marker_file(apply_marker.c_str()))
-            {
-                // errno is clobbered by create_marker_file's internal close();
-                // reading it here would be meaningless.
-                cli_io::write_stdout("Initiate of update apply fails...\n");
-                this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_FAILED);
-            }
-            else
-            {
-                cli_io::write_stdout("Apply update...\n");
-                this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFUL);
-            }
-        }
-        return;
-    }
-#endif
 
     if (posix_helpers::path_exists(rollback_path.c_str()))
     {

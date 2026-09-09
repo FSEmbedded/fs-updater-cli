@@ -31,9 +31,6 @@ Options:
   --lib <build_dir> Use locally built fs-updater-lib from this build directory.
                     Match the mode: build_san/ for the sanitize target, build/
                     for the others — the lib archive carries its own flags.
-  --no-dbus         Disable D-Bus cloud-flow handlers (BUILD_DBUS_SUPPORT=OFF).
-                    On this branch D-Bus is the default; opt out only when
-                    the lib is also built --no-dbus.
   --sanitize        With 'test': run the native suite under ASan/UBSan
                     (separate build_test_san/ dir; cross builds keep the
                     'sanitize' target).
@@ -59,7 +56,6 @@ while [ $# -gt 0 ]; do
     --sanitize) EXTRA_ARGS+=("-DENABLE_SANITIZERS=ON"); TEST_SUFFIX="_san" ;;
     --uint64)  EXTRA_ARGS+=("-Dupdate_version_type=uint64") ;;
     --lib)     LIB_BUILD_DIR="$(realpath "$2")"; shift ;;
-    --no-dbus) EXTRA_ARGS+=("-DBUILD_DBUS_SUPPORT=OFF") ;;
     --env-config)
         # Point the build at another fw_env.config. For a harness that drives
         # this binary against a prepared environment instead of the device's;
@@ -155,7 +151,9 @@ build_fuzz() {
     fi
 
     # Neither the parser nor the classifier touches D-Bus, so this build needs
-    # none of the cross libraries the CLI executable does.
+    # none of the cross libraries the CLI executable does. It builds no
+    # executable (BUILD_MAIN_TARGET=OFF), which is why it is the one build
+    # allowed to configure with BUILD_DBUS_SUPPORT off.
     mkdir -p "$build_dir" && cd "$build_dir"
     "$cmake_bin" \
         -DCMAKE_BUILD_TYPE=Debug \
