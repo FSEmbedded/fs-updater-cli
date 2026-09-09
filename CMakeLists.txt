@@ -144,9 +144,8 @@ set_target_properties(fs_updater_cli PROPERTIES
 # Compiler and linker flags
 #
 # Deviation: -fno-exceptions and -fno-rtti are NOT applied.
-# fs-updater-lib throws exceptions; CLI must catch. RTTI now has no user of its
-# own here and is only still on because the flags are flipped together, in the
-# slice that makes the lib shim the last exception island.
+# fs-updater-lib throws exceptions; CLI must catch. RTTI has no user of its own
+# here and stays on only because both flags are flipped together.
 # ==============================================================================
 
 target_compile_options(fs_updater_cli PRIVATE
