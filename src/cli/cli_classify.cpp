@@ -143,9 +143,11 @@ namespace
         {
             return static_cast<int>(UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_UNPROVISIONED);
         }
-        /* EPERM/ECANCELED: the lib refused the switch because the target slot
-         * is marked bad — a state error the caller must see as such (54), not a
-         * generic progress failure (13). */
+        /* EPERM/ECANCELED: the lib refused the switch, either because the
+         * target slot is marked bad or because a firmware rollback was asked
+         * for a slot whose install never reached the boot order (never
+         * actionable) — both are state errors the caller must see as such
+         * (54), not a generic progress failure (13). */
         if (errno_value == EPERM || errno_value == ECANCELED)
         {
             return static_cast<int>(UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_BAD);

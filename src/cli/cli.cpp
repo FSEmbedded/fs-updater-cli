@@ -320,7 +320,7 @@ void cli::fs_update_cli::print_update_reboot_state()
         }
         else
         {
-            cli_io::write_stdout("Firmware update pending; mounted image state indeterminate (no app image mounted)\n");
+            cli_io::write_stdout("Firmware update pending; the install never reached the boot order — commit settles it and quarantines the slot, no reboot needed\n");
             this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::UPDATE_REBOOT_STATE_INDETERMINATE);
         }
     }
@@ -358,7 +358,12 @@ void cli::fs_update_cli::print_update_reboot_state()
         }
         else
         {
-            cli_io::write_stdout("Application and firmware update pending; mounted image state indeterminate (no app image mounted)\n");
+            /* No clean remedy for this shape: confirmPendingApplicationFirmwareUpdate()
+             * has no never-activated branch (unlike its firmware-only sibling), so
+             * commit throws instead of settling and exits 19, not a no-op; rollback
+             * still runs the application half before the firmware half is refused,
+             * though nothing persists from it. */
+            cli_io::write_stdout("Application and firmware update pending; the install never reached the boot order — no clean remedy here: commit fails, rollback is refused for firmware after the application half already ran\n");
             this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::UPDATE_REBOOT_STATE_INDETERMINATE);
         }
     }

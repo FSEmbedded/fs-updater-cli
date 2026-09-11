@@ -93,11 +93,13 @@ namespace cli
     [[nodiscard]] int install_terminal_code(bool success, const std::string& type);
 
     /* Return code for a GenericException out of a slot switch, by its errno: a
-     * refused switch is state-bad (EPERM/ECANCELED — the target slot is bad,
-     * 54) or unprovisioned (ENOENT — the target slot has no image installed,
-     * 56), anything else is a rollback progress error (13). Shared verbatim by
-     * both slot-switch handlers; pure so the branch is testable without the
-     * throw. (Rollback needs no equivalent: those errnos only arise in the
-     * committed-slot-switch path, which rollback never enters.) */
+     * refused switch is state-bad (EPERM/ECANCELED — either the target slot is
+     * marked bad, or a firmware rollback was asked for a slot whose install
+     * never reached the boot order and so is never actionable — 54 either way)
+     * or unprovisioned (ENOENT — the target slot has no image installed, 56),
+     * anything else is a rollback progress error (13). Shared verbatim by both
+     * slot-switch handlers and by rollback_update() (its app+firmware and
+     * firmware-only branches both call it); pure so the branch is testable
+     * without the throw. */
     [[nodiscard]] int map_slot_switch_errno(int errno_value);
 }

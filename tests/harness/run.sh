@@ -132,7 +132,7 @@ trap 'restore_fixture; exit 143' TERM HUP
 # and checked against what actually ran. It has to be bumped when a case is
 # added, and that is the point: a case count nobody maintains cannot notice a
 # case that disappears.
-EXPECTED_CASES=65
+EXPECTED_CASES=66
 
 fails=0
 passes=0
@@ -230,34 +230,39 @@ expect_rc_named "garbage is not idle" 124 \
 expect_rc "a settled device is idle"               27  0     0000
 
 # The derived answers. The stored value alone does not determine the code: the
-# client asks whether the reboot happened and whether the image is mounted, so
-# the same stored state yields different answers on different evidence. A stub
-# that maps state to code cannot show this.
+# client asks which slot the install is still in flight for, whether the reboot
+# happened and whether the image is mounted, so the same stored state yields
+# different answers on different evidence. A stub that maps state to code
+# cannot show this.
 #
-# The first two rows are that claim, and they are one variable apart. Same
-# stored state, same bitfield; in the second the boot order leads with a slot
-# other than the running one while the previous order is still recorded -- what
-# an install writes and a reboot then consumes. So the same device state is
-# reported as awaiting a commit in one case and as still owing its reboot in
-# the other, on evidence alone. (The derivation also requires both boot budgets
-# untouched; a spent budget does not move this answer by itself.)
+# The first three rows are that claim, and each is one variable from the next.
+# Same stored state, same bitfield -- the install's target digit is fw_B -- and
+# the answer moves with the boot order and the running slot alone. Leading with
+# B and running B, the install landed and awaits its commit. Leading with B
+# while the device still runs A, the reboot is what an install writes and a
+# reboot then consumes, so it is still owed. Leading with A, nothing was ever
+# staged to boot into: a slot's install in flight that the boot order does not
+# prefer never activated, and there is nothing to commit or roll back. (The
+# first two also require both boot budgets untouched; a spent budget does not
+# move those answers by itself.)
 #
 # The mount side of the same question is out of reach here: nothing loop-mounts
-# an application image under user-mode emulation. This pair covers the boot
+# an application image under user-mode emulation. These rows cover the boot
 # order, not the mount.
-expect_rc "firmware installed, reboot taken"       23  2     0010
+expect_rc "firmware installed, reboot taken"       23  2     0010 'BOOT_ORDER=B A' \
+    'rauc_cmd=rauc.slot=B' application=B
 expect_rc "firmware installed, reboot still owed"  26  2     0010 'BOOT_ORDER=B A'
+expect_rc "firmware install never reached the boot order" 55 2 0010
 expect_rc "application installed, nothing mounted" 55  3     0001
 
 # The bitfield is [fw_A][app_A][fw_B][app_B]; running on A, an install's target
-# is B. The query does not consult it at all -- the derived answer comes from
-# the stored state and the boot and mount evidence -- so the same state answers
-# the same way whichever digits are set. Pinned because a reader seeing a
-# bitfield in a fixture will otherwise assume it is what produced the answer.
-# The target-digit member of the comparison is the first row above; repeating it
-# here under a second name only made one product change look like two.
-expect_rc "the query ignores the bitfield (wrong digit set)" 23 2 0100
-expect_rc "the query ignores the bitfield (no digit set)"    23 2 0000
+# is B. The firmware query reads the two firmware digits and nothing else: an
+# application digit does not move it whichever way it is set, and with no
+# firmware digit in flight the answer comes from the boot and mount evidence
+# alone. Pinned because a reader seeing a bitfield in a fixture will otherwise
+# assume the whole field is what produced the answer.
+expect_rc "the firmware query ignores an application digit" 23 2 0100
+expect_rc "the firmware query on an empty bitfield"         23 2 0000
 
 # The decoder's alphabet, at the client boundary. The library pins these
 # against its own environment doubles; this runs the same values through the
