@@ -108,7 +108,9 @@ endif()
 find_package(Threads REQUIRED)
 find_package(PkgConfig REQUIRED)
 
-pkg_check_modules(BOTAN2 REQUIRED botan-2)
+# Not required: no source here calls botan. It is linked only so a library
+# archive built with FUS_LEGACY_IMAGE_SUPPORT resolves its symbols.
+pkg_check_modules(BOTAN2 botan-2)
 pkg_check_modules(JSONCPP REQUIRED jsoncpp)
 
 # ==============================================================================
