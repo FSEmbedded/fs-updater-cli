@@ -112,10 +112,14 @@ build_test() {
 
     # Prefer SDK cmake/ctest; fall back to system cmake/ctest if SDK not present
     local cmake_bin="$SDK_CMAKE"
-    local ctest_bin="$SDK_CTEST"
+    local ctest_cmd=("$SDK_CTEST" --output-on-failure --output-junit "$build_dir/ctest-junit.xml")
     if [ ! -x "$cmake_bin" ]; then
         cmake_bin="$(command -v cmake 2>/dev/null)" || { echo "cmake not found"; exit 1; }
-        ctest_bin="$(command -v ctest 2>/dev/null)" || ctest_bin="$cmake_bin --build . --target test"
+        if command -v ctest >/dev/null 2>&1; then
+            ctest_cmd=(ctest --output-on-failure --output-junit "$build_dir/ctest-junit.xml")
+        else
+            ctest_cmd=("$cmake_bin" --build . --target test)
+        fi
     fi
 
     mkdir -p "$build_dir" && cd "$build_dir"
@@ -128,10 +132,7 @@ build_test() {
         "${cmake_args[@]}" \
         "$PROJECT_ROOT"
     make -j"$(nproc)"
-    # --output-junit needs a real ctest; the fallback above is a cmake --build call.
-    local junit=()
-    case "$ctest_bin" in *ctest) junit=(--output-junit "$build_dir/ctest-junit.xml") ;; esac
-    "$ctest_bin" --output-on-failure "${junit[@]}"
+    "${ctest_cmd[@]}"
 }
 
 build_fuzz() {
