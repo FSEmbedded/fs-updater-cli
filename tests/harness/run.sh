@@ -121,6 +121,7 @@ printf '%s 0x0000 %s\n' "$ENV_BIN" "$(python3 "$MKENV" size)" > "$FIXTURE/fw_env
 # product. Give the permission back however this run ends.
 restore_fixture() {
     if [ -e "$ENV_BIN" ]; then chmod 0644 "$ENV_BIN" 2>/dev/null || true; fi
+    if [ -n "${MARKER:-}" ]; then rm -f "$MARKER"; fi
 }
 trap 'status=$?; restore_fixture; exit $status' EXIT
 trap 'restore_fixture; exit 130' INT
@@ -129,7 +130,7 @@ trap 'restore_fixture; exit 143' TERM HUP
 # Case-count guard: the total is declared here and checked against what
 # actually ran, so a run that never reached part of the file cannot end in
 # "everything passed". Bump it when a case is added.
-EXPECTED_CASES=66
+EXPECTED_CASES=67
 
 fails=0
 passes=0
@@ -535,6 +536,19 @@ expect_verb_named "rollback: a target slot marked bad is refused as a state erro
 #
 # The write is provoked by a spent boot budget on a settled device -- the one
 # branch that puts the budget back, and the only write an otherwise idle client
+#
+# A stray rollback marker in the work directory must not count as a pending
+# apply: the answer comes from the stored state alone. The harness refuses to
+# run as root, so a client that still honoured the
+# marker would fail at the reboot instead of reporting that there is nothing to
+# apply.
+WORK_DIR=/tmp/adu/.work
+mkdir -p "$WORK_DIR" || { echo "harness: cannot create $WORK_DIR" >&2; exit 2; }
+MARKER="$WORK_DIR/rollbackUpdate"
+: > "$MARKER"
+expect_verb_named "apply: a stale rollback marker is not a pending apply" \
+    --apply_update 51 'Nothing to apply' 0 0000
+rm -f "$MARKER"
 # makes.
 expect_write_refused() { # expect_write_refused <name> <want-rc>
     seed 0 0000 BOOT_A_LEFT=1
