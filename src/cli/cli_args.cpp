@@ -116,7 +116,7 @@ namespace
 		{"download_progress", Role::action, Command::download_progress, ValueKind::none, Slot::none, nullptr,
 			"Show the progress of the current update"},
 		{"download_update", Role::action, Command::download_update, ValueKind::none, Slot::none, nullptr,
-			"Download the available update"},
+			"Report whether a download is running (the update source starts them)"},
 		{"is_update_available", Role::action, Command::is_update_available, ValueKind::none, Slot::none, nullptr,
 			"Check update available on the server"},
 		{"set_app_state_bad", Role::action, Command::set_app_state_bad, ValueKind::state_char, Slot::app_state_set,

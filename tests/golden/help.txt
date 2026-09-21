@@ -72,7 +72,7 @@ Where:
      Show the progress of the current update
 
    --download_update
-     Download the available update
+     Report whether a download is running (the update source starts them)
 
    --is_update_available
      Check update available on the server
