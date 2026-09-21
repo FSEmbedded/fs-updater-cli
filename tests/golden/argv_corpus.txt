@@ -19,13 +19,13 @@
 #            a real binary. "--" wherever the answer is not the parse layer's:
 #            for a dispatchable command the handler owns the outcome, so the
 #            code there says nothing about parsing.
-#   verdict  intended  the behaviour is wanted and must survive the cut
+#   verdict  intended  the behaviour is wanted and must be kept
 #            tolerated the behaviour is an accident of the current parser;
 #                      it may change, but only deliberately
 
 # --- Unknown input -----------------------------------------------------------
-# Absorbing an unknown flag into the install positional was a live defect; the
-# parser reports these itself again.
+# A flag the parser does not know is reported by the parser; it is never
+# absorbed into the install positional.
 --definitely-not-a-real-flag   | parse_error  | -              | 0 | 1  | intended
 --commit_update --bogus        | parse_error  | -              | 0 | 1  | intended
 -ab                            | parse_error  | -              | 0 | 1  | intended
@@ -64,7 +64,7 @@ x --install_update             | ok           | install_update | 1 | -- | tolera
 x y                            | parse_error  | -              | 0 | 1  | intended
 
 # --- Value handling ----------------------------------------------------------
-# An empty value used to keep the argument's default and act on it. Rejected now.
+# An empty value is rejected rather than replaced by the argument's default.
 --is_app_state_bad ""          | parse_error  | -              | 0 | 1  | intended
 --cancel_install ""            | parse_error  | -              | 0 | 1  | intended
 --cancel_install               | parse_error  | -              | 0 | 1  | intended
@@ -76,10 +76,8 @@ x y                            | parse_error  | -              | 0 | 1  | intend
 # Decimal digits only, over the full token: "0x10" is rejected.
 --cancel_install 0x10          | parse_error  | -              | 0 | 1  | intended
 --cancel_install 99999999999   | parse_error  | -              | 0 | 1  | intended
-# A fix, not a re-pin of the old behaviour: TCLAP's unsigned extraction
-# silently wrapped "-1" to 4294967295 and dispatched a real cancel call;
-# parse_u32 rejects any leading '-' outright, closing that
-# silent-wraparound footgun.
+# A leading '-' is rejected outright: an unsigned extraction that wraps "-1"
+# to 4294967295 would dispatch a real cancel call.
 --cancel_install -1            | parse_error  | -              | 0 | 1  | intended
 --is_app_state_bad toolong     | parse_error  | -              | 0 | 1  | intended
 --is_app_state_bad Z           | ok           | is_app_state_bad | 1 | -- | tolerated
@@ -91,47 +89,37 @@ x y                            | parse_error  | -              | 0 | 1  | intend
 # --help does not end the scan: the rest of argv is still read, and a later
 # error wins.
 --help --bogus                 | parse_error  | -                | 0 | 1  | intended
-# Order matters only in the other direction, and already worked correctly
-# before this fix (the error is hit before --help is ever reached) — pinned so
-# a future change cannot regress it silently.
+# An error ahead of --help is reached before help is.
 --bogus --help                 | parse_error  | -                | 0 | 1  | intended
 --help --cancel_install        | parse_error  | -                | 0 | 1  | intended
-# Bundled short option: getopt_long resolves 'h' first, then 'x' on the same
-# token — without the fix above, 'h' returned before 'x' was ever seen.
+# Bundled short option: 'h' is recorded and 'x' on the same token is still seen.
 -hx                            | parse_error  | -                | 0 | 1  | intended
 # An extra operand alongside --help is ignored: help is honoured before
 # classify(), which would reject a bare positional via the bare-path rule, runs.
 --help x                       | help         | -                | 0 | 0  | intended
-# A lone "-" is always a non-option to getopt_long, but the previous parser's
-# is_option_like("-") declined it as a path. Fixed: rejected as an
-# unrecognized argument again, before a literal "--".
+# A lone "-" is rejected as an unrecognized argument, ahead of a literal "--".
 -                              | parse_error  | -                | 0 | 1  | intended
 # The same "-" is a legitimate operand once "--" has ended option parsing.
 --install_update -- -          | ok           | install_update   | 1 | -- | intended
-# Repeating a switch action used to silently dedup to one action instead of
-# erroring. Fixed: rejected, matching the previous parser's per-Arg
-# "already set" check.
+# Repeating a switch action is rejected.
 --commit_update --commit_update | parse_error | -                | 0 | 1  | intended
-# Repeating a value action used to silently keep only the last value with no
-# error at all — a session-swap footgun for --cancel_install. Fixed: rejected.
+# Repeating a value action is rejected: keeping only the last value would swap
+# the session of --cancel_install without a word.
 --cancel_install 5 --cancel_install 6 | parse_error | -           | 0 | 1  | intended
 
 # --- Repeats, aliases and value edge cases -----------------------------------
 # Repeating help is rejected like repeating an action; modifiers stay lenient.
 --help --help                  | parse_error  | -                | 0 | 1  | intended
 -h -h                          | parse_error  | -                | 0 | 1  | intended
-# The previous library registered --ignore_rest as an alias of "--". The alias
-# is not reimplemented: "--" is the POSIX form and stays the only one.
+# --ignore_rest is not an alias of "--": "--" is the only form.
 --ignore_rest                  | parse_error  | -                | 0 | 1  | intended
 # State values: the parser checks one-character syntax only and the command
 # checks the value, so a space reaches the command (which rejects it) while a
-# space-plus-letter is two characters and fails here. The previous library's
-# stream extraction skipped leading blanks and did the opposite in both cases.
+# space-plus-letter is two characters and fails here.
 --set_app_state_bad <SP>       | ok           | set_app_state_bad | 1 | -- | intended
 --is_app_state_bad <SP>A       | parse_error  | -                | 0 | 1  | intended
-# An extra operand after "--" was silently discarded before the cut; for an
-# install command that is a footgun, so the single-operand limit applies there
-# too — same rule as without "--".
+# An extra operand after "--" is refused: the single-operand limit applies
+# there as it does without "--".
 --install_update -- x y        | parse_error  | -                | 0 | 1  | intended
 # An ambiguous prefix is refused for the same reason a resolvable one is: the
 # parser never guesses which flag was meant.
@@ -162,7 +150,7 @@ x                              | guard_error  | -              | 0 | 65 | intend
 --install_update -- x          | ok           | install_update | 1 | -- | intended
 
 # --- Baseline: one entry per live action flag --------------------------------
-# rc is (design) for anything that mutates state — see "Not measured".
+# rc is "--" for anything that mutates state -- see "Not measured".
 --version                      | ok | print_version        | 1 | -- | intended
 --firmware_version             | ok | firmware_version     | 1 | -- | intended
 --application_version          | ok | application_version  | 1 | -- | intended
@@ -188,10 +176,6 @@ x                              | guard_error  | -              | 0 | 65 | intend
 # rc is "--" wherever the outcome depends on hardware state or would mutate it.
 # Those rows pin the parse layer only, which is all the parser owes; the exit
 # code there belongs to the handler.
-#
-# Two rows above were run on hardware before this boundary was drawn, and should
-# not have been: bare `--install_update` (cloud-advance; returned 48 "installation
-# finished" with nothing staged) and `--cancel_install -1` (a real cancel call).
-# Neither changed board state — verified idle, update=0000 — but neither is a
-# read-only probe. Do not re-run this corpus against a live board; the native
-# test is the way it is meant to be exercised.
+# Bare `--install_update` and `--cancel_install -1` reach a real service call.
+# Do not run this corpus against a live board; the native test is the way to
+# exercise it.
