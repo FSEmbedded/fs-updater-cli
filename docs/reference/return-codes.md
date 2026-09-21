@@ -6,8 +6,8 @@ All exit codes from `src/cli/fs_updater_error.h`. Valid POSIX range is 0–125
 ## Stability contract
 
 - **Append-only.** Never renumber or reuse an existing value — scripts depend on stable numbers.
-- **New categories start at the next free value ≥ 55.** Reserve 4–5 slots per category for future additions.
-- **Values 55–59** are reserved for future `UPDATER_SETGET_UPDATE_STATE` extension.
+- **New categories start at the next free value** above the highest assigned code. Reserve 4–5 slots per category for future additions.
+- **Values 55 and 57** are claimed by `UPDATER_UPDATE_REBOOT_STATE`, **56** by `UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_UNPROVISIONED`, and **58–59** by `UPDATER_COMMIT_STATE`.
 - **Do not exceed 125.** Values 124–125 are reserved for fatal/framework-level codes.
 
 ---
