@@ -1,8 +1,6 @@
 # libFuzzer target for the argument parser. Requires clang -- GCC has no
 # -fsanitize=fuzzer equivalent. Only reached through `./scripts/build.sh fuzz`,
-# which configures a separate build_fuzz/ directory with clang; BUILD_FUZZING
-# stays OFF for the ordinary gcc-based `test` build, so this directory is
-# genuinely additive and never affects the existing native test path.
+# which configures a separate build_fuzz/ directory with clang.
 if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     message(FATAL_ERROR
         "BUILD_FUZZING requires clang (got ${CMAKE_CXX_COMPILER_ID}); "

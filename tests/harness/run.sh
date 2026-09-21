@@ -126,22 +126,16 @@ trap 'status=$?; restore_fixture; exit $status' EXIT
 trap 'restore_fixture; exit 130' INT
 trap 'restore_fixture; exit 143' TERM HUP
 
-# The summary used to count failures only, so a run that never reached half the
-# file -- an early return, a block left behind by an edit -- would still have
-# ended in the sentence that says everything passed. The total is declared here
-# and checked against what actually ran. It has to be bumped when a case is
-# added, and that is the point: a case count nobody maintains cannot notice a
-# case that disappears.
+# Case-count guard: the total is declared here and checked against what
+# actually ran, so a run that never reached part of the file cannot end in
+# "everything passed". Bump it when a case is added.
 EXPECTED_CASES=66
 
 fails=0
 passes=0
 
-# A seed that fails has to stop the run. Without `set -e` its status was
-# dropped, and the case then measured whatever the previous case had left
-# behind: for the decode table, twenty-one consecutive rows all expecting the
-# same recovery code, a seed that stops working part-way through keeps every
-# later row green while it tests nothing at all.
+# A seed that fails has to stop the run; otherwise the case would measure
+# whatever the previous case left behind.
 seed() { # seed <state> <update-bits> [override k=v...]
     _state=$1; _bits=$2; shift 2
     python3 "$MKENV" build "$ENV_BIN" \
@@ -331,10 +325,8 @@ expect_verb "commit: nothing to do on a settled device" --commit_update   17 0  
 expect_verb "commit: a decided firmware rollback finalises" --commit_update 16 7  0000
 expect_verb "commit: an incomplete install with nothing in flight is refused" \
     --commit_update 18 2 0000
-# Nothing writes this state, so a device carrying it got it from outside. It used
-# to be a dead end: its acknowledge predicate wanted the running slot uncommitted,
-# which is the opposite of what the state means, so every verb refused. Meanwhile
-# the consuming layer counts its code among the failed ones and calls commit to
+# Nothing writes this state, so a device carrying it got it from outside. The
+# consuming layer counts its code among the failed ones and calls commit to
 # settle it on every boot, and the deadline timer reboots on the failure. It has
 # to settle from any shape, which is what this case measures.
 # The answer is its own code, not an ordinary confirmation: nothing was
@@ -354,10 +346,8 @@ expect_verb_named "commit: an unreadable state is refused" --commit_update 18 \
     'holds uninterpretable content: "zz"' zz 0000
 # The boot-order evidence is the same pair used by the reboot-state query's
 # "reboot still owed" case above: the installer already wrote the target
-# order, but the device has not booted into it yet. A commit here used to
-# fall through to the generic system-error arm (19) instead of being refused
-# by name (18) -- same defect class as the two cases above, on the boot-order
-# arm instead of the bitfield arms.
+# order, but the device has not booted into it yet. The commit is refused by
+# name (18), not through the generic system-error arm (19).
 expect_verb_named "commit: firmware installed but reboot still owed is refused, not a system error" \
     --commit_update 18 \
     'firmware update reboot missing' \
@@ -413,10 +403,7 @@ expect_verb_named "rollback: an unreadable state is refused" --rollback_update 1
     'holds uninterpretable content: "zz"' zz 0000
 
 # The two query verbs answer on stdout and in the exit code, and both halves are
-# pinned here: the line is the answer, the code says the query ran. The code
-# used to be the constructor's 0 -- the only verb in this table whose success
-# was 0, next to twenty-odd whose success is not, and indistinguishable from a
-# verb that set nothing at all.
+# pinned here: the line is the answer, the code says the query ran.
 expect_verb_named "query: a slot that is not bad answers 0 and says the query ran" \
     --is_app_state_bad=B 52 '0' 0 0000
 expect_verb_named "query: a slot marked bad answers 1 and says the query ran" \
@@ -426,12 +413,8 @@ expect_verb_named "query: a slot marked bad answers 1 and says the query ran" \
 expect_verb_named "query: the firmware twin answers the same way" \
     --is_fw_state_bad=B 52 '1' 0 0020
 
-# The setters had no case here at all, and that is how a defect reached a
-# device: every row above reads the field, none of them writes it, so what the
-# marking verbs leave behind rested on a single bench measurement. The verbs
-# answer with a code and print nothing, so the code alone would say only that
-# something ran -- the assertion that carries the meaning is the field
-# afterwards.
+# The setters are pinned by the field afterwards: the verbs answer with a code
+# and print nothing, so the code alone would say only that something ran.
 expect_verb_writes() { # <name> <verb> <want-rc> <state> <bits> <want-bits-after> [override k=v...]
     _n=$1; _v=$2; _w=$3; _s=$4; _b=$5; _a=$6; shift 6
     seed "$_s" "$_b" "$@"
@@ -449,19 +432,15 @@ expect_verb_writes "mark: the firmware twin writes its own digit" \
 
 # The one that matters. A slot can be marked while an update is in flight on it
 # -- the boot guard does exactly that when the trials run out -- and the two
-# facts are independent, so the mark must not take the other one with it. It
-# used to: the digit was replaced rather than the bit set, the pending-update
-# predicate then answered false, and the revert took a path that reaches a
-# different end state. Nothing at this level held that.
+# facts are independent, so the mark must not take the other one with it.
 expect_verb_writes "mark: a slot in flight keeps that fact when it is marked bad" \
     --set_app_state_bad=B 52 3 0001 0003
 
 # The other direction of the same independence, at the door an operator uses.
 # A slot can be marked bad after it booted -- the guard does it when the trials
-# run out -- and the commit that follows must not undo that verdict. The commit
-# path used to write the committed digit as a literal, so it cleared both facts
-# at once: the device came out of the update reporting a slot as good that had
-# been condemned while running, and the switch verbs would then admit it.
+# run out -- and the commit that follows must not undo that verdict; otherwise
+# the device would report a condemned slot as good and the switch verbs would
+# admit it.
 #
 # The success predicate reads the boot order and never the digit, so this arm is
 # reached with the mark standing.
@@ -525,14 +504,11 @@ expect_verb_named "an ambiguous bitfield is refused on read, before any arm" \
 expect_verb_named "commit: an app rollback with nothing mounted is settled" \
     --commit_update 16 'Commit update' 8 0000
 
-# NOT the mount behaviour its old name claimed, and no longer the collaborator's
-# error either. The state says an application update is in flight and the
+# NOT a mount test. The state says an application update is in flight and the
 # bitfield says nothing is, so the pending arm is not taken and this seed reaches
 # the committed-slot-switch verdict instead -- where the target slot has no image
-# under user-mode emulation. Line and code now say the same thing: the rollback
-# door maps the refusal errnos exactly as the switch doors do, so one library
-# decision no longer arrives as two different codes depending on which door the
-# caller used. It answered 13 until that mapper was shared. With a RAUC fixture
+# under user-mode emulation. Line and code agree: the rollback door maps the
+# refusal errnos exactly as the switch doors do. With a RAUC fixture
 # present this same seed settles instead of refusing; measuring the mount half
 # needs that fixture and is out of scope here.
 expect_verb_named "rollback: a settled bitfield sends a pending state to the switch verdict" \
@@ -578,9 +554,8 @@ expect_write_refused "a write that cannot be persisted is reported, not assumed"
 # the state, and it does all of that in one transaction. A partial write here
 # would leave a device whose durable record says one thing and whose budgets say
 # another -- worse than the refusal, because the next read cannot tell that
-# anything was lost. The seed is the shape whose precondition the commit now
-# accepts, so this exercises the path that changed rather than the one that
-# always refused.
+# anything was lost. The seed is the shape whose precondition the commit
+# accepts, so this exercises the write path rather than the refusal.
 expect_rollback_write_refused() { # <name> <want-rc>
     seed 8 0000
     chmod 0444 "$ENV_BIN"

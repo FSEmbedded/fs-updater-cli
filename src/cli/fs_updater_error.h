@@ -59,8 +59,8 @@ enum class UPDATER_COMMIT_STATE : int{
     UPDATE_SYSTEM_ERROR = 19,
     /* The commit settled an install that was interrupted before its target
      * was ever activated: that update is discarded and the device still runs
-     * the firmware it ran before, so the caller has to install again. Kept
-     * outside the block above because a consumer matching that range as
+     * the firmware it ran before, so the caller has to install again. Outside
+     * the block above because a consumer matching that range as
      * success would read a discarded update as a confirmed one. */
     STALLED_INSTALL_SETTLED = 58,
     /* The commit consumed a durable state that no current flow writes: the
@@ -81,15 +81,9 @@ enum class UPDATER_UPDATE_REBOOT_STATE : int{
     INCOMPLETE_APP_FW_UPDATE = 25,
     UPDATE_REBOOT_PENDING = 26,
     NO_UPDATE_REBOOT_PENDING = 27,
-    /* The six rollback answers are three pairs, not six states: each rollback
-     * state reports the first code while its reboot is outstanding and the
-     * second once the commit is requested. So 31, 32 and 33 are each reached
-     * from the rollback state of their own dimension, and not only from the
-     * state that shares their name.
-     *
-     * That matters because those same-named states -- the three incomplete
-     * rollbacks -- have no writer in the shipped configuration, while all three
-     * rollback-requested states do. No code here is unreachable.
+    /* The six rollback answers are three pairs: each rollback state reports
+     * the first code while its reboot is outstanding and the second once the
+     * commit is requested.
      */
     ROLLBACK_FW_REBOOT_PENDING = 28,
     ROLLBACK_APP_REBOOT_PENDING = 29,
@@ -149,11 +143,12 @@ enum class UPDATER_SETGET_UPDATE_STATE : int{
 };
 
 enum class UPDATER_CLI_VALIDATION : int{
-    INVALID_UPDATE_TYPE       = 60,  // unused; value reserved so the rest don't shift
+    /* 60 and 62-64 are reserved; the numbers are wire-stable. */
+    INVALID_UPDATE_TYPE       = 60,
     UPDATE_FILE_NOT_FOUND     = 61,
-    MISSING_ENV_UPDATE_STICK  = 62,  // unused; value reserved so the rest don't shift
-    MISSING_ENV_UPDATE_FILE   = 63,  // unused; value reserved so the rest don't shift
-    UPDATE_TYPE_WITHOUT_FILE  = 64,  // unused; value reserved so the rest don't shift
+    MISSING_ENV_UPDATE_STICK  = 62,
+    MISSING_ENV_UPDATE_FILE   = 63,
+    UPDATE_TYPE_WITHOUT_FILE  = 64,
     INCOMPATIBLE_ARG_COMBO    = 65,
     INSTALL_BUSY              = 66,  // another install/download already in flight
     PERMISSION_DENIED         = 67   // polkit / bus-policy rejected the call

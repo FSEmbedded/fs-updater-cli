@@ -69,9 +69,7 @@ namespace cli
 	};
 
 	/**
-	 * Owns one getopt_long parse. Unlike the previous parser, there is no
-	 * per-instance registration state, so a second CliArgs is not a first the
-	 * caller shares by accident — sequential reuse (tests parsing more than
+	 * Owns one getopt_long parse. Sequential reuse (tests parsing more than
 	 * once) is safe, since parse() resets its own state at entry. This does
 	 * NOT extend to concurrent or interleaved use: getopt_long itself drives
 	 * process-global state (optind/opterr), so two parse() calls racing on
@@ -90,7 +88,7 @@ namespace cli
 
 		[[nodiscard]] ParseResult parse(int argc, const char **argv);
 
-		/* The usage block, identical to what the parser would have printed. */
+		/* The usage block. */
 		[[nodiscard]] std::string usage_text();
 
 		/* Populated only when parse() returned Kind::parse_error. */

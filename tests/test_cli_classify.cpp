@@ -184,8 +184,8 @@ TEST(InstallTerminalCode, EmptyOrUnknownTypeIsTypeAgnosticNotFirmware)
 }
 
 /* --- classify_call_error: the busy-name string is the only reliable busy
- * detector over the bus and, before this seam existed, had no executable pin
- * on the client side. The exact literals must match service.cpp. --- */
+ * detector over the bus.
+ * The exact literals must match service.cpp. --- */
 
 TEST(ClassifyCallError, SuccessIsNone)
 {
@@ -232,7 +232,6 @@ TEST(InstallStartErrorCode, MapsEachCallError)
     EXPECT_EQ(cli::install_start_error_code(CallError::no_updater), 49); /* install failed */
     EXPECT_EQ(cli::install_start_error_code(CallError::other),      49);
 }
-
 
 /* --- map_slot_switch_errno: a slot switch refused because the target is bad,
  * or a rollback refused because the target's install never reached the boot

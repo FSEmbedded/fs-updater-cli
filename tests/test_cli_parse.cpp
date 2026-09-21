@@ -222,8 +222,7 @@ TEST(UsageText, MatchesTheGoldenByteForByte)
 	EXPECT_EQ(parser().usage_text(), read_file(FSUP_GOLDEN_HELP));
 }
 
-/* getopt_long has no process-global registration state (unlike the previous
- * parser, which threw on a second CliArgs construction). These use their own
+/* getopt_long has no process-global registration state. These use their own
  * local instances rather than the shared parser() singleton, since the whole
  * point is to show instances do not interfere with each other. */
 TEST(CliArgsLifecycle, TwoInstancesParseIndependently)

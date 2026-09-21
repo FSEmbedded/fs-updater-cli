@@ -183,11 +183,8 @@ void cli::fs_update_cli::rollback_update()
         /* Same mapper as the slot switches, because a rollback reaches the same
          * refusals: a state that says an update is in flight with a bitfield
          * that says nothing is does not take the pending arm, it falls through
-         * to the committed-slot-switch verdict. Answering those refusals with
-         * the plain progress error made one library decision arrive as two
-         * different codes depending on which door the caller used. Refusals
-         * this mapper does not name still answer 13, so nothing that already
-         * relied on a code loses it. */
+         * to the committed-slot-switch verdict. Refusals the mapper does not
+         * name still answer 13. */
         this->return_code = cli::map_slot_switch_errno(e.errorno);
     }
     catch (const fs::BaseFSUpdateException &e)
@@ -502,11 +499,8 @@ void cli::fs_update_cli::is_application_state_bad(const char &state)
     }
     else
     {
-        /* The answer is the line on stdout; the code says the query ran, the
-         * way its setter counterpart does. Leaving it at the constructor's 0
-         * made a successful query indistinguishable from every other verb's
-         * silence, and put the only verb in this table whose success is 0 next
-         * to twenty-odd whose success is not. */
+        /* The answer is the line on stdout; the code says the query ran, as
+         * the setter counterpart does. */
         cli_io::write_stdout(std::to_string(this->update_handler->is_update_state_bad(state, application_update_state)) + "\n");
         this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::GETSET_STATE_SUCCESSFUL);
     }
@@ -540,13 +534,10 @@ void cli::fs_update_cli::is_firmware_state_bad(const char &state)
 
 void cli::fs_update_cli::handle_print_version()
 {
-    /* The project version marks the generation, not the build: it moves rarely,
-     * so two binaries that differ in behaviour can carry the same number. The
-     * source ids name the revisions this one came from -- the library's is
-     * asked for at runtime, because a shared library can be replaced under a
-     * CLI that was compiled against a different one, and the two are meant to
-     * be pinned as a pair. The timestamp is the source date, not the build
-     * clock, wherever the build system pins it. */
+    /* The project version marks the generation, not the build. The library's
+     * source id is asked for at runtime, because a shared library can be
+     * replaced under a CLI compiled against a different one. The timestamp is
+     * the source date, not the build clock, wherever the build system pins it. */
     cli_io::write_stdout(string("F&S Update Framework CLI Version: ") + FUS_CLI_PROJECT_VERSION
         + " cli: " + FUS_CLI_SOURCE_ID
         + " lib: " + fs::library_source_id()
@@ -646,8 +637,7 @@ void cli::fs_update_cli::handle_install_progress()
 
     /* Print the final percent before returning, including for the
      * "failed" terminal state — callers want to see how far the
-     * install got before it failed. (Diverges from
-     * handle_download_progress on purpose.) */
+     * install got before it failed. */
     const int pct = fus_dbus::get_install_progress();
     if (pct < 0) {
         this->return_code =
@@ -870,17 +860,10 @@ void cli::fs_update_cli::handle_apply_update()
     if (posix_helpers::path_exists(rollback_path.c_str()))
     {
         /* A prepared rollback needs nothing but the reboot it is waiting for.
-         * Nothing is written here, deliberately: promoting the pending state
-         * to its INCOMPLETE_* counterpart would leave a different durable
-         * state than a reboot happening for any other reason, and those two
-         * must stay indistinguishable.
-         *
-         * The two values are not interchangeable either. The commit accepts an
-         * INCOMPLETE_* rollback unconditionally, while a pending one is
-         * checked against evidence that the reboot really happened. Promoting
-         * before the reboot therefore replaces a verified verdict with an
-         * assumed one, and a reboot that never arrives leaves the state
-         * claiming a rollback that did not take effect. */
+         * The state is left unchanged on purpose: promoting it to INCOMPLETE_*
+         * would replace the commit's verified verdict with an assumed one, and
+         * a reboot that never arrives would leave a rollback claimed that did
+         * not take effect. */
         cli_io::write_stdout("Apply rollback update...\n");
 
         if(this->reboot() != 0) {
@@ -986,8 +969,7 @@ void cli::fs_update_cli::parse_input(int argc, const char **argv)
 
     /* The verdict is known before this point, but acting on it early would move
      * the no-argument and bad-combination paths ahead of updater construction
-     * and change what they return on a board that cannot construct it. That is
-     * a separate question from extracting the seam. */
+     * and change what they return on a board that cannot construct it. */
     this->setup_logging();
 
     switch (parsed.kind)

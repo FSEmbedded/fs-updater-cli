@@ -77,8 +77,7 @@ namespace
 
 	/* getopt_long option codes start past every ASCII byte, so the short
 	 * option 'h' stays free for -h/--help. Table order also drives
-	 * usage_text() — kept in the previous parser's add() order to minimize
-	 * the visible diff in the golden usage block. */
+	 * usage_text(). */
 	constexpr int kFirstCode = 256;
 
 	constexpr OptionSpec kOptions[] = {
@@ -195,8 +194,7 @@ namespace
 
 	std::string banner_for(const std::string &token, const std::string &reason)
 	{
-		/* The previous parser's shape; the continuation indent aligns the reason
-		 * under the token. ErrorBanner in the tests pins it. */
+		/* The continuation indent aligns the reason under the token. ErrorBanner in the tests pins it. */
 		return "PARSE ERROR: " + token + "\n             " + reason + "\n\n";
 	}
 
@@ -381,9 +379,8 @@ ParseResult CliArgs::parse(int argc, const char **argv)
 
 		if (spec.role == Role::help)
 		{
-			/* Do not return yet: the previous parser scanned the whole line
-			 * before honouring --help, so an error anywhere else in argv
-			 * (unknown option, missing value, a bundled "-hx") still wins.
+			/* Do not return yet: an error anywhere else in argv (unknown
+			 * option, missing value, a bundled "-hx") still wins over --help.
 			 * Checked once after the loop, ahead of classify(). */
 			help_requested = true;
 			continue;
@@ -483,7 +480,7 @@ ParseResult CliArgs::parse(int argc, const char **argv)
 	}
 
 	/* Full argv is now known error-free — honour a --help seen anywhere,
-	 * ahead of classify(), matching the previous parser's ordering. */
+	 * ahead of classify(). */
 	if (help_requested)
 	{
 		result.kind = ParseResult::Kind::help;

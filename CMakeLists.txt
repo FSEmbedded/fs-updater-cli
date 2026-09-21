@@ -42,8 +42,7 @@ option(ENABLE_SANITIZERS  "Enable ASan and UBSan (Debug builds)"             OFF
 option(BUILD_FUZZING      "Build the libFuzzer target (needs clang)"         OFF)
 
 # One working value for the CLI executable -- see the same guard in the library.
-# Its non-D-Bus halves drove the service through files it no longer reads. The
-# fuzz build is the exception and stays legitimate: it builds parsers with
+# The fuzz build is the exception and stays legitimate: it builds parsers with
 # BUILD_MAIN_TARGET=OFF, so the executable and its bus client are not part of
 # that build at all.
 if(BUILD_MAIN_TARGET AND NOT BUILD_DBUS_SUPPORT)
@@ -145,9 +144,8 @@ set_target_properties(fs_updater_cli PROPERTIES
 # ==============================================================================
 # Compiler and linker flags
 #
-# Deviation: -fno-exceptions and -fno-rtti are NOT applied.
-# fs-updater-lib throws exceptions; CLI must catch. RTTI has no user of its own
-# here and stays on only because both flags are flipped together.
+# -fno-exceptions and -fno-rtti are not applied: fs-updater-lib throws, and
+# the CLI catches.
 # ==============================================================================
 
 target_compile_options(fs_updater_cli PRIVATE

@@ -54,8 +54,7 @@ TEST(FsUpdaterError, AllExitCodesAreDistinct)
         code(UPDATER_COMMIT_STATE::UPDATE_NOT_NEEDED),
         code(UPDATER_COMMIT_STATE::UPDATE_NOT_ALLOWED_UBOOT_STATE),
         code(UPDATER_COMMIT_STATE::UPDATE_SYSTEM_ERROR),
-        /* Both sit outside the 16/17 block and were outside this guard too:
-         * the settled stalled install has been missing since it was added. */
+        /* Both sit outside the 16/17 block. */
         code(UPDATER_COMMIT_STATE::STALLED_INSTALL_SETTLED),
         code(UPDATER_COMMIT_STATE::LEGACY_STATE_MIGRATED),
 

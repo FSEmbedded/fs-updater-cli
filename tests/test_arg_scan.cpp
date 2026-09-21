@@ -1,4 +1,4 @@
-/* RED-first pin for the getopt_long parser's low-level scanners: strict
+/* Pin for the getopt_long parser's low-level scanners: strict
  * decimal parsing, single-character state syntax, and long-option exact
  * matching (no abbreviation, "--flag=value" form allowed). */
 #include "cli/arg_scan.h"

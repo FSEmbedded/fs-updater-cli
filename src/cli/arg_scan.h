@@ -32,9 +32,9 @@ namespace cli
         return static_cast<std::uint32_t>(value);
     }
 
-    /* Single-character syntax check only — no A/B value constraint here (B0
-     * #6): a parser-level constraint on the state letter would move the
-     * handler's rc 53 to the parser's rc 1, which is pinned against. */
+    /* Single-character syntax check only — no A/B value constraint here:
+     * a parser-level constraint on the state letter would move the handler's
+     * rc 53 to the parser's rc 1, which is pinned against. */
     [[nodiscard]] inline std::optional<char> parse_state_char(const char *text) noexcept
     {
         if (text == nullptr || text[0] == '\0' || text[1] != '\0') return std::nullopt;
