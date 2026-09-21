@@ -46,6 +46,8 @@ All exit codes from `src/cli/fs_updater_error.h`. Valid POSIX range is 0–125
 | 17 | `UPDATER_COMMIT_STATE::UPDATE_NOT_NEEDED` | Nothing to commit (idle) |
 | 18 | `UPDATER_COMMIT_STATE::UPDATE_NOT_ALLOWED_UBOOT_STATE` | U-Boot state incompatible |
 | 19 | `UPDATER_COMMIT_STATE::UPDATE_SYSTEM_ERROR` | System error during commit |
+| 58 | `UPDATER_COMMIT_STATE::STALLED_INSTALL_SETTLED` | An install interrupted before its target was activated has been settled: that update is discarded, its slot is quarantined, and the device still runs the firmware it ran before |
+| 59 | `UPDATER_COMMIT_STATE::LEGACY_STATE_MIGRATED` | A durable state that no current flow writes has been settled: the device carried it in from a superseded firmware or an edited environment. Nothing was confirmed and nothing discarded |
 
 ## Update state query (`--update_reboot_state`)
 
@@ -65,6 +67,8 @@ All exit codes from `src/cli/fs_updater_error.h`. Valid POSIX range is 0–125
 | 31 | `UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_FW_ROLLBACK` | FW rolled back, awaiting commit |
 | 32 | `UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_ROLLBACK` | APP rolled back, awaiting commit |
 | 33 | `UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_FW_ROLLBACK` | Both rolled back, awaiting commit |
+| 55 | `UPDATER_UPDATE_REBOOT_STATE::UPDATE_REBOOT_STATE_INDETERMINATE` | An update is pending, but the reboot state cannot be told: either whether the reboot took effect is unanswerable, or a firmware install never reached the boot order (`--commit_update` settles it, no reboot needed). The combined app+firmware shape has no clean remedy here |
+| 57 | `UPDATER_UPDATE_REBOOT_STATE::ROLLBACK_APP_REBOOT_INDETERMINATE` | An app rollback awaits commit, but no app image is loop-mounted; distinct from 55 so a pending-update watcher does not count a rollback as a pending update |
 
 ## Network update availability (`--is_update_available`)
 
@@ -116,6 +120,7 @@ All exit codes from `src/cli/fs_updater_error.h`. Valid POSIX range is 0–125
 | 52 | `UPDATER_SETGET_UPDATE_STATE::GETSET_STATE_SUCCESSFUL` | Get / set succeeded |
 | 53 | `UPDATER_SETGET_UPDATE_STATE::PASSING_PARAM_UPDATE_STATE_WRONG` | Invalid slot (not `A` or `B`) |
 | 54 | `UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_BAD` | Switch rejected: target slot is bad |
+| 56 | `UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_UNPROVISIONED` | Switch or rollback rejected: target slot was never provisioned (no image file installed). Not reachable on the firmware switch, which has no unprovisioned refusal |
 
 ## CLI validation
 
@@ -127,6 +132,8 @@ All exit codes from `src/cli/fs_updater_error.h`. Valid POSIX range is 0–125
 | 63 | `UPDATER_CLI_VALIDATION::MISSING_ENV_UPDATE_FILE` | `UPDATE_FILE` not set (`--automatic`) |
 | 64 | `UPDATER_CLI_VALIDATION::UPDATE_TYPE_WITHOUT_FILE` | `--update_type` without `--update_file` |
 | 65 | `UPDATER_CLI_VALIDATION::INCOMPATIBLE_ARG_COMBO` | Mutually exclusive flags combined |
+| 66 | `UPDATER_CLI_VALIDATION::INSTALL_BUSY` | The service rejected the install because another install or download is already in flight (`de.fsembedded.fsupdate1.Error.Busy`; a same-host direct peer with no error name maps its raw `-EBUSY` here too) |
+| 67 | `UPDATER_CLI_VALIDATION::PERMISSION_DENIED` | The install request was rejected by policy (polkit / D-Bus bus policy — `org.freedesktop.DBus.Error.AccessDenied`) |
 
 ## System-level
 
