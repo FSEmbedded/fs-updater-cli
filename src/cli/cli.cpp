@@ -35,6 +35,22 @@ void render_install_progress(int pct)
     cli_io::write_stdout("\rInstalling: " + std::to_string(pct) + "%");
 }
 
+/* The library refuses an unreadable stored state by throwing; answer with the
+ * recovery code and a line saying which access failed. */
+template <typename Verb>
+void answer_state_verb(int &return_code, Verb &&verb)
+{
+    try
+    {
+        verb();
+    }
+    catch (const std::exception &e)
+    {
+        cli_io::write_stderr(std::string("Cannot access update state: ") + e.what() + "\n");
+        return_code = static_cast<int>(UPDATER_FATAL::UNHANDLED_EXCEPTION);
+    }
+}
+
 } // namespace
 
 constexpr uint32_t firmware_update_state = 0;
@@ -484,9 +500,11 @@ void cli::fs_update_cli::print_current_firmware_version()
 
 void cli::fs_update_cli::set_application_state_bad(const char &state)
 {
-    this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::GETSET_STATE_SUCCESSFUL);
-    if (this->update_handler->set_update_state_bad(state, application_update_state) == EINVAL)
-        this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::PASSING_PARAM_UPDATE_STATE_WRONG);
+    answer_state_verb(this->return_code, [&] {
+        this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::GETSET_STATE_SUCCESSFUL);
+        if (this->update_handler->set_update_state_bad(state, application_update_state) == EINVAL)
+            this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::PASSING_PARAM_UPDATE_STATE_WRONG);
+    });
 }
 
 void cli::fs_update_cli::is_application_state_bad(const char &state)
@@ -500,16 +518,20 @@ void cli::fs_update_cli::is_application_state_bad(const char &state)
     {
         /* The answer is the line on stdout; the code says the query ran, as
          * the setter counterpart does. */
-        cli_io::write_stdout(std::to_string(this->update_handler->is_update_state_bad(state, application_update_state)) + "\n");
-        this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::GETSET_STATE_SUCCESSFUL);
+        answer_state_verb(this->return_code, [&] {
+            cli_io::write_stdout(std::to_string(this->update_handler->is_update_state_bad(state, application_update_state)) + "\n");
+            this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::GETSET_STATE_SUCCESSFUL);
+        });
     }
 }
 
 void cli::fs_update_cli::set_firmware_state_bad(const char &state)
 {
-    this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::GETSET_STATE_SUCCESSFUL);
-    if (this->update_handler->set_update_state_bad(state, firmware_update_state) == EINVAL)
-        this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::PASSING_PARAM_UPDATE_STATE_WRONG);
+    answer_state_verb(this->return_code, [&] {
+        this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::GETSET_STATE_SUCCESSFUL);
+        if (this->update_handler->set_update_state_bad(state, firmware_update_state) == EINVAL)
+            this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::PASSING_PARAM_UPDATE_STATE_WRONG);
+    });
 }
 
 void cli::fs_update_cli::is_firmware_state_bad(const char &state)
@@ -522,8 +544,10 @@ void cli::fs_update_cli::is_firmware_state_bad(const char &state)
     else
     {
         /* Same contract as the application query above. */
-        cli_io::write_stdout(std::to_string(this->update_handler->is_update_state_bad(state, firmware_update_state)) + "\n");
-        this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::GETSET_STATE_SUCCESSFUL);
+        answer_state_verb(this->return_code, [&] {
+            cli_io::write_stdout(std::to_string(this->update_handler->is_update_state_bad(state, firmware_update_state)) + "\n");
+            this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::GETSET_STATE_SUCCESSFUL);
+        });
     }
 }
 
@@ -866,6 +890,23 @@ void cli::fs_update_cli::handle_apply_update()
         this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_FAILED);
         return;
     }
+    catch (const std::exception &e)
+    {
+        /* Apply failed: report and leave the state machine untouched. */
+        cli_io::write_stderr(string("Initiate of update apply fails... ") + e.what() + "\n");
+        this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_FAILED);
+        return;
+    }
+
+    cli_io::write_stdout("Apply update...\n");
+    if (reboot_needed && this->reboot() != 0)
+    {
+        const int saved = errno;
+        cli_io::write_stderr(string("Failed to reboot system: ") + strerror(saved) + "\n");
+        this->return_code = static_cast<int>(UPDATER_SYSTEM::REBOOT_FAILED);
+        return;
+    }
+    this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFUL);
 }
 
 void cli::fs_update_cli::handle_set_app_state_bad()
@@ -890,23 +931,6 @@ void cli::fs_update_cli::handle_is_fw_state_bad()
 
 // ---------------------------------------------------------------------------
 // Command dispatch
-    catch (const std::exception &e)
-    {
-        /* Apply failed: report and leave the state machine untouched. */
-        cli_io::write_stderr(string("Initiate of update apply fails... ") + e.what() + "\n");
-        this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_FAILED);
-        return;
-    }
-
-    cli_io::write_stdout("Apply update...\n");
-    if (reboot_needed && this->reboot() != 0)
-    {
-        const int saved = errno;
-        cli_io::write_stderr(string("Failed to reboot system: ") + strerror(saved) + "\n");
-        this->return_code = static_cast<int>(UPDATER_SYSTEM::REBOOT_FAILED);
-        return;
-    }
-    this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFUL);
 // ---------------------------------------------------------------------------
 
 void cli::fs_update_cli::parse_input(int argc, const char **argv)

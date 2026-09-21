@@ -130,7 +130,7 @@ trap 'restore_fixture; exit 143' TERM HUP
 # Case-count guard: the total is declared here and checked against what
 # actually ran, so a run that never reached part of the file cannot end in
 # "everything passed". Bump it when a case is added.
-EXPECTED_CASES=67
+EXPECTED_CASES=71
 
 fails=0
 passes=0
@@ -414,6 +414,15 @@ expect_verb_named "query: a slot marked bad answers 1 and says the query ran" \
 expect_verb_named "query: the firmware twin answers the same way" \
     --is_fw_state_bad=B 52 '1' 0 0020
 
+# The four state-bad verbs read the bitfield through the library, which refuses
+# an out-of-contract value by throwing. That has to end as the recovery answer
+# with a line saying what could not be read, not as an escaped exception.
+for _verb in --set_fw_state_bad=B --is_fw_state_bad=B \
+             --set_app_state_bad=B --is_app_state_bad=B; do
+    expect_verb_named "state-bad: an unreadable bitfield is reported by $_verb" \
+        "$_verb" 124 'Cannot access update state:' 0 1010
+done
+
 # The setters are pinned by the field afterwards: the verbs answer with a code
 # and print nothing, so the code alone would say only that something ran.
 expect_verb_writes() { # <name> <verb> <want-rc> <state> <bits> <want-bits-after> [override k=v...]
@@ -523,19 +532,10 @@ expect_verb_named "rollback: a settled bitfield sends a pending state to the swi
 expect_verb_named "rollback: a target slot marked bad is refused as a state error" \
     --rollback_update 54 'not allowed' 2 0020
 
-# Deliberately absent: --apply_update. Where it has real work it ends in a
-# reboot, and there is no reboot here, so it answers with the system-level
+# --apply_update is pinned only where it refuses. Where it has real work it ends
+# in a reboot, and there is no reboot here, so it answers with the system-level
 # failure. That is the harness speaking, not the product, and pinning it would
 # pin the emulation.
-
-# A write that cannot be persisted. The environment carries the only record of
-# what the device is doing, so the failure has to be reported rather than
-# assumed, and what is already there has to survive: a half-written environment
-# is worse than an unchanged one, because the next read cannot tell the
-# difference between a value and a casualty.
-#
-# The write is provoked by a spent boot budget on a settled device -- the one
-# branch that puts the budget back, and the only write an otherwise idle client
 #
 # A stray rollback marker in the work directory must not count as a pending
 # apply: the answer comes from the stored state alone. The harness refuses to
@@ -549,6 +549,15 @@ MARKER="$WORK_DIR/rollbackUpdate"
 expect_verb_named "apply: a stale rollback marker is not a pending apply" \
     --apply_update 51 'Nothing to apply' 0 0000
 rm -f "$MARKER"
+
+# A write that cannot be persisted. The environment carries the only record of
+# what the device is doing, so the failure has to be reported rather than
+# assumed, and what is already there has to survive: a half-written environment
+# is worse than an unchanged one, because the next read cannot tell the
+# difference between a value and a casualty.
+#
+# The write is provoked by a spent boot budget on a settled device -- the one
+# branch that puts the budget back, and the only write an otherwise idle client
 # makes.
 expect_write_refused() { # expect_write_refused <name> <want-rc>
     seed 0 0000 BOOT_A_LEFT=1
