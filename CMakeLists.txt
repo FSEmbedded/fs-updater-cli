@@ -18,6 +18,8 @@ set(FUS_LIB_DIR "" CACHE PATH "Local fs-updater-lib install prefix (overrides SD
 # its own it cannot tell two builds apart; a recipe passes the revision it pinned
 # (-DFUS_SOURCE_ID=${SRCREV}). Falls back to the working tree's own description,
 # and to "unknown" outside a checkout, so the field is never silently empty.
+# The description is taken at configure time: re-run cmake after committing to
+# refresh it.
 set(FUS_SOURCE_ID "" CACHE STRING "Source revision baked into --version")
 if(NOT FUS_SOURCE_ID)
     find_package(Git QUIET)
