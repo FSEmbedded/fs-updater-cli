@@ -133,8 +133,8 @@ On resume the handler must:
    already booted the update, so the step is `--commit_update`, not another
    `Apply()`.
 3. A failed install (20, 21, or 22) is settled by `--commit_update`, never by
-   `Cancel()`: a failed install left the device on its proven slot, so there
-   is nothing to roll back, and `Cancel()` fails the step in these states.
+   `Cancel()`, which fails the step in these states; the CLI Reference gives
+   the reason.
    `IsInstalled()` issues that commit itself when it reads 20 or 21, but
    not for 22.
 

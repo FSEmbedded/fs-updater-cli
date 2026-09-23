@@ -43,7 +43,9 @@ After rebooting into the new slot, confirm the update is healthy:
 fs-updater --commit_update
 ```
 
-Exit code `16` = committed. Exit code `17` = nothing to commit (already idle).
+Exit code `16` = committed. Exit code `17` = nothing to commit. With nothing
+pending, `16` means the running slot's boot budget was restored; see
+[CLI Reference — `--commit_update`](reference/cli.md#--commit_update).
 
 ## Check the current update state
 

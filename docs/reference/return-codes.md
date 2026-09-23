@@ -66,8 +66,8 @@ busy, denied) are reported before any of these: see 61/66/67 under
 
 | Code | Enum | Trigger |
 |:----:|------|---------|
-| 16 | `UPDATER_COMMIT_STATE::UPDATE_COMMIT_SUCCESSFUL` | Update / rollback committed |
-| 17 | `UPDATER_COMMIT_STATE::UPDATE_NOT_NEEDED` | Nothing to commit (idle) |
+| 16 | `UPDATER_COMMIT_STATE::UPDATE_COMMIT_SUCCESSFUL` | Update, rollback or failed install committed; with nothing pending, the running slot's boot budget was restored |
+| 17 | `UPDATER_COMMIT_STATE::UPDATE_NOT_NEEDED` | Nothing pending and nothing to restore |
 | 18 | `UPDATER_COMMIT_STATE::UPDATE_NOT_ALLOWED_UBOOT_STATE` | U-Boot state incompatible |
 | 19 | `UPDATER_COMMIT_STATE::UPDATE_SYSTEM_ERROR` | System error during commit |
 | 58 | `UPDATER_COMMIT_STATE::STALLED_INSTALL_SETTLED` | An install interrupted before its target was activated has been settled: that update is discarded, its slot is quarantined, and the device still runs the firmware it ran before |

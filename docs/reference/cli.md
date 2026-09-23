@@ -134,8 +134,8 @@ per state under [`--update_reboot_state`](#--update_reboot_state).
 
 | Exit code | Meaning |
 |:---------:|---------|
-| 16 | Committed successfully |
-| 17 | Nothing to commit (already idle) |
+| 16 | Committed successfully; with nothing pending, the running slot's boot budget was restored (the routine mark-good) |
+| 17 | Nothing pending and nothing to restore |
 | 18 | U-Boot state incompatible |
 | 19 | System error |
 | 58 | An install interrupted before its target was activated has been settled (discarded, slot quarantined) |
@@ -194,9 +194,11 @@ table.
 - **3:** no application image is mounted at all. The library's
   [transition diagram](https://github.com/fsembedded/fs-updater-lib/blob/master/docs/state-machine.md#transition-diagram)
   (Phase 2) describes this shape. `--commit_update` refuses it and exits 19.
-- **4:** the combined install never reached the boot order. Neither verb
-  leads out cleanly: `--commit_update` fails with 19, and `--rollback_update`
-  is refused for the firmware half.
+- **4:** a firmware slot is in flight that does not lead the boot order while
+  the combined state is stored. The library's own writes do not produce this
+  shape (an interrupted combined install is stored as 2, see above). Neither
+  verb leads out cleanly: `--commit_update` fails with 19, and
+  `--rollback_update` is refused for the firmware half.
 
 ---
 
