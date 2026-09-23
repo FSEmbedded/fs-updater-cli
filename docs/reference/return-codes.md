@@ -76,24 +76,32 @@ busy, denied) are reported before any of these: see 61/66/67 under
 
 ## Update state query (`--update_reboot_state`)
 
-| Code | Enum | State |
-|:----:|------|-------|
-| 20 | `UPDATER_UPDATE_REBOOT_STATE::FAILED_APP_UPDATE` | Application update failed |
-| 21 | `UPDATER_UPDATE_REBOOT_STATE::FAILED_FW_UPDATE` | Firmware update failed |
-| 22 | `UPDATER_UPDATE_REBOOT_STATE::FW_UPDATE_REBOOT_FAILED` | FW installed; bootloader fell back to old slot |
-| 23 | `UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_FW_UPDATE` | FW installed, awaiting reboot |
-| 24 | `UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_UPDATE` | APP installed, awaiting reboot |
-| 25 | `UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_FW_UPDATE` | Both installed, awaiting reboot |
-| 26 | `UPDATER_UPDATE_REBOOT_STATE::UPDATE_REBOOT_PENDING` | Reboot requested |
-| 27 | `UPDATER_UPDATE_REBOOT_STATE::NO_UPDATE_REBOOT_PENDING` | Idle |
-| 28 | `UPDATER_UPDATE_REBOOT_STATE::ROLLBACK_FW_REBOOT_PENDING` | FW rollback, awaiting reboot |
-| 29 | `UPDATER_UPDATE_REBOOT_STATE::ROLLBACK_APP_REBOOT_PENDING` | APP rollback, awaiting reboot |
-| 30 | `UPDATER_UPDATE_REBOOT_STATE::ROLLBACK_APP_FW_REBOOT_PENDING` | Both rollbacks, awaiting reboot |
-| 31 | `UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_FW_ROLLBACK` | FW rolled back, awaiting commit |
-| 32 | `UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_ROLLBACK` | APP rolled back, awaiting commit |
-| 33 | `UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_FW_ROLLBACK` | Both rolled back, awaiting commit |
-| 55 | `UPDATER_UPDATE_REBOOT_STATE::UPDATE_REBOOT_STATE_INDETERMINATE` | An update is pending, but the reboot state cannot be told: either whether the reboot took effect is unanswerable, or a firmware install never reached the boot order (`--commit_update` settles it, no reboot needed). The combined app+firmware shape has no clean remedy here |
-| 57 | `UPDATER_UPDATE_REBOOT_STATE::ROLLBACK_APP_REBOOT_INDETERMINATE` | An app rollback awaits commit, but no app image is loop-mounted; distinct from 55 so a pending-update watcher does not count a rollback as a pending update |
+Which stored library state each code reports, under which condition, and the
+next step for it are listed under
+[CLI Reference — `--update_reboot_state`](cli.md#--update_reboot_state).
+
+| Code | Enum |
+|:----:|------|
+| 20 | `UPDATER_UPDATE_REBOOT_STATE::FAILED_APP_UPDATE` |
+| 21 | `UPDATER_UPDATE_REBOOT_STATE::FAILED_FW_UPDATE` |
+| 22 | `UPDATER_UPDATE_REBOOT_STATE::FW_UPDATE_REBOOT_FAILED` |
+| 23 | `UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_FW_UPDATE` |
+| 24 | `UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_UPDATE` |
+| 25 | `UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_FW_UPDATE` |
+| 26 | `UPDATER_UPDATE_REBOOT_STATE::UPDATE_REBOOT_PENDING` |
+| 27 | `UPDATER_UPDATE_REBOOT_STATE::NO_UPDATE_REBOOT_PENDING` |
+| 28 | `UPDATER_UPDATE_REBOOT_STATE::ROLLBACK_FW_REBOOT_PENDING` |
+| 29 | `UPDATER_UPDATE_REBOOT_STATE::ROLLBACK_APP_REBOOT_PENDING` |
+| 30 | `UPDATER_UPDATE_REBOOT_STATE::ROLLBACK_APP_FW_REBOOT_PENDING` |
+| 31 | `UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_FW_ROLLBACK` |
+| 32 | `UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_ROLLBACK` |
+| 33 | `UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_FW_ROLLBACK` |
+| 55 | `UPDATER_UPDATE_REBOOT_STATE::UPDATE_REBOOT_STATE_INDETERMINATE` |
+| 57 | `UPDATER_UPDATE_REBOOT_STATE::ROLLBACK_APP_REBOOT_INDETERMINATE` |
+
+A stored state the CLI cannot interpret is answered with 124
+(`UPDATER_FATAL::UNHANDLED_EXCEPTION`), not with a code from this range, so a
+caller that treats only 27 as "nothing to do" does not act on it.
 
 ## Update availability (`--is_update_available`)
 

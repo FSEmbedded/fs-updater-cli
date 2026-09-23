@@ -52,24 +52,32 @@ Exit code `16` = committed. Exit code `17` = nothing to commit (already idle).
 fs-updater --update_reboot_state
 ```
 
-Returns a code in the range 20–33 that maps to the 13-state machine. See
-[CLI Reference](reference/cli.md#--update_reboot_state) for the full mapping.
+The exit code names the stored state and the next step to take; see
+[CLI Reference — `--update_reboot_state`](reference/cli.md#--update_reboot_state)
+for every code. A failed install (20, 21, 22) is settled with
+`--commit_update`, not rolled back.
 
 ## Rollback to the previous version
 
 ```bash
-# Rollback both firmware and application (whichever is pending)
+# Roll back the firmware, the application or both, whichever is pending
 fs-updater --rollback_update
 
-# Reboot is required to complete the rollback
-fs-updater --apply_update
+# Read what the rollback left behind
+fs-updater --update_reboot_state
 ```
 
-After reboot, commit to finalise:
+Exit 27 means the device is already back on the proven slot. Exit 28–30 means
+a reboot is still owed:
 
 ```bash
+fs-updater --apply_update     # reboots
+# after the reboot:
 fs-updater --commit_update
 ```
+
+A combined firmware and application update rolled back before its reboot is
+the exception; see [CLI Reference — `--rollback_update`](reference/cli.md#--rollback_update).
 
 ## Query installed versions
 

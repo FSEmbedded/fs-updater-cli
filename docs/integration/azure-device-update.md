@@ -68,8 +68,8 @@ These map to the D-Bus interface's own `"fw"`/`"app"`/`"fw+app"` type strings
 | Download | `Download()` | Direct D-Bus: `StartDownload`, then `FinishDownload` after the transfer |
 | Install | `Install()` | Direct D-Bus: `StartInstall`, poll `InstallState` property |
 | Apply | `Apply()` | Direct D-Bus: `Apply()`; issues the reboot itself via `workflow_request_immediate_reboot()` when it reports one is required |
-| Cancel | `Cancel()` | `adu-shell execute` → `fs-updater --update_reboot_state` / `--commit_update`, via `HandleExecuteAction()` below |
-| IsInstalled | `IsInstalled()` | `adu-shell execute` → `fs-updater --firmware_version` / `--application_version`, via `HandleExecuteAction()` |
+| Cancel | `Cancel()` | adu-shell → `fs-updater --update_reboot_state`; on exit 24 `--rollback_update` (adu-shell's cancel action), on exit 28 `--commit_update`; every other state fails the step |
+| IsInstalled | `IsInstalled()` | adu-shell → `fs-updater --firmware_version` / `--application_version` and `--update_reboot_state`; on exit 20 or 21 also `--commit_update` |
 | Backup | `Backup()` | — (no-op) |
 | Restore | `Restore()` | — (unsupported, no-op) |
 
@@ -120,14 +120,20 @@ restarts between `Install()` completing and `Apply()` running, the durable
 On resume the handler must:
 
 1. Call `--update_reboot_state` to read the current state via its **exit code**.
-2. If exit code is 23, 24, or 25 (`INCOMPLETE_*`): proceed directly to `Apply()`.
-3. If exit code is 20 or 21 (`FAILED_*`) or 22 (`FW_UPDATE_REBOOT_FAILED`): the
-   previous install failed; call `Cancel()` to roll back before retrying.
+2. Take the next step the
+   [CLI Reference](../reference/cli.md#--update_reboot_state) lists for that
+   code. 26 means the reboot is still owed: `Apply()`. 23–25 mean the restart
+   already booted the update, so the step is `--commit_update`, not another
+   `Apply()`.
+3. A failed install (20, 21, or 22) is settled by `--commit_update`, never by
+   `Cancel()`: a failed install left the device on its proven slot, so there
+   is nothing to roll back, and `Cancel()` fails the step in these states.
+   `IsInstalled()` issues that commit itself when it reads 20 or 21, but
+   not for 22.
 
-See the [state machine recovery table](https://github.com/fsembedded/fs-updater-lib/blob/main/docs/state-machine.md#stale-and-stuck-states)
-for the full per-state recovery calls, and
-[Return Codes](../reference/return-codes.md#update-state-query---update_reboot_state)
-for the exit-code-to-state mapping.
+The library's
+[Stale and stuck states](https://github.com/fsembedded/fs-updater-lib/blob/master/docs/state-machine.md#stale-and-stuck-states)
+table covers the recovery per stored state.
 
 **This handler's `Install()` poll loop has no overall timeout.** It caps
 consecutive *empty/unreadable* `InstallState` reads at `MAX_EMPTY_RETRIES`,
