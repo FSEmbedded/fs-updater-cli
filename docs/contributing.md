@@ -29,7 +29,7 @@ native targets use `build_test/`, `build_test_san/` and `build_fuzz/`.
 | `--uint64` | `uint64` version type instead of `string` |
 | `--lib <build_dir>` | Link a locally built `fs-updater-lib`; use its `build_san/` for the `sanitize` target |
 | `--sanitize` | With `test`: run the native suite under ASan/UBSan |
-| `--env-config <path>` | Compile another `fw_env.config` path into the binary, for test harnesses |
+| `--env-config <path>` | Compile another `fw_env.config` path into the `--serial` console lookup, for test harnesses. Every state command opens the path compiled into the library, so a harness passes the same path to both builds (`scripts/run-env-harness.sh`) |
 
 ## CMake options
 
@@ -39,7 +39,7 @@ native targets use `build_test/`, `build_test_san/` and `build_fuzz/`.
 | `update_version_type` | `string` / `uint64` | `string` | Version field type in config header |
 | `FUS_LIB_DIR` | path | _(empty)_ | Local `fs-updater-lib` install prefix; overrides SDK sysroot |
 | `FUS_SOURCE_ID` | string | _(empty: `git describe`, else `unknown`)_ | Source revision reported by `--version` |
-| `UBOOT_CONFIG_PATH` | path | _(empty: the library's default)_ | `fw_env.config` path compiled into the binary |
+| `UBOOT_CONFIG_PATH` | path | _(empty: the library's default)_ | `fw_env.config` path for the `--serial` console lookup; every other environment access uses the library's own compiled-in path |
 | `BUILD_DBUS_SUPPORT` | `ON` / `OFF` | `ON` | Must stay `ON` for the executable; only the fuzz build sets it `OFF` |
 | `BUILD_TESTING` | `ON` / `OFF` | `OFF` | Build the unit tests |
 | `BUILD_MAIN_TARGET` | `ON` / `OFF` | `ON` | Build the executable (`OFF`: tests or fuzz targets only) |
@@ -59,13 +59,13 @@ QEMU image with U-Boot environment support.
 Targeting C++17.
 
 **Exceptions and RTTI are enabled.** `fs-updater-lib` reports errors by
-throwing; every exception is caught in `main()` and translated to an exit
-code, and none may escape.
+throwing; each command's handler catches what it expects and translates it to
+an exit code. `main()` catches any `std::exception` that gets past a handler
+and exits 124.
 
 Rules that apply in full:
 
 - No raw `new`/`delete` — smart pointers and RAII only
-- `[[nodiscard]]` on all error-returning functions
 - `std::unique_ptr` as the default ownership type; `std::shared_ptr` only
   when ownership is genuinely shared
 - Exit codes are **append-only** and must never be renumbered or reused —
