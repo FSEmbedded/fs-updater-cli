@@ -138,6 +138,7 @@ all, is described in the library's
 [transition diagram](https://github.com/fsembedded/fs-updater-lib/blob/master/docs/state-machine.md#transition-diagram)
 (Phase 3).
 
-After the reboot, `--commit_update` finalises the rollback (exit 16) or
-reports a settle that confirmed nothing (exit 58/59 — see
-[Return Codes](../reference/return-codes.md#commit---commit_update)).
+After the reboot, `--commit_update` finalises the rollback (exit 16). If it
+refuses (18) or fails (19), `--update_reboot_state` names the state and its
+next step; see
+[Return Codes](../reference/return-codes.md#commit---commit_update).

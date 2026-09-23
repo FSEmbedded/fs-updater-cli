@@ -33,8 +33,9 @@ CLI, which is D-Bus-only. With `BUILD_DBUS_SUPPORT`, the handler talks to
    going through the CLI or adu-shell at all.
 2. **Child process launch** — `Cancel()` and `IsInstalled()` shell out
    through adu-shell to the `fs-updater` CLI, reading its exit code as
-   `result.ExtendedResultCode`. These two steps only ever *query or settle*
-   durable U-Boot state.
+   `result.ExtendedResultCode`. These two steps read durable state and, in
+   the states the [mapping below](#adu-lifecycle--integration-mapping) names,
+   prepare a rollback or run a commit.
 
 See [D-Bus Session Protocol](dbus-session-protocol.md) and
 `dbus/de.fsembedded.fsupdate1.xml` in `fs-updater-service` for the full
@@ -75,17 +76,17 @@ firmware, application, or both for `"common-both"`.
 | Download | `Download()` | Direct D-Bus: `StartDownload`, then `FinishDownload` after the transfer |
 | Install | `Install()` | Direct D-Bus: `StartInstall`, poll `InstallState` property |
 | Apply | `Apply()` | Direct D-Bus: `Apply()`; issues the reboot itself via `workflow_request_immediate_reboot()` when it reports one is required |
-| Cancel | `Cancel()` | adu-shell → `fs-updater --update_reboot_state`; on exit 24 `--rollback_update` (adu-shell's cancel action), on exit 28 `--commit_update`; every other state fails the step |
-| IsInstalled | `IsInstalled()` | adu-shell → `fs-updater --firmware_version` / `--application_version` and `--update_reboot_state`; on exit 20 or 21 also `--commit_update` |
+| Cancel | `Cancel()` | adu-shell → `fs-updater --update_reboot_state`; on exit 24 `--rollback_update` (adu-shell's cancel action), then another state read that accepts only 28 or 27 — an application rollback reports neither, so the step fails after the rollback is stored; on exit 28 `--commit_update`, whose result is compared against 27, which a commit never returns, so the step reports `ADUC_Result_Cancel_Success` with the not-allowed-state extended code (28 itself means the rollback's reboot is outstanding, so the commit is refused with 18 unless the boot evidence shows that reboot); every other state fails the step |
+| IsInstalled | `IsInstalled()` | adu-shell → `fs-updater --firmware_version` / `--application_version` and `--update_reboot_state`; on exit 20 or 21 also `--commit_update`, but only after the version comparison did not match — with a matching version, 20 or 21 fails the step as an unknown state and nothing is committed |
 | Backup | `Backup()` | — (no-op) |
 | Restore | `Restore()` | — (unsupported, no-op) |
 
 The Delivery Optimization SDK (`ExtensionManager::Download()`) drives the
 actual HTTP transfer between `StartDownload` and `FinishDownload`. The
 interface has a `ReportDownloadProgress` method for a caller to push interim
-progress, but this handler does not call it — `DownloadProgress` stays
-unset for the duration of an ADU-driven download; only `DownloadState`
-("in_progress" → "finished"/"failed") changes.
+progress, but this handler does not call it: during an ADU-driven download
+`DownloadProgress` stays at the 0 that `StartDownload` sets, and a successful
+`FinishDownload` sets it to 100. No interim value is published.
 
 ---
 
@@ -135,8 +136,8 @@ On resume the handler must:
 3. A failed install (20, 21, or 22) is settled by `--commit_update`, never by
    `Cancel()`, which fails the step in these states; the CLI Reference gives
    the reason.
-   `IsInstalled()` issues that commit itself when it reads 20 or 21, but
-   not for 22.
+   `IsInstalled()` issues that commit itself when it reads 20 or 21 after a
+   version mismatch (see the mapping above), but not for 22.
 
 The library's
 [Stale and stuck states](https://github.com/fsembedded/fs-updater-lib/blob/master/docs/state-machine.md#stale-and-stuck-states)
@@ -172,8 +173,10 @@ HandleExecuteAction(targetaction)
 
 The CLI exit code is passed back as `result.ExtendedResultCode`. These two
 steps use this path rather than a direct D-Bus call because
-they act on **durable** U-Boot state (the current reboot-state, firmware/app
-version) that the CLI already exposes correctly whether or not a D-Bus
+they act on state that outlives a session — the reboot state in the U-Boot
+environment and the installed versions, which the library reads from files
+(see its [Versions](https://github.com/fsembedded/fs-updater-lib/blob/master/docs/reference/api.md#versions)
+entry) — that the CLI already exposes correctly whether or not a D-Bus
 session happens to be tracked — there is nothing session-scoped for them to
 gain from calling the service directly.
 
