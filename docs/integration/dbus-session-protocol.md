@@ -25,8 +25,8 @@ that every later call in the same cycle passes back, and that terminal
 signals carry for correlation. `session_id = 0` is never issued and marks
 "no session" in `SessionId`/`GetState()`. The session is service-local,
 in-memory state: it does not survive a service restart (the counter resets
-to 1), and nothing in this CLI or in the ADU handler currently calls
-`GetState()` to detect and recover from that — see the interface's own
+to 1), and neither this CLI nor the ADU handler calls `GetState()` to
+detect and recover from that — see the interface's own
 stability notes on `GetState()` for the recovery pattern it is designed to
 support.
 
@@ -69,7 +69,7 @@ sequenceDiagram
 
     CLI->>Svc: --apply_update (Apply)
     Svc-->>CLI: reboot_required
-    CLI-->>CLI: reboot(2) if required
+    CLI-->>CLI: reboot if required
 ```
 
 The no-path `--install_update` call above needs `DownloadState == "finished"`
@@ -79,7 +79,7 @@ instead of calling `StartInstall`.
 
 ## Local update flow
 
-`--install_update <path>` (or a bare trailing path) mints its own session
+`--install_update <path>` mints its own session
 via `InstallLocal` and, by default, blocks on the outcome itself instead of
 requiring a separate `--install_progress` poll loop.
 
@@ -102,7 +102,7 @@ sequenceDiagram
     User->>CLI: --apply_update
     CLI->>Svc: Apply()
     Svc-->>CLI: reboot_required
-    CLI-->>CLI: reboot(2) if required
+    CLI-->>CLI: reboot if required
 ```
 
 If the blocking wait sees no progress for its idle timeout, or loses the
@@ -113,9 +113,10 @@ install may still be running, and `--install_progress` reports its outcome.
 
 `--rollback_update`, `--switch_fw_slot`, and `--switch_app_slot` are local
 durable-state operations against the library — no D-Bus call. `--apply_update`
-is the only step here that talks to the service, and only when it has no
-D-Bus install of its own to finish; otherwise it reads the durable
-`update_reboot_state` directly through the library and reboots from there.
+is the only step here that talks to the service: it reads `InstallState`,
+calls `Apply` when the service reports a finished install, and otherwise
+reads the durable `update_reboot_state` through the library and reboots from
+there.
 
 ```mermaid
 sequenceDiagram
@@ -128,7 +129,7 @@ sequenceDiagram
     CLI-->>User: exit 12 (prepared), or 54/56 if the target slot can't take it
 
     User->>CLI: --apply_update
-    CLI->>UB: read update_reboot_state (no D-Bus session tracked)
+    CLI->>UB: read update_reboot_state (service reports no finished install)
     CLI-->>CLI: reboot()
 ```
 
@@ -138,5 +139,5 @@ all, is described in the library's
 (Phase 3).
 
 After the reboot, `--commit_update` finalises the rollback (exit 16) or
-settles a state the current flow no longer writes (exit 58/59 — see
+reports a settle that confirmed nothing (exit 58/59 — see
 [Return Codes](../reference/return-codes.md#commit---commit_update)).

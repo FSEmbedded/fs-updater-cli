@@ -22,19 +22,19 @@ ADU Agent
                       └─> fs-updater CLI (Cancel / IsInstalled state queries)
 ```
 
-The handler is built with `BUILD_DBUS_SUPPORT` (the default; a legacy
-`!BUILD_DBUS_SUPPORT` build exists in the source for an older, file-signal-based
-`fs-updater` this framework no longer ships — do not pair it with a current
-CLI, which is D-Bus-only). With `BUILD_DBUS_SUPPORT`, the handler talks to
+The handler must be built with its `BUILD_DBUS_SUPPORT` option enabled. The
+source also has a build without it, which drives a file-signal-based
+`fs-updater` that this framework does not ship; it does not work with this
+CLI, which is D-Bus-only. With `BUILD_DBUS_SUPPORT`, the handler talks to
 `fs-updater-service` two different ways depending on the ADU step:
 
 1. **Direct D-Bus calls** — `Download()`, `Install()`, and `Apply()` call the
    `de.fsembedded.fsupdate1` service directly (`fus_service_client`), without
    going through the CLI or adu-shell at all.
-2. **Child process launch** — `Cancel()` and `IsInstalled()` still shell out
+2. **Child process launch** — `Cancel()` and `IsInstalled()` shell out
    through adu-shell to the `fs-updater` CLI, reading its exit code as
-   `result.ExtendedResultCode`. These two steps only ever *query or unwind*
-   durable U-Boot state; they were not moved to the direct D-Bus path.
+   `result.ExtendedResultCode`. These two steps only ever *query or settle*
+   durable U-Boot state.
 
 See [D-Bus Session Protocol](dbus-session-protocol.md) and
 `dbus/de.fsembedded.fsupdate1.xml` in `fs-updater-service` for the full
@@ -47,17 +47,24 @@ interface contract behind the direct calls.
 The update type is read from the ADU manifest field
 `handlerProperties.updateType`:
 
-| String | Meaning |
-|--------|---------|
-| `"firmware"` | Firmware-only update (old `.raucb` format) |
-| `"application"` | Application-only update (old component format) |
-| `"common-firmware"` | Firmware-only update from `.fs` bundle |
-| `"common-application"` | Application-only update from `.fs` bundle |
-| `"common-both"` | Firmware + application update from `.fs` bundle |
+| String | D-Bus type string |
+|--------|-------------------|
+| `"firmware"` | `"fw"` |
+| `"application"` | `"app"` |
+| `"common-firmware"` | `"fw"` |
+| `"common-application"` | `"app"` |
+| `"common-both"` | `"fw+app"` |
 
-These map to the D-Bus interface's own `"fw"`/`"app"`/`"fw+app"` type strings
-(`update_type_to_dbus_string()` in the handler) for `StartDownload`,
-`StartInstall`, and `InstallLocal`.
+The handler maps each string (`update_type_to_dbus_string()`) to the D-Bus
+interface's type string and passes it to `StartDownload` and `StartInstall`;
+any other string fails the step. The service records the type, requires
+`StartInstall` to repeat the one `StartDownload` announced, and publishes it
+as `UpdateType`, but does not hand it to the library: the library detects the
+payload's format from the file itself and installs whatever the file
+contains. See the library's
+[Bundle Format](https://github.com/fsembedded/fs-updater-lib/blob/master/docs/reference/bundle-format.md#accepted-inputs).
+In `IsInstalled()` the type selects which version the handler compares:
+firmware, application, or both for `"common-both"`.
 
 ---
 
@@ -108,9 +115,9 @@ Handler.Apply()
 counter restarts at 1 when it restarts, and a client that had a session in
 flight sees it vanish — the interface's own stability notes describe the
 recovery pattern (`GetState()`, matching `SessionId` against an `InstallState`
-of `"idle"` reading as "failed"), but this handler does not currently call
+of `"idle"` reading as "failed"), but this handler does not call
 `GetState()` anywhere: an ADU-driven install that is in flight when the
-service restarts is not resumed by this code today. What *does* survive a
+service restarts is not resumed by it. What *does* survive a
 restart is the **durable** U-Boot state below, which is why the exit-code
 based recovery in the next paragraph works regardless.
 
@@ -150,7 +157,9 @@ if your deployment requires bounded recovery time.
 
 ## `HandleExecuteAction()` dispatch
 
-`Cancel` and `IsInstalled` route `fs-updater` calls through a common helper:
+`Cancel` and `IsInstalled` route their `fs-updater` calls through a common
+helper. The one exception is the rollback in `Cancel()`, which runs adu-shell's
+`cancel` action (`fs-updater --rollback_update`) instead:
 
 ```
 HandleExecuteAction(targetaction)
@@ -162,7 +171,7 @@ HandleExecuteAction(targetaction)
 ```
 
 The CLI exit code is passed back as `result.ExtendedResultCode`. These two
-steps stay on this path rather than moving to a direct D-Bus call because
+steps use this path rather than a direct D-Bus call because
 they act on **durable** U-Boot state (the current reboot-state, firmware/app
 version) that the CLI already exposes correctly whether or not a D-Bus
 session happens to be tracked — there is nothing session-scoped for them to
@@ -182,7 +191,10 @@ See `fsupdate_result.h` in `fus-device-update-azure` for all codes:
 | `0x300`–`0x3FF` | Apply errors |
 | `0x400`–`0x4FF` | Cancel errors |
 | `0x500`–`0x5FF` | IsInstalled errors |
-| `0x1000`+ | CLI exit code passthrough (Cancel / IsInstalled path only) |
+| `0x1000`+ | Reserved for child-process exit codes (`0x1000` + exit code); defined, but not used by this handler |
+
+On the Cancel / IsInstalled path the CLI exit code itself, without an offset,
+is the `ExtendedResultCode` the handler evaluates.
 
 ---
 
