@@ -43,9 +43,8 @@ After rebooting into the new slot, confirm the update is healthy:
 fs-updater --commit_update
 ```
 
-Exit code `16` = committed. Exit code `17` = nothing to commit. With nothing
-pending, `16` means the running slot's boot budget was restored, and after an
-interrupted install it can mean the update was discarded; see
+Exit code `16` = committed. Exit code `17` = nothing to commit. What `16`
+confirms or discards depends on the stored state; see
 [CLI Reference — `--commit_update`](reference/cli.md#--commit_update).
 
 ## Check the current update state
@@ -73,7 +72,7 @@ Exit 27 means the device is already back on the proven slot. Exit 23 means a
 bootloader fallback had already undone the firmware and the rollback changed
 nothing: commit instead, see
 [CLI Reference — `--rollback_update`](reference/cli.md#--rollback_update).
-Exit 28–30 means a reboot is still owed:
+Exit 29, 30 or 31 means the rollback needs a reboot and then a commit:
 
 ```bash
 fs-updater --apply_update     # reboots
@@ -81,6 +80,9 @@ fs-updater --apply_update     # reboots
 fs-updater --commit_update
 ```
 
+A commit before that reboot exits 18 and changes nothing; after it, the commit
+exits 16. Exit 31 is reported both before and after the reboot; see
+[CLI Reference — Rebooting after a firmware rollback or slot switch](reference/cli.md#rebooting-after-a-firmware-rollback-or-slot-switch).
 A combined firmware and application update rolled back before its reboot is
 the exception; see [CLI Reference — `--rollback_update`](reference/cli.md#--rollback_update).
 

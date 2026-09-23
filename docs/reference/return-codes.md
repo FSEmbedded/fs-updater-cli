@@ -66,7 +66,7 @@ busy, denied) are reported before any of these: see 61/66/67 under
 
 | Code | Enum | Trigger |
 |:----:|------|---------|
-| 16 | `UPDATER_COMMIT_STATE::UPDATE_COMMIT_SUCCESSFUL` | Update, rollback or failed install committed; with nothing pending, the running slot's boot budget was restored. After an install interrupted during the image write, the update was discarded, not confirmed (see [exit 55](cli.md#--update_reboot_state)) |
+| 16 | `UPDATER_COMMIT_STATE::UPDATE_COMMIT_SUCCESSFUL` | Committed; what it confirmed or discarded per state is listed under [CLI Reference — `--commit_update`](cli.md#--commit_update) |
 | 17 | `UPDATER_COMMIT_STATE::UPDATE_NOT_NEEDED` | Nothing pending and nothing to restore |
 | 18 | `UPDATER_COMMIT_STATE::UPDATE_NOT_ALLOWED_UBOOT_STATE` | U-Boot state incompatible |
 | 19 | `UPDATER_COMMIT_STATE::UPDATE_SYSTEM_ERROR` | System error during commit |

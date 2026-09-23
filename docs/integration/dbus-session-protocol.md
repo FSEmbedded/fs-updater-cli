@@ -141,4 +141,4 @@ all, is described in the library's
 After the reboot, `--commit_update` finalises the rollback (exit 16). If it
 refuses (18) or fails (19), `--update_reboot_state` names the state and its
 next step; see
-[Return Codes](../reference/return-codes.md#commit---commit_update).
+[CLI Reference — `--update_reboot_state`](../reference/cli.md#--update_reboot_state).
