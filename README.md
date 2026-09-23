@@ -13,6 +13,7 @@ Binary: `fs-updater`, installed to `/usr/sbin/`.
 ./scripts/build.sh debug           # cross-compile Debug (default)
 ./scripts/build.sh release         # cross-compile Release (-Os, LTO, stripped)
 ./scripts/build.sh sanitize        # cross-compile Debug with ASan + UBSan
+./scripts/build.sh test            # native build + unit tests
 ./scripts/build.sh clean
 
 # Link against a locally built fs-updater-lib instead of the SDK version
@@ -23,7 +24,8 @@ SDK defaults to `/opt/fslc-xwayland/5.15-scarthgap`. Override with
 `SDK_ROOT=/path/to/sdk ./scripts/build.sh debug`.
 
 The `--lib <build_dir>` flag installs `fs-updater-lib` into a local staging
-prefix (`build/fus_lib_install`) and overrides the SDK sysroot version.
+prefix (`fus_lib_install/` inside the build directory) and overrides the SDK
+sysroot version. All targets and options: [Contributing](docs/contributing.md#build).
 
 ## Documentation
 

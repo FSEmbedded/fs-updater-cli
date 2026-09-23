@@ -22,10 +22,13 @@ fs-updater [--rollback_update] [--switch_fw_slot] [--switch_app_slot]
            [--apply_update] [--install_update] [--detach] [--serial]
            [--install_progress] [--cancel_install <session_id (uint32)>]
            [--download_progress] [--download_update] [--is_update_available]
-           [--set_app_state_bad <A|B>] [--is_app_state_bad <A|B>]
-           [--set_fw_state_bad <A|B>] [--is_fw_state_bad <A|B>]
-           [--] [install_path]
+           [--set_app_state_bad <accepted states: A or B>]
+           [--is_app_state_bad <accepted states: A or B>]
+           [--set_fw_state_bad <accepted states: A or B>]
+           [--is_fw_state_bad <accepted states: A or B>] [--] [install_path]
 ```
+
+`fs-updater --help` prints this block with a description of every option.
 
 ---
 
@@ -35,12 +38,17 @@ fs-updater [--rollback_update] [--switch_fw_slot] [--switch_app_slot]
 
 Install an update. Two forms, distinguished by whether a path is given:
 
-- **With a path** (`--install_update /mnt/usb/update.fs`, or a bare trailing
-  operand: `fs-updater /mnt/usb/update.fs`): install that local `.fs` bundle
-  via `InstallLocal` on the D-Bus service. Blocking by default — the CLI
+- **With a path** (`--install_update /mnt/usb/update.fs`): install that local
+  bundle via `InstallLocal` on the D-Bus service. The path is a positional
+  operand and is accepted only together with `--install_update`: a path on
+  its own exits 65, an empty path exits 61. The CLI resolves it to an
+  absolute path before passing it on. Blocking by default — the CLI
   streams live progress to stdout and returns the terminal 0/4/8 ÷ 3/7/11
   verdict (see [Return Codes](return-codes.md)) once the service reports the
   install finished or failed. Pass `--detach` to return immediately instead.
+  The blocking wait gives up after 120 s without progress (exit 47); the
+  environment variable `FSUP_INSTALL_WAIT_MS` overrides that limit with a
+  value from 1 to 3600000 milliseconds.
   A `--` before the path ends option parsing, so a path that itself starts
   with `-` is still read as the path.
 - **Without a path:** trigger `StartInstall` for a download some other D-Bus
@@ -52,16 +60,14 @@ Install an update. Two forms, distinguished by whether a path is given:
   this form is for a manual step or a different integrator advancing a
   download it started itself.
 
-The old two-step procedure (`--update_file`/`--update_type` for raw
-component files, `--automatic` for a USB-stick environment-variable flow)
-has been retired; there is one install entry point now. See
-[Bundle Format](https://github.com/fsembedded/fs-updater-lib/blob/main/docs/reference/bundle-format.md)
-for the `.fs` container layout.
+The formats an install accepts and the `.fs` container layout are described in
+the library's
+[Bundle Format](https://github.com/fsembedded/fs-updater-lib/blob/master/docs/reference/bundle-format.md)
+reference.
 
 ```bash
 # Blocking local install, type auto-detected from the bundle
 fs-updater --install_update /mnt/usb/update.fs
-fs-updater /mnt/usb/update.fs                 # bare path, same effect
 
 # Start it and come back later
 fs-updater --install_update /mnt/usb/update.fs --detach
@@ -71,12 +77,13 @@ fs-updater --install_progress
 | Exit code | Meaning |
 |:---------:|---------|
 | 0 / 4 / 8 | Firmware / application / firmware+application installed |
-| 3 / 7 / 11 | System error (firmware / application / combined) — the only failure variant the D-Bus-backed install path currently produces; 1/2/5/6/9/10 (progress/internal-error) are reserved but not reachable today |
+| 3 / 7 / 11 | System error (firmware / application / combined) — the only per-type failure verdict the install path produces; 1/2/5/6/9/10 (progress/internal-error) are reserved and never produced |
 | 46 | No path given, and no finished download staged to advance |
 | 47 | Accepted; still running (`--detach`, or a session already in flight whose id could not be read back), or the blocking wait hit its no-progress timeout or lost the D-Bus watch — the install may still be running; poll `--install_progress` |
-| 48 | No path given, and the D-Bus service already reports the (other-owned) install finished |
-| 49 | Installation failed — used when the outcome's update type could not be classified |
-| 61 | Path does not exist or is not accessible |
+| 48 | No path given, and the D-Bus service already reports the (other-owned) install finished; or a local install succeeded with an update type that could not be classified |
+| 49 | The `InstallLocal`/`StartInstall` call failed, or a local install failed with an update type that could not be classified |
+| 61 | Path is empty, does not exist or is not accessible |
+| 65 | A path without `--install_update`, `--detach` without a path, or a second action flag |
 | 66 | Another install or download is already in progress (`Error.Busy`) |
 | 67 | Rejected by bus policy (`Error.AccessDenied`) |
 
@@ -151,9 +158,9 @@ the enum names of the exit codes are listed in
 | 20 | `FAILED_APP_UPDATE` (6) | Always | `--commit_update` (16), see below |
 | 21 | `FAILED_FW_UPDATE` (5) | Always | `--commit_update` (16), see below |
 | 22 | `FW_UPDATE_REBOOT_FAILED` (1) | Always | `--commit_update` (59) |
-| 23 | `INCOMPLETE_FW_UPDATE` (2) | The reboot into the new firmware slot took effect | `--commit_update` |
+| 23 | `INCOMPLETE_FW_UPDATE` (2) | The update's reboot happened: into the new firmware slot, or a bootloader fallback to the old one | `--commit_update` |
 | 24 | `INCOMPLETE_APP_UPDATE` (3) | The new application image is mounted | `--commit_update` |
-| 25 | `INCOMPLETE_APP_FW_UPDATE` (4) | The reboot into the new firmware slot took effect | `--commit_update` |
+| 25 | `INCOMPLETE_APP_FW_UPDATE` (4) | As for 23 | `--commit_update` |
 | 26 | 2, 3 or 4 | The reboot into the update has not happened | `--apply_update`, then `--commit_update` after the reboot |
 | 27 | `NO_UPDATE_REBOOT_PENDING` (0) | Always | None |
 | 28 | `ROLLBACK_FW_REBOOT_PENDING` (7) | The rollback's reboot has not happened | `--apply_update`, then `--commit_update` after the reboot |
@@ -179,8 +186,11 @@ table.
 
 **Exit 55** has three sources, one per stored state:
 
-- **2:** the firmware install never reached the boot order. `--commit_update`
-  settles it with no reboot, quarantines the slot and exits 58.
+- **2:** the firmware install was interrupted before its slot led the boot
+  order. `--commit_update` settles it with no reboot: exit 58 when the slot
+  was never taken out of the rotation (it is quarantined), 16 when the install
+  was interrupted during the image write. The library describes both in
+  [The install's two interruption windows](https://github.com/fsembedded/fs-updater-lib/blob/master/docs/state-machine.md#the-installs-two-interruption-windows).
 - **3:** no application image is mounted at all. The library's
   [transition diagram](https://github.com/fsembedded/fs-updater-lib/blob/master/docs/state-machine.md#transition-diagram)
   (Phase 2) describes this shape. `--commit_update` refuses it and exits 19.
@@ -246,17 +256,20 @@ Complete a pending install or rollback. Two paths, chosen automatically:
 
 | Condition | Action |
 |-----------|--------|
-| A D-Bus install this CLI process is tracking has finished | Calls `Apply` on the service, then `reboot(2)` directly if it reports a reboot is required |
-| No install tracked in this session | Reads the durable `update_reboot_state` via the library and reboots if that state needs it |
+| The service reports `InstallState == "finished"` | Calls `Apply` on the service, then reboots if it reports a reboot is required |
+| The service reports `InstallState == "in_progress"` | Refuses (51); applying mid-install would reboot during the write |
+| Anything else | Reads the durable `update_reboot_state` via the library and reboots if that state needs it |
 
-Neither path creates a file or waits on anything external; `--apply_update`
-either reboots or reports there was nothing to do.
+The reboot is requested from init: the CLI flushes the file systems
+(`sync()`) and sends `SIGINT` to PID 1, which a systemd system handles as an
+orderly reboot. Neither path creates a file or waits on anything external;
+`--apply_update` either reboots or reports there was nothing to do.
 
 | Exit code | Meaning |
 |:---------:|---------|
 | 50 | Applied (reboot performed, or none was needed) |
-| 51 | Nothing to apply, or the service `Apply` call failed |
-| 70 | `reboot(2)` returned an error; see stderr |
+| 51 | Nothing to apply, an install still in progress, or the service `Apply` call failed |
+| 70 | Signalling PID 1 for the reboot failed; see stderr |
 
 ---
 
@@ -309,7 +322,7 @@ Reads `DownloadState`/`DownloadProgress` and reports percentage to stdout.
 | 45 | Download complete |
 
 Code 43 (`UPDATE_DOWNLOAD_WAITING_TO_START`) is reserved but not produced —
-there is no separate "waiting to start" state on the current session model.
+the session model has no separate "waiting to start" state.
 
 ---
 
@@ -329,8 +342,9 @@ Print the current application version to stdout, read the same way as
 
 ### `--version`
 
-Print the CLI version and build date to stdout. Version is set in
-`CMakeLists.txt`. Always exits 0.
+Print the CLI version (set in `CMakeLists.txt`), the source revision of the CLI
+and of the loaded library, and the build date and time to stdout. Always exits
+0. Running `fs-updater` with no action prints the same line.
 
 ---
 
@@ -348,7 +362,7 @@ Mark the specified application slot as bad.
 ### `--is_app_state_bad <A|B>`
 
 Query whether the specified application slot is marked bad. Prints `1` (bad)
-or `0` (not bad) to stdout.
+or `0` (not bad) to stdout; for an invalid slot it prints `X`.
 
 ### `--set_fw_state_bad <A|B>`
 
@@ -356,15 +370,17 @@ Mark the specified firmware slot as bad.
 
 ### `--is_fw_state_bad <A|B>`
 
-Query whether the specified firmware slot is marked bad.
+Query whether the specified firmware slot is marked bad. Output as for
+`--is_app_state_bad`.
 
-All four arguments share the same exit-code range:
+The slot is `A` or `B`, in either case. All four arguments share the same
+exit codes:
 
 | Exit code | Meaning |
 |:---------:|---------|
 | 52 | Operation successful |
 | 53 | Invalid slot parameter (not `A` or `B`) |
-| 54 | Slot switch rejected: target slot is bad |
+| 124 | The `update` variable could not be read or written; the message goes to stderr |
 
 ---
 
@@ -372,12 +388,14 @@ All four arguments share the same exit-code range:
 
 ### `--debug`
 
-Enable verbose debug logging to stderr. Combinable with any action argument.
+Raise the log level from warnings to debug output. The log goes to stdout, or
+to the serial console with `--serial`. Combinable with any action argument.
 
 ### `--serial`
 
-Send log output to the serial console instead of the default. Combinable
-with any action argument, like `--debug`.
+Send log output to the serial console instead of stdout. The device is the one
+named in the U-Boot `console` variable. Combinable with any action argument,
+like `--debug`.
 
 ```bash
 fs-updater --debug --serial --install_update /mnt/usb/firmware.fs
@@ -403,18 +421,17 @@ its own:
 
 | Exit code | Meaning |
 |:---------:|---------|
-| 61 | Path passed to `--install_update` (or the bare operand) does not exist or is not accessible |
-| 65 | Multiple mutually exclusive action flags passed |
+| 61 | Path passed to `--install_update` is empty, does not exist or is not accessible |
+| 65 | Multiple mutually exclusive action flags passed, a path without `--install_update`, or `--detach` without a path |
 | 1 | Any option value the parser rejects outright — not a decimal number where one is required, a state letter that isn't exactly one character, an unknown option — exits `1` with usage printed, ahead of the codes above |
 
 Codes 60 (`INVALID_UPDATE_TYPE`), 62 (`MISSING_ENV_UPDATE_STICK`), 63
-(`MISSING_ENV_UPDATE_FILE`), and 64 (`UPDATE_TYPE_WITHOUT_FILE`) belonged to
-the retired `--update_type`/`--automatic` flags. They are reserved by the
-stability contract — never reused for something else — but this CLI no
-longer produces them.
+(`MISSING_ENV_UPDATE_FILE`), and 64 (`UPDATE_TYPE_WITHOUT_FILE`) are reserved
+by the stability contract — never reused for something else — and never
+produced by this CLI.
 
 ## Fatal errors
 
 | Exit code | Meaning |
 |:---------:|---------|
-| 124 | An exception escaped `main()` — framework bug or unexpected hardware state |
+| 124 | An exception escaped `main()`, the stored update state is not interpretable (`--update_reboot_state`), or the update state could not be accessed (state-bad flags) |

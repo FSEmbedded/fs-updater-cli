@@ -2,7 +2,9 @@
 
 ## Prerequisites
 
-- SDK sourced: `/opt/fslc-xwayland/5.15-scarthgap/environment-setup-cortexa53-fslc-linux`
+- SDK installed at `/opt/fslc-xwayland/5.15-scarthgap`, or `SDK_ROOT` set to
+  its location; `scripts/build.sh` sources its
+  `environment-setup-cortexa53-fslc-linux` itself
 - `fs-updater-lib` built and installed (either in SDK sysroot or via `--lib`)
 - Target device with U-Boot environment configured for A/B updates
 
@@ -22,15 +24,12 @@ scp build/fs-updater root@<device>:/usr/sbin/fs-updater
 D-Bus service, blocking by default until the outcome is known. See
 [CLI Reference — `--install_update`](reference/cli.md#--install_update-install_path)
 for the `--detach` form and the D-Bus call it makes, and
-[Bundle Format](https://github.com/fsembedded/fs-updater-lib/blob/main/docs/reference/bundle-format.md)
+[Bundle Format](https://github.com/fsembedded/fs-updater-lib/blob/master/docs/reference/bundle-format.md)
 for the container layout.
 
 ```bash
 # Install firmware and application bundle from a local path
 fs-updater --install_update /mnt/usb/update.fs
-
-# A bare trailing path works the same way
-fs-updater /mnt/usb/update.fs
 ```
 
 Exit code `0` (firmware), `4` (application), or `8` (both) indicates success.
@@ -89,7 +88,8 @@ fs-updater --version               # prints CLI version + build date, exits 0
 
 ## Enable debug logging
 
-Add `--debug` to any command to log verbose output to stderr:
+Add `--debug` to any command to log debug output to stdout (or, with
+`--serial`, to the serial console):
 
 ```bash
 fs-updater --debug --install_update /mnt/usb/firmware.fs

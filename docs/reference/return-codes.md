@@ -9,11 +9,10 @@ All exit codes from `src/cli/fs_updater_error.h`. Valid POSIX range is 0–125
 - **New categories start at the next free value** above the highest assigned code. Reserve 4–5 slots per category for future additions.
 - **Values 55 and 57** are claimed by `UPDATER_UPDATE_REBOOT_STATE`, **56** by `UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_UNPROVISIONED`, and **58–59** by `UPDATER_COMMIT_STATE`.
 - **Do not exceed 125.** Values 124–125 are reserved for fatal/framework-level codes.
-- **A code being listed here does not mean today's binary can produce it.** The
-  CLI's install path moved to a D-Bus-backed service since these numbers were
-  assigned; several are reserved-but-currently-unreachable rather than retired
-  — the table below marks each one explicitly rather than silently dropping it,
-  because the append-only rule means a script may still be watching for it.
+- **A code being listed here does not mean the binary produces it.** Several
+  are reserved and never produced; the tables below mark each one explicitly
+  rather than dropping it, because the append-only rule means a script may
+  still be watching for it.
 
 ---
 
@@ -22,24 +21,24 @@ All exit codes from `src/cli/fs_updater_error.h`. Valid POSIX range is 0–125
 | Code | Enum | Trigger |
 |:----:|------|---------|
 | 0 | `UPDATER_FIRMWARE_STATE::UPDATE_SUCCESSFUL` | Firmware installed |
-| 1 | `UPDATER_FIRMWARE_STATE::UPDATE_PROGRESS_ERROR` | *(reserved, not currently produced)* |
-| 2 | `UPDATER_FIRMWARE_STATE::UPDATE_INTERNAL_ERROR` | *(reserved, not currently produced)* |
+| 1 | `UPDATER_FIRMWARE_STATE::UPDATE_PROGRESS_ERROR` | *(reserved, never produced)* |
+| 2 | `UPDATER_FIRMWARE_STATE::UPDATE_INTERNAL_ERROR` | *(reserved, never produced)* |
 | 3 | `UPDATER_FIRMWARE_STATE::UPDATE_SYSTEM_ERROR` | Firmware install failed |
 | 4 | `UPDATER_APPLICATION_STATE::UPDATE_SUCCESSFUL` | Application installed |
-| 5 | `UPDATER_APPLICATION_STATE::UPDATE_PROGRESS_ERROR` | *(reserved, not currently produced)* |
-| 6 | `UPDATER_APPLICATION_STATE::UPDATE_INTERNAL_ERROR` | *(reserved, not currently produced)* |
+| 5 | `UPDATER_APPLICATION_STATE::UPDATE_PROGRESS_ERROR` | *(reserved, never produced)* |
+| 6 | `UPDATER_APPLICATION_STATE::UPDATE_INTERNAL_ERROR` | *(reserved, never produced)* |
 | 7 | `UPDATER_APPLICATION_STATE::UPDATE_SYSTEM_ERROR` | Application install failed |
 | 8 | `UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_SUCCESSFUL` | Both installed |
-| 9 | `UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_PROGRESS_ERROR` | *(reserved, not currently produced)* |
-| 10 | `UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_INTERNAL_ERROR` | *(reserved, not currently produced)* |
+| 9 | `UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_PROGRESS_ERROR` | *(reserved, never produced)* |
+| 10 | `UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_INTERNAL_ERROR` | *(reserved, never produced)* |
 | 11 | `UPDATER_FIRMWARE_AND_APPLICATION_STATE::UPDATE_SYSTEM_ERROR` | Combined install failed |
 
 The install path (`InstallLocal`/`StartInstall` on the D-Bus service) reports
-only success or a single system-error verdict per type; it does not currently
+only success or a single system-error verdict per type; it does not
 distinguish a progress error from an internal one, so 1/2/5/6/9/10 are
 reserved slots, not dead numbers to reuse. An install whose type could not be
-classified at all reports 49 instead (see `--install_progress` below) rather
-than guessing a type family. Start-of-install failures (path not found,
+classified at all reports 48 (success) or 49 (failure) instead (see
+`--install_progress` below) rather than guessing a type family. Start-of-install failures (path not found,
 busy, denied) are reported before any of these: see 61/66/67 under
 [CLI validation errors](#cli-validation-and-session-errors).
 
@@ -49,8 +48,8 @@ busy, denied) are reported before any of these: see 61/66/67 under
 |:----:|------|---------|
 | 46 | `UPDATER_INSTALL_UPDATE_STATE::NO_INSTALLATION_QUEUED` | Nothing tracked |
 | 47 | `UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_IN_PROGRESS` | Running (`--detach`, or an already-active session `--install_update` picked up), or the blocking wait hit its no-progress timeout or lost the D-Bus watch — the install may still be running |
-| 48 | `UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FINISHED` | Finished |
-| 49 | `UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FAILED` | Failed, or `--install_update` completed with a type D-Bus couldn't classify |
+| 48 | `UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FINISHED` | Finished, or `--install_update` succeeded with an update type that could not be classified |
+| 49 | `UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FAILED` | Failed; `--install_update` failed with an update type that could not be classified, or its `InstallLocal`/`StartInstall` call failed; `--cancel_install` with session id `0` or a failed `CancelInstall` call |
 
 ## Rollback and slot switch (`--rollback_update`, `--switch_fw_slot`, `--switch_app_slot`)
 
@@ -60,7 +59,7 @@ busy, denied) are reported before any of these: see 61/66/67 under
 | 13 | `UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_PROGRESS_ERROR` | Error during rollback |
 | 14 | `UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_INTERNAL_ERROR` | Internal error (rollback) |
 | 15 | `UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_SYSTEM_ERROR` | System error (rollback) |
-| 54 | `UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_BAD` | Refused: target slot is marked bad, or (firmware only) the install never reached the boot order — shares the code with the state-bad flags below via a common classifier |
+| 54 | `UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_BAD` | Refused: target slot is marked bad, or (firmware only) the install never reached the boot order |
 | 56 | `UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_UNPROVISIONED` | Refused: target slot was never provisioned. Not reachable on `--switch_fw_slot`, which has no unprovisioned refusal |
 
 ## Commit (`--commit_update`)
@@ -119,16 +118,16 @@ Backed by `CheckUpdateAvailable` on the D-Bus service.
 | Code | Enum | Trigger |
 |:----:|------|---------|
 | 38 | `UPDATER_DOWNLOAD_UPDATE_STATE::NO_DOWNLOAD_QUEUED` | Nothing queued |
-| 39 | `UPDATER_DOWNLOAD_UPDATE_STATE::UPDATE_DOWNLOAD_STARTED` | *(reserved, not currently produced — this command only observes `DownloadState`, it does not call `StartDownload` itself)* |
+| 39 | `UPDATER_DOWNLOAD_UPDATE_STATE::UPDATE_DOWNLOAD_STARTED` | *(reserved, never produced — this command only observes `DownloadState`, it does not call `StartDownload` itself)* |
 | 40 | `UPDATER_DOWNLOAD_UPDATE_STATE::UPDATE_DOWNLOAD_STARTED_BEFORE` | A download is already in progress |
-| 41 | `UPDATER_DOWNLOAD_UPDATE_STATE::UPDATE_DOWNLOAD_FAILED` | *(reserved, not currently produced — same reason as 39)* |
+| 41 | `UPDATER_DOWNLOAD_UPDATE_STATE::UPDATE_DOWNLOAD_FAILED` | *(reserved, never produced — same reason as 39)* |
 
 ## Download progress (`--download_progress`)
 
 | Code | Enum | Trigger |
 |:----:|------|---------|
 | 42 | `UPDATER_DOWNLOAD_PROGRESS_STATE::NO_DOWNLOAD_STARTED` | No download active, or the tracked download failed |
-| 43 | `UPDATER_DOWNLOAD_PROGRESS_STATE::UPDATE_DOWNLOAD_WAITING_TO_START` | *(reserved, not currently produced — no separate "waiting" state on the current session model)* |
+| 43 | `UPDATER_DOWNLOAD_PROGRESS_STATE::UPDATE_DOWNLOAD_WAITING_TO_START` | *(reserved, never produced — the session model has no separate "waiting" state)* |
 | 44 | `UPDATER_DOWNLOAD_PROGRESS_STATE::UPDATE_DOWNLOAD_IN_PROGRESS` | Downloading (percentage on stdout) |
 | 45 | `UPDATER_DOWNLOAD_PROGRESS_STATE::UPDATE_DOWNLOAD_FINISHED` | Download complete |
 
@@ -137,7 +136,7 @@ Backed by `CheckUpdateAvailable` on the D-Bus service.
 | Code | Enum | Trigger |
 |:----:|------|---------|
 | 50 | `UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFUL` | Applied — rebooted, or nothing needed a reboot |
-| 51 | `UPDATER_APPLY_UPDATE_STATE::APPLY_FAILED` | Nothing to apply, or the `Apply` D-Bus call failed |
+| 51 | `UPDATER_APPLY_UPDATE_STATE::APPLY_FAILED` | Nothing to apply, an install still in progress, or the `Apply` D-Bus call failed |
 
 ## State-bad flags (`--set_*_state_bad`, `--is_*_state_bad`)
 
@@ -145,19 +144,21 @@ Backed by `CheckUpdateAvailable` on the D-Bus service.
 |:----:|------|---------|
 | 52 | `UPDATER_SETGET_UPDATE_STATE::GETSET_STATE_SUCCESSFUL` | Get / set succeeded |
 | 53 | `UPDATER_SETGET_UPDATE_STATE::PASSING_PARAM_UPDATE_STATE_WRONG` | Invalid slot (not `A` or `B`) |
-| 54 | `UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_BAD` | Switch rejected: target slot is bad |
-| 56 | `UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_UNPROVISIONED` | Switch or rollback rejected: target slot was never provisioned (no image file installed). Not reachable on the firmware switch, which has no unprovisioned refusal |
+
+54 and 56 belong to the same enum but are produced only by the rollback and
+slot-switch verbs; see [Rollback and slot switch](#rollback-and-slot-switch---rollback_update---switch_fw_slot---switch_app_slot).
+An unreadable `update` variable makes these four flags exit 124.
 
 ## CLI validation and session errors
 
 | Code | Enum | Trigger |
 |:----:|------|---------|
-| 60 | `UPDATER_CLI_VALIDATION::INVALID_UPDATE_TYPE` | *(retired with `--update_type`; reserved, never produced by this CLI)* |
-| 61 | `UPDATER_CLI_VALIDATION::UPDATE_FILE_NOT_FOUND` | Path given to `--install_update` (or the bare operand) does not exist or is not accessible |
-| 62 | `UPDATER_CLI_VALIDATION::MISSING_ENV_UPDATE_STICK` | *(retired with `--automatic`; reserved, never produced by this CLI)* |
-| 63 | `UPDATER_CLI_VALIDATION::MISSING_ENV_UPDATE_FILE` | *(retired with `--automatic`; reserved, never produced by this CLI)* |
-| 64 | `UPDATER_CLI_VALIDATION::UPDATE_TYPE_WITHOUT_FILE` | *(retired with `--update_type`; reserved, never produced by this CLI)* |
-| 65 | `UPDATER_CLI_VALIDATION::INCOMPATIBLE_ARG_COMBO` | Mutually exclusive flags combined, or a guard rejected the parsed arguments (e.g. `--cancel_install` with a bad session id) |
+| 60 | `UPDATER_CLI_VALIDATION::INVALID_UPDATE_TYPE` | *(reserved, never produced by this CLI)* |
+| 61 | `UPDATER_CLI_VALIDATION::UPDATE_FILE_NOT_FOUND` | Path given to `--install_update` is empty, does not exist or is not accessible |
+| 62 | `UPDATER_CLI_VALIDATION::MISSING_ENV_UPDATE_STICK` | *(reserved, never produced by this CLI)* |
+| 63 | `UPDATER_CLI_VALIDATION::MISSING_ENV_UPDATE_FILE` | *(reserved, never produced by this CLI)* |
+| 64 | `UPDATER_CLI_VALIDATION::UPDATE_TYPE_WITHOUT_FILE` | *(reserved, never produced by this CLI)* |
+| 65 | `UPDATER_CLI_VALIDATION::INCOMPATIBLE_ARG_COMBO` | Mutually exclusive action flags combined, a path without `--install_update`, or `--detach` without a path |
 | 66 | `UPDATER_CLI_VALIDATION::INSTALL_BUSY` | The service rejected the install because another install or download is already in flight (`de.fsembedded.fsupdate1.Error.Busy`; a same-host direct peer with no error name maps its raw `-EBUSY` here too) |
 | 67 | `UPDATER_CLI_VALIDATION::PERMISSION_DENIED` | The install request was rejected by policy (polkit / D-Bus bus policy — `org.freedesktop.DBus.Error.AccessDenied`) |
 
@@ -165,13 +166,13 @@ Backed by `CheckUpdateAvailable` on the D-Bus service.
 
 | Code | Enum | Trigger |
 |:----:|------|---------|
-| 70 | `UPDATER_SYSTEM::REBOOT_FAILED` | `reboot(2)` syscall failed; details on stderr |
+| 70 | `UPDATER_SYSTEM::REBOOT_FAILED` | Signalling PID 1 for the reboot failed; details on stderr |
 
 ## Fatal
 
 | Code | Enum | Trigger |
 |:----:|------|---------|
-| 124 | `UPDATER_FATAL::UNHANDLED_EXCEPTION` | Exception escaped `main()` — framework bug |
+| 124 | `UPDATER_FATAL::UNHANDLED_EXCEPTION` | Exception escaped `main()`; also the answer of `--update_reboot_state` for a stored state it cannot interpret, and of the state-bad flags when the `update` variable cannot be accessed |
 
 ## Query success
 
