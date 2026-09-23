@@ -162,7 +162,7 @@ the enum names of the exit codes are listed in
 | 22 | `FW_UPDATE_REBOOT_FAILED` (1) | Always | `--commit_update` (59) |
 | 23 | `INCOMPLETE_FW_UPDATE` (2) | The update's reboot happened: into the new firmware slot, or a bootloader fallback to the old one | `--commit_update`; after a fallback, commit rather than roll back (see [`--rollback_update`](#--rollback_update)) |
 | 24 | `INCOMPLETE_APP_UPDATE` (3) | The new application image is mounted | `--commit_update` |
-| 25 | `INCOMPLETE_APP_FW_UPDATE` (4) | As for 23 | `--commit_update` |
+| 25 | `INCOMPLETE_APP_FW_UPDATE` (4) | As for 23 | `--commit_update`; after a fallback, commit rather than roll back (see [`--rollback_update`](#--rollback_update)) |
 | 26 | 2, 3 or 4 | The reboot into the update has not happened | `--apply_update`, then `--commit_update` after the reboot |
 | 27 | `NO_UPDATE_REBOOT_PENDING` (0) | Always | None |
 | 28 | `ROLLBACK_FW_REBOOT_PENDING` (7) | The rollback's reboot has not happened | `--apply_update`, then `--commit_update` after the reboot |
@@ -202,8 +202,9 @@ table.
   the combined state is stored. The library's own writes do not produce this
   shape (an interrupted combined install is stored as 2, see above). Neither
   verb leads out cleanly: while `BOOT_ORDER` equals `BOOT_ORDER_OLD`,
-  `--commit_update` fails with 19 (with differing orders it takes the ordinary
-  commit paths: 16 after a failed reboot, 18 while the reboot is missing), and
+  `--commit_update` fails with 19 (with differing orders the result follows the
+  boot evidence, e.g. 16 after a failed reboot, 18 while the reboot is
+  missing), and
   `--rollback_update` is refused for the firmware half.
 
 ---
@@ -228,7 +229,7 @@ the library's
 its next step: 28–30 need `--apply_update` and a commit after the reboot, 27
 means the device is already back on the proven slot. After a bootloader
 fallback on state 2 the reboot has already undone the firmware: the rollback
-writes nothing, still exits 12, and `--update_reboot_state` keeps reporting 23.
+changes nothing, still exits 12, and `--update_reboot_state` keeps reporting 23.
 Commit rather than roll back after a fallback; see the library's
 [Rollback](https://github.com/fsembedded/fs-updater-lib/blob/master/docs/reference/api.md#rollback)
 reference. A combined update rolled
@@ -237,7 +238,7 @@ back before its reboot stores a state that no verb leads out of; see
 
 | Exit code | Meaning |
 |:---------:|---------|
-| 12 | Rollback prepared (after a bootloader fallback on state 2, nothing written; see above) |
+| 12 | Rollback prepared (after a bootloader fallback on state 2, nothing changed; see above) |
 | 13 | Progress error |
 | 14 | Internal error |
 | 15 | System error |
@@ -357,7 +358,7 @@ Print the current application version to stdout, read the same way as
 
 Print the CLI version (set in `CMakeLists.txt`), the source revision of the CLI
 and of the loaded library, and the build date and time to stdout. Exits 0, or
-124 when the U-Boot environment cannot be opened (see
+124 if `fw_env.config` cannot be read (see
 [Return Codes](return-codes.md#fatal)). Running `fs-updater` with no action
 prints the same line.
 

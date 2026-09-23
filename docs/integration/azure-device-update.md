@@ -19,7 +19,7 @@ ADU Agent
        └─> ADUC_LaunchChildProcess(adu-shell)
             └─> fusupdate_tasks  (DoFUSUpdateTask)
                  └─> ADUC_LaunchChildProcess(fs-updater)
-                      └─> fs-updater CLI (Cancel / IsInstalled state queries)
+                      └─> fs-updater CLI (Cancel / IsInstalled)
 ```
 
 The handler must be built with its `BUILD_DBUS_SUPPORT` option enabled. The

@@ -172,10 +172,10 @@ An unreadable `update` variable makes these four flags exit 124.
 
 | Code | Enum | Trigger |
 |:----:|------|---------|
-| 124 | `UPDATER_FATAL::UNHANDLED_EXCEPTION` | An exception reached `main()` uncaught by the command's handler — among them a U-Boot environment that cannot be opened, which fails every command past argument parsing and `--help`, `--version` included; also the answer of `--update_reboot_state` for a stored state it cannot interpret, and of the state-bad flags when the `update` variable cannot be accessed |
+| 124 | `UPDATER_FATAL::UNHANDLED_EXCEPTION` | An exception reached `main()` uncaught by the command's handler. Among them: the library is constructed before any action runs, `--version` and the no-action line included, and its construction throws when `libubootenv` cannot be initialised or `fw_env.config` cannot be read (see the library's [Construction](https://github.com/fsembedded/fs-updater-lib/blob/master/docs/reference/api.md#construction)). Also the answer of `--update_reboot_state` for a stored state it cannot interpret, and of the state-bad flags when the `update` variable cannot be accessed |
 
 ## Query success
 
 `--version`, `--firmware_version`, and `--application_version` exit `0`
-on success (124 when the U-Boot environment cannot be opened, see [Fatal](#fatal)) (no dedicated success enum — they share `UPDATER_FIRMWARE_STATE::UPDATE_SUCCESSFUL`
+on success (124 if `fw_env.config` cannot be read, see [Fatal](#fatal)) (no dedicated success enum — they share `UPDATER_FIRMWARE_STATE::UPDATE_SUCCESSFUL`
 by convention).
