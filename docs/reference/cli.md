@@ -175,19 +175,6 @@ the enum names of the exit codes are listed in
 | 57 | 8 | No application image is mounted (`classify_app_rollback()` answers `INDETERMINATE`), or the loop devices cannot be read | Nothing mounted: `--commit_update` settles it. Loop devices unreadable: the commit reads the same evidence and fails with 19 until they can be read |
 | 124 | `UNKNOWN_STATE` (13) | The stored value is absent, unreadable or not interpretable; the message goes to stderr | Nothing in the CLI leads out; see the library's recovery for `UNKNOWN_STATE` |
 
-#### Rebooting after a firmware rollback or slot switch
-
-For state 7 the exit code tells how the state came about, not whether its
-reboot has happened: a slot switch reports 28 and a rolled-back firmware update
-31, both before and after the reboot. Reboot once (`--apply_update`), then run
-`--commit_update`. Before that reboot the commit is refused with 18 and changes
-nothing; after it, the commit settles the state with 16. `--apply_update`
-reboots on every 7, so a caller that has already rebooted commits directly.
-For 8 and 9 the codes tell the two apart (29 and 32, 30 and 33). The evidence
-the commit reads is described in the library's
-[transition diagram](https://github.com/fsembedded/fs-updater-lib/blob/master/docs/state-machine.md#transition-diagram)
-(Phase 4).
-
 **Failed installs (20, 21, 22) are settled by `--commit_update`, not rolled
 back.** A failed install never left the proven slot, so there is nothing to
 undo. `--rollback_update`, `--switch_fw_slot` and `--switch_app_slot` refuse
@@ -220,6 +207,19 @@ table.
   missing), and
   `--rollback_update` is refused for the firmware half.
 
+#### Rebooting after a firmware rollback or slot switch
+
+For state 7 the exit code tells how the state came about, not whether its
+reboot has happened: a slot switch reports 28 and a rolled-back firmware update
+31, both before and after the reboot. Reboot once (`--apply_update`), then run
+`--commit_update`. Before that reboot the commit is refused with 18 and changes
+nothing; after it, the commit settles the state with 16. `--apply_update`
+reboots on every 7, so a caller that has already rebooted commits directly.
+For 8 and 9 the codes tell the two apart (29 and 32, 30 and 33). The evidence
+the commit reads is described in the library's
+[transition diagram](https://github.com/fsembedded/fs-updater-lib/blob/master/docs/state-machine.md#transition-diagram)
+(Phase 4).
+
 ---
 
 ## Category B: Rollback and slot management
@@ -245,8 +245,8 @@ need a reboot and then a commit (see
 After a bootloader fallback the reboot has already undone the firmware. On
 state 2 the rollback changes nothing, still exits 12, and
 `--update_reboot_state` keeps reporting 23. On state 4 it still points the
-application back and stores 9, whose commit settles the failed firmware slot
-without marking it bad. Commit rather than roll back after a fallback; see the
+application back and stores 9, which `--update_reboot_state` reports as 33
+at once; its commit settles the failed firmware slot without marking it bad. Commit rather than roll back after a fallback; see the
 library's
 [transition diagram](https://github.com/fsembedded/fs-updater-lib/blob/master/docs/state-machine.md#transition-diagram)
 (Phase 3). A combined update rolled

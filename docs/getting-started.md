@@ -68,9 +68,9 @@ fs-updater --rollback_update
 fs-updater --update_reboot_state
 ```
 
-Exit 27 means the device is already back on the proven slot. Exit 23 means a
-bootloader fallback had already undone the firmware and the rollback changed
-nothing: commit instead, see
+Exit 27 means the device is already back on the proven slot. Exit 23
+(firmware) or 33 (combined update) means a bootloader fallback had already
+undone the firmware: commit, see
 [CLI Reference — `--rollback_update`](reference/cli.md#--rollback_update).
 Exit 29, 30 or 31 means the rollback needs a reboot and then a commit:
 
