@@ -47,7 +47,7 @@ busy, denied) are reported before any of these: see 61/66/67 under
 | Code | Enum | Trigger |
 |:----:|------|---------|
 | 46 | `UPDATER_INSTALL_UPDATE_STATE::NO_INSTALLATION_QUEUED` | Nothing tracked |
-| 47 | `UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_IN_PROGRESS` | Accepted and running: `--detach`, a pathless `--install_update` whose `StartInstall` was accepted, or a local install whose session id could not be read back; or the blocking wait hit its no-progress timeout or lost the D-Bus watch — the install may still be running |
+| 47 | `UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_IN_PROGRESS` | Accepted and running: `--detach`, a pathless `--install_update` whose `StartInstall` was accepted, or a local install whose session id could not be read back; a pathless `--install_update` that finds an install already in progress (`InstallState == "in_progress"`, no `StartInstall` call); or the blocking wait hit its no-progress timeout or lost the D-Bus watch — the install may still be running. Also `--cancel_install` when the cancel request was accepted; the outcome follows via `--install_progress` |
 | 48 | `UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FINISHED` | Finished, or `--install_update` succeeded with an update type that could not be classified |
 | 49 | `UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FAILED` | Failed; `--install_update` failed with an update type that could not be classified, or its `InstallLocal`/`StartInstall` call failed; `--cancel_install` with session id `0` or a failed `CancelInstall` call |
 
@@ -154,7 +154,7 @@ An unreadable `update` variable makes these four flags exit 124.
 | Code | Enum | Trigger |
 |:----:|------|---------|
 | 60 | `UPDATER_CLI_VALIDATION::INVALID_UPDATE_TYPE` | *(reserved, never produced by this CLI)* |
-| 61 | `UPDATER_CLI_VALIDATION::UPDATE_FILE_NOT_FOUND` | Path given to `--install_update` is empty, does not exist or cannot be resolved. A file that exists but is unreadable passes this check and is rejected by the service instead (49) |
+| 61 | `UPDATER_CLI_VALIDATION::UPDATE_FILE_NOT_FOUND` | Path given to `--install_update` is empty, does not exist or cannot be resolved by the CLI (`realpath`). A path that resolves is checked again by the service, which runs as root, with `access(R_OK)`; when that check fails the call fails and the CLI exits 49 |
 | 62 | `UPDATER_CLI_VALIDATION::MISSING_ENV_UPDATE_STICK` | *(reserved, never produced by this CLI)* |
 | 63 | `UPDATER_CLI_VALIDATION::MISSING_ENV_UPDATE_FILE` | *(reserved, never produced by this CLI)* |
 | 64 | `UPDATER_CLI_VALIDATION::UPDATE_TYPE_WITHOUT_FILE` | *(reserved, never produced by this CLI)* |
@@ -172,10 +172,10 @@ An unreadable `update` variable makes these four flags exit 124.
 
 | Code | Enum | Trigger |
 |:----:|------|---------|
-| 124 | `UPDATER_FATAL::UNHANDLED_EXCEPTION` | An exception reached `main()` uncaught by the command's handler. Among them: the library is constructed before any action runs, `--version` and the no-action line included, and its construction throws when `libubootenv` cannot be initialised or `fw_env.config` cannot be read (see the library's [Construction](https://github.com/fsembedded/fs-updater-lib/blob/master/docs/reference/api.md#construction)). Also the answer of `--update_reboot_state` for a stored state it cannot interpret, and of the state-bad flags when the `update` variable cannot be accessed |
+| 124 | `UPDATER_FATAL::UNHANDLED_EXCEPTION` | An exception reached `main()` uncaught by the command's handler. Among them: the library is constructed before any action runs, `--version` and the no-action line included, and its construction throws when `libubootenv` cannot be initialised or `fw_env.config` cannot be read (see the library's [Construction](https://github.com/fsembedded/fs-updater-lib/blob/master/docs/reference/api.md#construction)); with `--serial`, any command exits 124 when the U-Boot `console` variable cannot be read; `--firmware_version` and `--application_version` exit 124 when the version cannot be read (see the library's [Versions](https://github.com/fsembedded/fs-updater-lib/blob/master/docs/reference/api.md#versions)). Also the answer of `--update_reboot_state` for a stored state it cannot interpret, and of the state-bad flags when the `update` variable cannot be accessed |
 
 ## Query success
 
 `--version`, `--firmware_version`, and `--application_version` exit `0`
-on success (124 if `fw_env.config` cannot be read, see [Fatal](#fatal)) (no dedicated success enum — they share `UPDATER_FIRMWARE_STATE::UPDATE_SUCCESSFUL`
+on success (124 on the failures listed under [Fatal](#fatal)) (no dedicated success enum — they share `UPDATER_FIRMWARE_STATE::UPDATE_SUCCESSFUL`
 by convention).

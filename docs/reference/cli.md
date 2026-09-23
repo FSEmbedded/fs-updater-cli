@@ -82,7 +82,7 @@ fs-updater --install_progress
 | 47 | Accepted and still running, or the blocking wait ended without an outcome; the cases are listed under [Return Codes](return-codes.md#install-progress---install_progress-and---install_updates-in-flightfailed-cases). Poll `--install_progress` |
 | 48 | No path given, and the D-Bus service already reports the (other-owned) install finished; or a local install succeeded with an update type that could not be classified |
 | 49 | The `InstallLocal`/`StartInstall` call failed, or a local install failed with an update type that could not be classified |
-| 61 | Path is empty, does not exist or cannot be resolved (a file that exists but is unreadable is rejected by the service: 49) |
+| 61 | Path is empty, does not exist or cannot be resolved; a path the service's own check rejects exits 49 (see [Return Codes](return-codes.md#cli-validation-and-session-errors)) |
 | 65 | A path without `--install_update`, `--detach` without a path, or a second action flag |
 | 66 | Another install or download is already in progress (`Error.Busy`) |
 | 67 | Rejected by bus policy (`Error.AccessDenied`) |
@@ -375,8 +375,7 @@ Print the current application version to stdout, read the same way as
 
 Print the CLI version (set in `CMakeLists.txt`), the source revision of the CLI
 and of the loaded library, and the build date and time to stdout. Exits 0, or
-124 if `fw_env.config` cannot be read (see
-[Return Codes](return-codes.md#fatal)). Running `fs-updater` with no action
+124 on a startup failure (see [Return Codes](return-codes.md#fatal)). Running `fs-updater` with no action
 prints the same line.
 
 ---
@@ -451,7 +450,7 @@ to find the serial device it writes the log to.
 
 | Exit code | Meaning |
 |:---------:|---------|
-| 61 | Path passed to `--install_update` is empty, does not exist or cannot be resolved (an existing but unreadable file: 49) |
+| 61 | Path passed to `--install_update` is empty, does not exist or cannot be resolved (see [Return Codes](return-codes.md#cli-validation-and-session-errors)) |
 | 65 | Multiple mutually exclusive action flags passed, a path without `--install_update`, or `--detach` without a path |
 | 1 | Any option value the parser rejects outright — not a decimal number where one is required, a state letter that isn't exactly one character, an unknown option — exits `1` with usage printed, ahead of the codes above |
 
@@ -464,4 +463,4 @@ produced by this CLI.
 
 | Exit code | Meaning |
 |:---------:|---------|
-| 124 | An exception reached `main()` (see [Return Codes](return-codes.md#fatal)), the stored update state is not interpretable (`--update_reboot_state`), or the update state could not be accessed (state-bad flags) |
+| 124 | An exception reached `main()`, the stored update state is not interpretable (`--update_reboot_state`), or the update state could not be accessed (state-bad flags); every cause is listed under [Return Codes](return-codes.md#fatal) |
