@@ -79,10 +79,10 @@ fs-updater --install_progress
 | 0 / 4 / 8 | Firmware / application / firmware+application installed |
 | 3 / 7 / 11 | System error (firmware / application / combined) — the only per-type failure verdict the install path produces; 1/2/5/6/9/10 (progress/internal-error) are reserved and never produced |
 | 46 | No path given, and no finished download staged to advance |
-| 47 | Accepted; still running (`--detach`, or a session already in flight whose id could not be read back), or the blocking wait hit its no-progress timeout or lost the D-Bus watch — the install may still be running; poll `--install_progress` |
+| 47 | Accepted and still running, or the blocking wait ended without an outcome; the cases are listed under [Return Codes](return-codes.md#install-progress---install_progress-and---install_updates-in-flightfailed-cases). Poll `--install_progress` |
 | 48 | No path given, and the D-Bus service already reports the (other-owned) install finished; or a local install succeeded with an update type that could not be classified |
 | 49 | The `InstallLocal`/`StartInstall` call failed, or a local install failed with an update type that could not be classified |
-| 61 | Path is empty, does not exist or is not accessible |
+| 61 | Path is empty, does not exist or cannot be resolved (a file that exists but is unreadable is rejected by the service: 49) |
 | 65 | A path without `--install_update`, `--detach` without a path, or a second action flag |
 | 66 | Another install or download is already in progress (`Error.Busy`) |
 | 67 | Rejected by bus policy (`Error.AccessDenied`) |
@@ -125,8 +125,10 @@ semantics.
 
 ### `--commit_update`
 
-Confirm the active update or rollback, or settle a failed install. Writes to
-the U-Boot environment and returns `update_reboot_state` to 0 (idle).
+Confirm the active update or rollback, or settle a failed install. A commit
+that settles a state writes the U-Boot environment and returns
+`update_reboot_state` to 0 (idle). Exit 17 writes nothing; a refusal (18) or a
+failure (19) does not settle the state.
 
 For an update or a rollback, call it after rebooting into the new or
 rolled-back slot. Which state it settles, and with which exit code, is listed
@@ -134,12 +136,12 @@ per state under [`--update_reboot_state`](#--update_reboot_state).
 
 | Exit code | Meaning |
 |:---------:|---------|
-| 16 | Committed successfully; with nothing pending, the running slot's boot budget was restored (the routine mark-good) |
+| 16 | Committed successfully; with nothing pending, the running slot's boot budget was restored (the routine mark-good). After an install interrupted during the image write, 16 means the update was discarded, not confirmed (exit 55 from state 2 below) |
 | 17 | Nothing pending and nothing to restore |
 | 18 | U-Boot state incompatible |
 | 19 | System error |
 | 58 | An install interrupted before its target was activated has been settled (discarded, slot quarantined) |
-| 59 | A durable state from an older generation has been settled (nothing confirmed, nothing discarded) |
+| 59 | The stored state was `FW_UPDATE_REBOOT_FAILED` (1), which the library does not write, and has been settled (nothing confirmed, nothing discarded) |
 
 ### `--update_reboot_state`
 
@@ -158,7 +160,7 @@ the enum names of the exit codes are listed in
 | 20 | `FAILED_APP_UPDATE` (6) | Always | `--commit_update` (16), see below |
 | 21 | `FAILED_FW_UPDATE` (5) | Always | `--commit_update` (16), see below |
 | 22 | `FW_UPDATE_REBOOT_FAILED` (1) | Always | `--commit_update` (59) |
-| 23 | `INCOMPLETE_FW_UPDATE` (2) | The update's reboot happened: into the new firmware slot, or a bootloader fallback to the old one | `--commit_update` |
+| 23 | `INCOMPLETE_FW_UPDATE` (2) | The update's reboot happened: into the new firmware slot, or a bootloader fallback to the old one | `--commit_update`; after a fallback, commit rather than roll back (see [`--rollback_update`](#--rollback_update)) |
 | 24 | `INCOMPLETE_APP_UPDATE` (3) | The new application image is mounted | `--commit_update` |
 | 25 | `INCOMPLETE_APP_FW_UPDATE` (4) | As for 23 | `--commit_update` |
 | 26 | 2, 3 or 4 | The reboot into the update has not happened | `--apply_update`, then `--commit_update` after the reboot |
@@ -166,11 +168,11 @@ the enum names of the exit codes are listed in
 | 28 | `ROLLBACK_FW_REBOOT_PENDING` (7) | The rollback's reboot has not happened | `--apply_update`, then `--commit_update` after the reboot |
 | 29 | `ROLLBACK_APP_REBOOT_PENDING` (8) | The rollback's reboot has not happened | `--apply_update`, then `--commit_update` after the reboot |
 | 30 | `ROLLBACK_APP_FW_REBOOT_PENDING` (9) | The rollback's reboot has not happened | `--apply_update`, then `--commit_update` after the reboot |
-| 31 | 7, or `INCOMPLETE_FW_ROLLBACK` (10) | 7: the rollback's reboot took effect; 10: always | `--commit_update` |
-| 32 | 8, or `INCOMPLETE_APP_ROLLBACK` (11) | 8: the rollback's reboot took effect; 11: always | `--commit_update` |
-| 33 | 9, or `INCOMPLETE_APP_FW_ROLLBACK` (12) | 9: the rollback's reboot took effect; 12: always | `--commit_update` |
+| 31 | 7, or `INCOMPLETE_FW_ROLLBACK` (10) | 7: the rollback's reboot took effect; 10: always | `--commit_update` (16; for 10 it can refuse with 18) |
+| 32 | 8, or `INCOMPLETE_APP_ROLLBACK` (11) | 8: the rollback's reboot took effect; 11: always | `--commit_update` (16) |
+| 33 | 9, or `INCOMPLETE_APP_FW_ROLLBACK` (12) | 9: the rollback's reboot took effect; 12: always | `--commit_update` (16; for 12 it can refuse with 18) |
 | 55 | 2, 3 or 4 | Whether the reboot took effect cannot be told (`RebootCompleteState::INDETERMINATE`), see below | See below |
-| 57 | 8 | No application image is mounted, or the loop devices cannot be read (`classify_app_rollback()` answers `INDETERMINATE`) | `--commit_update` |
+| 57 | 8 | No application image is mounted (`classify_app_rollback()` answers `INDETERMINATE`), or the loop devices cannot be read | Nothing mounted: `--commit_update` settles it. Loop devices unreadable: the commit reads the same evidence and fails with 19 until they can be read |
 | 124 | `UNKNOWN_STATE` (13) | The stored value is absent, unreadable or not interpretable; the message goes to stderr | Nothing in the CLI leads out; see the library's recovery for `UNKNOWN_STATE` |
 
 **Failed installs (20, 21, 22) are settled by `--commit_update`, not rolled
@@ -189,15 +191,19 @@ table.
 - **2:** the firmware install was interrupted before its slot led the boot
   order. `--commit_update` settles it with no reboot: exit 58 when the slot
   was never taken out of the rotation (it is quarantined), 16 when the install
-  was interrupted during the image write. The library describes both in
+  was interrupted during the image write. Either way the update is discarded
+  and its slot quarantined; this 16 confirms nothing. The library describes both in
   [The install's two interruption windows](https://github.com/fsembedded/fs-updater-lib/blob/master/docs/state-machine.md#the-installs-two-interruption-windows).
 - **3:** no application image is mounted at all. The library's
   [transition diagram](https://github.com/fsembedded/fs-updater-lib/blob/master/docs/state-machine.md#transition-diagram)
-  (Phase 2) describes this shape. `--commit_update` refuses it and exits 19.
+  (Phase 2) describes this shape. `--commit_update` refuses it and exits 19;
+  `--rollback_update` settles it with no reboot (exit 12, state 0).
 - **4:** a firmware slot is in flight that does not lead the boot order while
   the combined state is stored. The library's own writes do not produce this
   shape (an interrupted combined install is stored as 2, see above). Neither
-  verb leads out cleanly: `--commit_update` fails with 19, and
+  verb leads out cleanly: while `BOOT_ORDER` equals `BOOT_ORDER_OLD`,
+  `--commit_update` fails with 19 (with differing orders it takes the ordinary
+  commit paths: 16 after a failed reboot, 18 while the reboot is missing), and
   `--rollback_update` is refused for the firmware half.
 
 ---
@@ -220,17 +226,22 @@ the library's
 [transition diagram](https://github.com/fsembedded/fs-updater-lib/blob/master/docs/state-machine.md#transition-diagram)
 (Phase 3) lists every case. Run `--update_reboot_state` afterwards and follow
 its next step: 28–30 need `--apply_update` and a commit after the reboot, 27
-means the device is already back on the proven slot. A combined update rolled
+means the device is already back on the proven slot. After a bootloader
+fallback on state 2 the reboot has already undone the firmware: the rollback
+writes nothing, still exits 12, and `--update_reboot_state` keeps reporting 23.
+Commit rather than roll back after a fallback; see the library's
+[Rollback](https://github.com/fsembedded/fs-updater-lib/blob/master/docs/reference/api.md#rollback)
+reference. A combined update rolled
 back before its reboot stores a state that no verb leads out of; see
 [Rolling back a combined update before its reboot](https://github.com/fsembedded/fs-updater-lib/blob/master/docs/state-machine.md#rolling-back-a-combined-update-before-its-reboot).
 
 | Exit code | Meaning |
 |:---------:|---------|
-| 12 | Rollback prepared |
+| 12 | Rollback prepared (after a bootloader fallback on state 2, nothing written; see above) |
 | 13 | Progress error |
 | 14 | Internal error |
 | 15 | System error |
-| 54 | Refused: target slot is marked bad, or the firmware install never reached the boot order |
+| 54 | Refused: target slot is marked bad or uncommitted, or the firmware install never reached the boot order |
 | 56 | Refused: target slot was never provisioned (no image installed there) |
 
 ### `--switch_fw_slot`
@@ -345,8 +356,10 @@ Print the current application version to stdout, read the same way as
 ### `--version`
 
 Print the CLI version (set in `CMakeLists.txt`), the source revision of the CLI
-and of the loaded library, and the build date and time to stdout. Always exits
-0. Running `fs-updater` with no action prints the same line.
+and of the loaded library, and the build date and time to stdout. Exits 0, or
+124 when the U-Boot environment cannot be opened (see
+[Return Codes](return-codes.md#fatal)). Running `fs-updater` with no action
+prints the same line.
 
 ---
 
@@ -410,12 +423,9 @@ fs-updater --debug --serial --install_update /mnt/usb/firmware.fs
 The variables, their accepted values and every writer are described once, in
 the library's
 [U-Boot Variables](https://github.com/fsembedded/fs-updater-lib/blob/master/docs/reference/uboot-variables.md#variable-reference)
-reference. The CLI reaches them through the library, with two direct uses of
-its own:
-
-- The state-bad flags (Category E) read and set the bad mark of one position
-  in `update`.
-- `--serial` reads `console` to find the serial device it writes the log to.
+reference. The CLI reaches them through the library, the state-bad flags
+(Category E) included. Its one direct read is `console`, which `--serial` uses
+to find the serial device it writes the log to.
 
 ---
 
@@ -423,7 +433,7 @@ its own:
 
 | Exit code | Meaning |
 |:---------:|---------|
-| 61 | Path passed to `--install_update` is empty, does not exist or is not accessible |
+| 61 | Path passed to `--install_update` is empty, does not exist or cannot be resolved (an existing but unreadable file: 49) |
 | 65 | Multiple mutually exclusive action flags passed, a path without `--install_update`, or `--detach` without a path |
 | 1 | Any option value the parser rejects outright — not a decimal number where one is required, a state letter that isn't exactly one character, an unknown option — exits `1` with usage printed, ahead of the codes above |
 
@@ -436,4 +446,4 @@ produced by this CLI.
 
 | Exit code | Meaning |
 |:---------:|---------|
-| 124 | An exception escaped `main()`, the stored update state is not interpretable (`--update_reboot_state`), or the update state could not be accessed (state-bad flags) |
+| 124 | An exception reached `main()` (see [Return Codes](return-codes.md#fatal)), the stored update state is not interpretable (`--update_reboot_state`), or the update state could not be accessed (state-bad flags) |

@@ -47,7 +47,7 @@ busy, denied) are reported before any of these: see 61/66/67 under
 | Code | Enum | Trigger |
 |:----:|------|---------|
 | 46 | `UPDATER_INSTALL_UPDATE_STATE::NO_INSTALLATION_QUEUED` | Nothing tracked |
-| 47 | `UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_IN_PROGRESS` | Running (`--detach`, or an already-active session `--install_update` picked up), or the blocking wait hit its no-progress timeout or lost the D-Bus watch — the install may still be running |
+| 47 | `UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_IN_PROGRESS` | Accepted and running: `--detach`, a pathless `--install_update` whose `StartInstall` was accepted, or a local install whose session id could not be read back; or the blocking wait hit its no-progress timeout or lost the D-Bus watch — the install may still be running |
 | 48 | `UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FINISHED` | Finished, or `--install_update` succeeded with an update type that could not be classified |
 | 49 | `UPDATER_INSTALL_UPDATE_STATE::UPDATE_INSTALLATION_FAILED` | Failed; `--install_update` failed with an update type that could not be classified, or its `InstallLocal`/`StartInstall` call failed; `--cancel_install` with session id `0` or a failed `CancelInstall` call |
 
@@ -59,19 +59,19 @@ busy, denied) are reported before any of these: see 61/66/67 under
 | 13 | `UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_PROGRESS_ERROR` | Error during rollback |
 | 14 | `UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_INTERNAL_ERROR` | Internal error (rollback) |
 | 15 | `UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_SYSTEM_ERROR` | System error (rollback) |
-| 54 | `UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_BAD` | Refused: target slot is marked bad, or (firmware only) the install never reached the boot order |
+| 54 | `UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_BAD` | Refused: target slot is marked bad or uncommitted, or (firmware only) the install never reached the boot order |
 | 56 | `UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_UNPROVISIONED` | Refused: target slot was never provisioned. Not reachable on `--switch_fw_slot`, which has no unprovisioned refusal |
 
 ## Commit (`--commit_update`)
 
 | Code | Enum | Trigger |
 |:----:|------|---------|
-| 16 | `UPDATER_COMMIT_STATE::UPDATE_COMMIT_SUCCESSFUL` | Update, rollback or failed install committed; with nothing pending, the running slot's boot budget was restored |
+| 16 | `UPDATER_COMMIT_STATE::UPDATE_COMMIT_SUCCESSFUL` | Update, rollback or failed install committed; with nothing pending, the running slot's boot budget was restored. After an install interrupted during the image write, the update was discarded, not confirmed (see [exit 55](cli.md#--update_reboot_state)) |
 | 17 | `UPDATER_COMMIT_STATE::UPDATE_NOT_NEEDED` | Nothing pending and nothing to restore |
 | 18 | `UPDATER_COMMIT_STATE::UPDATE_NOT_ALLOWED_UBOOT_STATE` | U-Boot state incompatible |
 | 19 | `UPDATER_COMMIT_STATE::UPDATE_SYSTEM_ERROR` | System error during commit |
 | 58 | `UPDATER_COMMIT_STATE::STALLED_INSTALL_SETTLED` | An install interrupted before its target was activated has been settled: that update is discarded, its slot is quarantined, and the device still runs the firmware it ran before |
-| 59 | `UPDATER_COMMIT_STATE::LEGACY_STATE_MIGRATED` | A durable state that no current flow writes has been settled: the device carried it in from a superseded firmware or an edited environment. Nothing was confirmed and nothing discarded |
+| 59 | `UPDATER_COMMIT_STATE::LEGACY_STATE_MIGRATED` | The stored state was `FW_UPDATE_REBOOT_FAILED` (1), which the library does not write (it is carried in from an earlier library version or an edited environment), and has been settled. Nothing was confirmed and nothing discarded. The carried-in rollback states 10–12 are committed with 16; see the library's [Stale and stuck states](https://github.com/fsembedded/fs-updater-lib/blob/master/docs/state-machine.md#stale-and-stuck-states) |
 
 ## Update state query (`--update_reboot_state`)
 
@@ -154,7 +154,7 @@ An unreadable `update` variable makes these four flags exit 124.
 | Code | Enum | Trigger |
 |:----:|------|---------|
 | 60 | `UPDATER_CLI_VALIDATION::INVALID_UPDATE_TYPE` | *(reserved, never produced by this CLI)* |
-| 61 | `UPDATER_CLI_VALIDATION::UPDATE_FILE_NOT_FOUND` | Path given to `--install_update` is empty, does not exist or is not accessible |
+| 61 | `UPDATER_CLI_VALIDATION::UPDATE_FILE_NOT_FOUND` | Path given to `--install_update` is empty, does not exist or cannot be resolved. A file that exists but is unreadable passes this check and is rejected by the service instead (49) |
 | 62 | `UPDATER_CLI_VALIDATION::MISSING_ENV_UPDATE_STICK` | *(reserved, never produced by this CLI)* |
 | 63 | `UPDATER_CLI_VALIDATION::MISSING_ENV_UPDATE_FILE` | *(reserved, never produced by this CLI)* |
 | 64 | `UPDATER_CLI_VALIDATION::UPDATE_TYPE_WITHOUT_FILE` | *(reserved, never produced by this CLI)* |
@@ -172,10 +172,10 @@ An unreadable `update` variable makes these four flags exit 124.
 
 | Code | Enum | Trigger |
 |:----:|------|---------|
-| 124 | `UPDATER_FATAL::UNHANDLED_EXCEPTION` | Exception escaped `main()`; also the answer of `--update_reboot_state` for a stored state it cannot interpret, and of the state-bad flags when the `update` variable cannot be accessed |
+| 124 | `UPDATER_FATAL::UNHANDLED_EXCEPTION` | An exception reached `main()` uncaught by the command's handler — among them a U-Boot environment that cannot be opened, which fails every command past argument parsing and `--help`, `--version` included; also the answer of `--update_reboot_state` for a stored state it cannot interpret, and of the state-bad flags when the `update` variable cannot be accessed |
 
 ## Query success
 
-`--version`, `--firmware_version`, and `--application_version` always exit `0`
-on success (no dedicated success enum — they share `UPDATER_FIRMWARE_STATE::UPDATE_SUCCESSFUL`
+`--version`, `--firmware_version`, and `--application_version` exit `0`
+on success (124 when the U-Boot environment cannot be opened, see [Fatal](#fatal)) (no dedicated success enum — they share `UPDATER_FIRMWARE_STATE::UPDATE_SUCCESSFUL`
 by convention).

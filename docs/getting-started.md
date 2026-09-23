@@ -44,7 +44,8 @@ fs-updater --commit_update
 ```
 
 Exit code `16` = committed. Exit code `17` = nothing to commit. With nothing
-pending, `16` means the running slot's boot budget was restored; see
+pending, `16` means the running slot's boot budget was restored, and after an
+interrupted install it can mean the update was discarded; see
 [CLI Reference — `--commit_update`](reference/cli.md#--commit_update).
 
 ## Check the current update state
@@ -68,8 +69,11 @@ fs-updater --rollback_update
 fs-updater --update_reboot_state
 ```
 
-Exit 27 means the device is already back on the proven slot. Exit 28–30 means
-a reboot is still owed:
+Exit 27 means the device is already back on the proven slot. Exit 23 means a
+bootloader fallback had already undone the firmware and the rollback changed
+nothing: commit instead, see
+[CLI Reference — `--rollback_update`](reference/cli.md#--rollback_update).
+Exit 28–30 means a reboot is still owed:
 
 ```bash
 fs-updater --apply_update     # reboots
@@ -83,10 +87,13 @@ the exception; see [CLI Reference — `--rollback_update`](reference/cli.md#--ro
 ## Query installed versions
 
 ```bash
-fs-updater --firmware_version      # prints to stdout, exits 0
-fs-updater --application_version   # prints to stdout, exits 0
-fs-updater --version               # prints CLI version + build date, exits 0
+fs-updater --firmware_version      # prints to stdout
+fs-updater --application_version   # prints to stdout
+fs-updater --version               # prints CLI version + build date
 ```
+
+Each exits 0 on success; see
+[Return Codes — Query success](reference/return-codes.md#query-success).
 
 ## Enable debug logging
 
