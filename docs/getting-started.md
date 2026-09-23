@@ -18,33 +18,19 @@ scp build/fs-updater root@<device>:/usr/sbin/fs-updater
 
 ## Install a local update file
 
-Two procedures are supported. The new procedure (`.fs` bundle) is preferred
-for new integrations; the old procedure (component files + `--update_type`)
-remains fully supported for existing pipelines. See
-[CLI Reference — `--update_file`](reference/cli.md#--update_file-path) for
-details, and
+`--install_update` installs a `.fs` bundle from a local path via the
+D-Bus service, blocking by default until the outcome is known. See
+[CLI Reference — `--install_update`](reference/cli.md#--install_update-install_path)
+for the `--detach` form and the D-Bus call it makes, and
 [Bundle Format](https://github.com/fsembedded/fs-updater-lib/blob/main/docs/reference/bundle-format.md)
-for both file layouts.
+for the container layout.
 
-### New update procedure
 ```bash
 # Install firmware and application bundle from a local path
-fs-updater --update_file /mnt/usb/update.fs
+fs-updater --install_update /mnt/usb/update.fs
 
-# Install firmware bundle from a local path
-fs-updater --update_file /mnt/usb/firmware.fs
-
-# Install application only
-fs-updater --update_file /mnt/usb/app.fs
-```
-
-### Old update procedure
-```bash
-# Install firmware only
-fs-updater --update_file /mnt/usb/firmware.raucb --update_type fw
-
-# Install application only
-fs-updater --update_file /mnt/usb/application_signed --update_type app
+# A bare trailing path works the same way
+fs-updater /mnt/usb/update.fs
 ```
 
 Exit code `0` (firmware), `4` (application), or `8` (both) indicates success.
@@ -67,7 +53,7 @@ fs-updater --update_reboot_state
 ```
 
 Returns a code in the range 20–33 that maps to the 13-state machine. See
-[CLI Reference](reference/cli.md#update_reboot_state) for the full mapping.
+[CLI Reference](reference/cli.md#--update_reboot_state) for the full mapping.
 
 ## Rollback to the previous version
 
@@ -98,13 +84,14 @@ fs-updater --version               # prints CLI version + build date, exits 0
 Add `--debug` to any command to log verbose output to stderr:
 
 ```bash
-fs-updater --debug --update_file /mnt/usb/firmware.fs
+fs-updater --debug --install_update /mnt/usb/firmware.fs
 ```
 
-`--debug` is the only flag combinable with another action flag.
+`--debug` and `--serial` combine with any action; `--detach` combines with
+`--install_update` only. All other action flags are mutually exclusive.
 
 ## Next steps
 
 - [CLI Reference](reference/cli.md) — full argument descriptions and return-code ranges
 - [Return Codes](reference/return-codes.md) — scripting guide
-- [Signal Files](integration/signal-files.md) — ADU agent IPC protocol
+- [D-Bus Session Protocol](integration/dbus-session-protocol.md) — the `de.fsembedded.fsupdate1` call sequence behind the network-update, local-install, and rollback flags

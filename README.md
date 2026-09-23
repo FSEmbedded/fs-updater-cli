@@ -1,8 +1,9 @@
 # fs-updater CLI
 
-Command-line interface for the F&S Update Framework. Converts
+Command-line interface for the F&S Update Framework. Exposes
 [`fs-updater-lib`](https://github.com/fsembedded/fs-updater-lib/blob/master/README.md)
-API calls and exceptions into TCLAP arguments and POSIX exit codes.
+API calls as command-line arguments (parsed with `getopt_long`) and maps their
+results and exceptions to POSIX exit codes.
 
 Binary: `fs-updater`, installed to `/usr/sbin/`.
 
@@ -29,9 +30,9 @@ prefix (`build/fus_lib_install`) and overrides the SDK sysroot version.
 | Document | Content |
 |----------|---------|
 | [Getting Started](docs/getting-started.md) | First-use walkthrough |
-| [CLI Reference](docs/reference/cli.md) | All 21 arguments, grouped by function |
+| [CLI Reference](docs/reference/cli.md) | All arguments, grouped by function |
 | [Return Codes](docs/reference/return-codes.md) | All exit codes (0–124) |
-| [Signal Files](docs/integration/signal-files.md) | Work-dir IPC protocol for ADU agent |
+| [D-Bus Session Protocol](docs/integration/dbus-session-protocol.md) | The `de.fsembedded.fsupdate1` call sequence behind the network-update, local-install, and rollback flags |
 | [Azure Device Update Integration](docs/integration/azure-device-update.md) | ADU handler + adu-shell call chain |
 | [Contributing](docs/contributing.md) | Build, coding standard |
 

@@ -15,19 +15,30 @@ components in the `fus-device-update-azure` repository:
 ```
 ADU Agent
   └─> fsupdate_handler  (ContentHandler plugin, fus/update:1)
+       ├─> fs-updater-service   (D-Bus: Download / Install / Apply)
        └─> ADUC_LaunchChildProcess(adu-shell)
             └─> fusupdate_tasks  (DoFUSUpdateTask)
                  └─> ADUC_LaunchChildProcess(fs-updater)
-                      └─> fs-updater CLI
+                      └─> fs-updater CLI (Cancel / IsInstalled state queries)
 ```
 
-The handler communicates with `fs-updater` through two mechanisms:
+The handler is built with `BUILD_DBUS_SUPPORT` (the default; a legacy
+`!BUILD_DBUS_SUPPORT` build exists in the source for an older, file-signal-based
+`fs-updater` this framework no longer ships — do not pair it with a current
+CLI, which is D-Bus-only). With `BUILD_DBUS_SUPPORT`, the handler talks to
+`fs-updater-service` two different ways depending on the ADU step:
 
-1. **Child process launch** — adu-shell → fs-updater; the CLI exit code is
-   returned as `result.ExtendedResultCode`.
-2. **Signal files** — the handler creates metadata files in
-   `/tmp/adu/.work/`; the CLI reads and creates signal files in that same
-   directory. See [Signal Files](signal-files.md) for the full protocol.
+1. **Direct D-Bus calls** — `Download()`, `Install()`, and `Apply()` call the
+   `de.fsembedded.fsupdate1` service directly (`fus_service_client`), without
+   going through the CLI or adu-shell at all.
+2. **Child process launch** — `Cancel()` and `IsInstalled()` still shell out
+   through adu-shell to the `fs-updater` CLI, reading its exit code as
+   `result.ExtendedResultCode`. These two steps only ever *query or unwind*
+   durable U-Boot state; they were not moved to the direct D-Bus path.
+
+See [D-Bus Session Protocol](dbus-session-protocol.md) and
+`dbus/de.fsembedded.fsupdate1.xml` in `fs-updater-service` for the full
+interface contract behind the direct calls.
 
 ---
 
@@ -44,66 +55,68 @@ The update type is read from the ADU manifest field
 | `"common-application"` | Application-only update from `.fs` bundle |
 | `"common-both"` | Firmware + application update from `.fs` bundle |
 
----
-
-## ADU lifecycle → CLI mapping
-
-| ADU Step | Handler Method | adu-shell Action | fs-updater CLI commands | Wait signal |
-|----------|---------------|------------------|------------------------|-------------|
-| Download | `Download()` | — (direct) | — | `downloadUpdate` |
-| Install | `Install()` | `install` | `--update_file [--update_type]` | `installUpdate` |
-| Apply | `Apply()` | `execute` | `--update_reboot_state` | `applyUpdate` |
-| Cancel | `Cancel()` | `execute`, `cancel` | `--update_reboot_state`, `--rollback_update` | — |
-| IsInstalled | `IsInstalled()` | `execute` | `--firmware_version` / `--application_version`, `--update_reboot_state`, `--commit_update` | — |
-| Backup | `Backup()` | — | — (no-op) | — |
-| Restore | `Restore()` | — | — (unsupported, no-op) | — |
+These map to the D-Bus interface's own `"fw"`/`"app"`/`"fw+app"` type strings
+(`update_type_to_dbus_string()` in the handler) for `StartDownload`,
+`StartInstall`, and `InstallLocal`.
 
 ---
 
-## Signal file lifecycle
+## ADU lifecycle → integration mapping
 
-The handler **creates** the work-directory files; the CLI **reads and creates**
-signal files.
+| ADU Step | Handler Method | How it reaches the service |
+|----------|---------------|------------------------------|
+| Download | `Download()` | Direct D-Bus: `StartDownload`, then `FinishDownload` after the transfer |
+| Install | `Install()` | Direct D-Bus: `StartInstall`, poll `InstallState` property |
+| Apply | `Apply()` | Direct D-Bus: `Apply()`; issues the reboot itself via `workflow_request_immediate_reboot()` when it reports one is required |
+| Cancel | `Cancel()` | `adu-shell execute` → `fs-updater --update_reboot_state` / `--commit_update`, via `HandleExecuteAction()` below |
+| IsInstalled | `IsInstalled()` | `adu-shell execute` → `fs-updater --firmware_version` / `--application_version`, via `HandleExecuteAction()` |
+| Backup | `Backup()` | — (no-op) |
+| Restore | `Restore()` | — (unsupported, no-op) |
+
+The Delivery Optimization SDK (`ExtensionManager::Download()`) drives the
+actual HTTP transfer between `StartDownload` and `FinishDownload`. The
+interface has a `ReportDownloadProgress` method for a caller to push interim
+progress, but this handler does not call it — `DownloadProgress` stays
+unset for the duration of an ADU-driven download; only `DownloadState`
+("in_progress" → "finished"/"failed") changes.
+
+---
+
+## D-Bus session lifecycle (Download / Install / Apply)
+
+The handler is a **direct D-Bus client** for these three steps — no signal
+files, no intermediate process.
 
 ```
-Handler (Download)                CLI (polling)
-  create_work_dir()
-    └─ rm + mkdir /tmp/adu/.work/
-  write update_version            --is_update_available
-  write update_type                 reads update_type, update_version, update_size
-  write update_size
-                                  --download_update
-  WAIT for downloadUpdate ◄─────    creates downloadUpdate signal
-  write update_location           --download_progress
-                                    reads update_location, compares file sizes
-  ExtensionManager::Download()
+Handler.Download()                       fs-updater-service
+  StartDownload(type, version, size) ──▶  opens session, returns session_id
+  ExtensionManager::Download()  (HTTP transfer, handler-owned)
+  FinishDownload(session_id, success, payload_path) ──▶  DownloadState = finished/failed
 
-Handler (Install)                 --install_update
-  WAIT for installUpdate ◄──────    checks update_location, creates installUpdate
-  launch fs-updater --update_file
+Handler.Install()
+  StartInstall(session_id, type) ──▶  service drives FSUpdate::update_image() asynchronously
+  poll InstallState  ◀──  "in_progress" | "finished" | "failed"
 
-Handler (Apply)
-  check --update_reboot_state
-  WAIT for applyUpdate ◄────────  --apply_update creates applyUpdate signal
-  request reboot or commit
+Handler.Apply()
+  Apply() ──▶  reboot_required
+  workflow_request_immediate_reboot()  (handler's own call, if reboot_required)
 ```
 
 ### Stale and stuck states
 
-**New download wipes in-progress install state.**
-`create_work_dir()` deletes and recreates the entire `/tmp/adu/.work/`
-directory at the start of every `Download()` call. If `Download()` is called
-while `Install()` is still waiting for `installUpdate`, the signal file and
-`update_location` are destroyed — `Install()` blocks forever waiting for a
-file that no longer exists. Do not call `Download()` while `Install()` is
-in progress.
+**A service restart loses the in-memory session.** The service's own session
+counter restarts at 1 when it restarts, and a client that had a session in
+flight sees it vanish — the interface's own stability notes describe the
+recovery pattern (`GetState()`, matching `SessionId` against an `InstallState`
+of `"idle"` reading as "failed"), but this handler does not currently call
+`GetState()` anywhere: an ADU-driven install that is in flight when the
+service restarts is not resumed by this code today. What *does* survive a
+restart is the **durable** U-Boot state below, which is why the exit-code
+based recovery in the next paragraph works regardless.
 
-**Leftover signals from a previous session.**
-On device restart (watchdog reset, reboot, process restart), `/tmp/adu/.work/`
-may contain signal files and metadata from the previous run. The next
-`Download()` call will call `create_work_dir()` and wipe them. However, if the
-restart occurs between `Install()` and `Apply()` — after `fs-updater --update_file` has completed but before `applyUpdate` is created — the
-`update_reboot_state` U-Boot variable is already set to an `INCOMPLETE_*` value.
+**Leftover install/apply state across a device restart.** If the device
+restarts between `Install()` completing and `Apply()` running, the durable
+`update_reboot_state` U-Boot variable already holds an `INCOMPLETE_*` value.
 On resume the handler must:
 
 1. Call `--update_reboot_state` to read the current state via its **exit code**.
@@ -116,18 +129,22 @@ for the full per-state recovery calls, and
 [Return Codes](../reference/return-codes.md#update-state-query---update_reboot_state)
 for the exit-code-to-state mapping.
 
-**Infinite wait.**
-The handler's `WAIT for <signal>` loops have no built-in timeout. If the CLI
-process dies or the signal is never created, the handler blocks indefinitely.
-Integrate a timeout and abort path in `Download()`, `Install()`, and `Apply()`
+**This handler's `Install()` poll loop has no overall timeout.** It caps
+consecutive *empty/unreadable* `InstallState` reads at `MAX_EMPTY_RETRIES`,
+but a service that is up and keeps answering `"in_progress"` is polled
+forever — there is no deadline on reaching a terminal state. (The CLI's own
+`--install_update`/`--install_progress` path is different: its
+`wait_for_install()` has an `idle_timeout_ms` and returns a distinct
+"timed out, may still be running" result — see
+[D-Bus Session Protocol](dbus-session-protocol.md) — but this handler does
+not use that code path.) Integrate a bounded overall deadline in `Install()`
 if your deployment requires bounded recovery time.
 
 ---
 
 ## `HandleExecuteAction()` dispatch
 
-Apply, Cancel, and IsInstalled all route `fs-updater` calls through a common
-helper:
+`Cancel` and `IsInstalled` route `fs-updater` calls through a common helper:
 
 ```
 HandleExecuteAction(targetaction)
@@ -138,7 +155,12 @@ HandleExecuteAction(targetaction)
             └─> fs-updater <targetaction>
 ```
 
-The CLI exit code is passed back as `result.ExtendedResultCode`.
+The CLI exit code is passed back as `result.ExtendedResultCode`. These two
+steps stay on this path rather than moving to a direct D-Bus call because
+they act on **durable** U-Boot state (the current reboot-state, firmware/app
+version) that the CLI already exposes correctly whether or not a D-Bus
+session happens to be tracked — there is nothing session-scoped for them to
+gain from calling the service directly.
 
 ---
 
@@ -154,7 +176,7 @@ See `fsupdate_result.h` in `fus-device-update-azure` for all codes:
 | `0x300`–`0x3FF` | Apply errors |
 | `0x400`–`0x4FF` | Cancel errors |
 | `0x500`–`0x5FF` | IsInstalled errors |
-| `0x1000`+ | CLI exit code passthrough |
+| `0x1000`+ | CLI exit code passthrough (Cancel / IsInstalled path only) |
 
 ---
 
@@ -165,6 +187,7 @@ See `fsupdate_result.h` in `fus-device-update-azure` for all codes:
 | `fsupdate_handler.cpp` | Handler implementation — seven ContentHandler methods |
 | `fsupdate_handler.hpp` | Handler class, `update_type_t` enum |
 | `fsupdate_result.h` | Extended result code definitions |
-| `fusupdate_tasks.cpp` | adu-shell task functions (Install, CommitUpdate, Cancel, Execute) |
+| `fus_service_client.h`/`.cpp` | Thin sd-bus client for `de.fsembedded.fsupdate1`, used by `Download()`/`Install()`/`Apply()` |
+| `fusupdate_tasks.cpp` | adu-shell task functions (Cancel, IsInstalled path) |
 | `fusupdate_tasks.hpp` | Task function declarations |
 | `adushell_const.hpp` | Update type and action string constants |

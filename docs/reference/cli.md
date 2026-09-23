@@ -2,69 +2,119 @@
 
 Binary: `fs-updater`, installed to `/usr/sbin/`.
 
-All action arguments are **mutually exclusive** except `--debug` (combinable
-with any action) and `--update_type` (modifier for `--update_file` only —
-see below).
+All action arguments are **mutually exclusive** except `--debug` and `--serial`
+(combinable with any action) and `--detach` (modifier for `--install_update`
+only — see below).
+
+The CLI is built with D-Bus support only (`BUILD_DBUS_SUPPORT` is a required
+`ON` option; the build fails otherwise). The commands below that talk to the
+system daemon (`de.fsembedded.fsupdate1`) do so over D-Bus, not through files
+or another process — see [D-Bus Session Protocol](../integration/dbus-session-protocol.md)
+for the underlying calls and [Azure Device Update Integration](../integration/azure-device-update.md)
+for how the ADU handler drives the same interface directly.
 
 See [Return Codes](return-codes.md) for the full exit-code table.
 
+```
+fs-updater [--rollback_update] [--switch_fw_slot] [--switch_app_slot]
+           [--commit_update] [--update_reboot_state] [--debug]
+           [--firmware_version] [--application_version] [--version] [-h]
+           [--apply_update] [--install_update] [--detach] [--serial]
+           [--install_progress] [--cancel_install <session_id (uint32)>]
+           [--download_progress] [--download_update] [--is_update_available]
+           [--set_app_state_bad <A|B>] [--is_app_state_bad <A|B>]
+           [--set_fw_state_bad <A|B>] [--is_fw_state_bad <A|B>]
+           [--] [install_path]
+```
+
 ---
 
-## Category A: Core update flow
+## Category A: Install and commit
 
-### `--update_file <path>`
+### `--install_update [install_path]`
 
-Install an update bundle from a local file path.
+Install an update. Two forms, distinguished by whether a path is given:
 
-Two procedures are supported. The new procedure (`.fs` bundle) is preferred
-for new integrations; the old procedure (component files + `--update_type`)
-remains fully supported. See
+- **With a path** (`--install_update /mnt/usb/update.fs`, or a bare trailing
+  operand: `fs-updater /mnt/usb/update.fs`): install that local `.fs` bundle
+  via `InstallLocal` on the D-Bus service. Blocking by default — the CLI
+  streams live progress to stdout and returns the terminal 0/4/8 ÷ 3/7/11
+  verdict (see [Return Codes](return-codes.md)) once the service reports the
+  install finished or failed. Pass `--detach` to return immediately instead.
+  A `--` before the path ends option parsing, so a path that itself starts
+  with `-` is still read as the path.
+- **Without a path:** trigger `StartInstall` for a download some other D-Bus
+  caller already finished (`DownloadState == "finished"`, with the
+  `SessionId`/`UpdateType` that caller's `FinishDownload` recorded). Reports
+  46 (nothing queued) if that state isn't there yet. Not the ADU handler's
+  path — it calls `StartInstall` itself directly over D-Bus (see
+  [Azure Device Update Integration](../integration/azure-device-update.md#adu-lifecycle--integration-mapping));
+  this form is for a manual step or a different integrator advancing a
+  download it started itself.
+
+The old two-step procedure (`--update_file`/`--update_type` for raw
+component files, `--automatic` for a USB-stick environment-variable flow)
+has been retired; there is one install entry point now. See
 [Bundle Format](https://github.com/fsembedded/fs-updater-lib/blob/main/docs/reference/bundle-format.md)
-for both layouts.
-
-**New procedure (`.fs` bundles):** pass a `.fs` archive; the bundle type
-(firmware, application, or both) is detected from the embedded
-`fsupdate.json`. Do not combine with `--update_type`.
-
-**Old procedure (component files):** pass a raw RAUC artifact (`.raucb`) or
-a raw application bundle and specify the component with `--update_type fw`
-or `--update_type app`.
+for the `.fs` container layout.
 
 ```bash
-# New procedure — bundle type auto-detected from file
-fs-updater --update_file /mnt/usb/update.fs
-fs-updater --update_file /mnt/usb/firmware.fs
+# Blocking local install, type auto-detected from the bundle
+fs-updater --install_update /mnt/usb/update.fs
+fs-updater /mnt/usb/update.fs                 # bare path, same effect
 
-# Old procedure — explicit type required
-fs-updater --update_file /mnt/usb/firmware.raucb --update_type fw
-fs-updater --update_file /mnt/usb/application_signed --update_type app
+# Start it and come back later
+fs-updater --install_update /mnt/usb/update.fs --detach
+fs-updater --install_progress
 ```
 
 | Exit code | Meaning |
 |:---------:|---------|
-| 0 | Firmware update installed |
-| 4 | Application update installed |
-| 8 | Firmware + application installed |
-| 1/5/9 | Progress error |
-| 2/6/10 | Internal error |
-| 3/7/11 | System error |
-| 61 | File not found |
+| 0 / 4 / 8 | Firmware / application / firmware+application installed |
+| 3 / 7 / 11 | System error (firmware / application / combined) — the only failure variant the D-Bus-backed install path currently produces; 1/2/5/6/9/10 (progress/internal-error) are reserved but not reachable today |
+| 46 | No path given, and no finished download staged to advance |
+| 47 | Accepted; still running (`--detach`, or a session already in flight whose id could not be read back), or the blocking wait hit its no-progress timeout or lost the D-Bus watch — the install may still be running; poll `--install_progress` |
+| 48 | No path given, and the D-Bus service already reports the (other-owned) install finished |
+| 49 | Installation failed — used when the outcome's update type could not be classified |
+| 61 | Path does not exist or is not accessible |
+| 66 | Another install or download is already in progress (`Error.Busy`) |
+| 67 | Rejected by bus policy (`Error.AccessDenied`) |
 
 A reboot is required before `--commit_update`.
 
-### `--update_type <fw|app>`
+### `--detach`
 
-Specifies the component type for old-format component files used with
-`--update_file`. Valid values: `fw` (firmware), `app` (application).
+Modifier for `--install_update <path>`: start the install and return
+immediately with the session id instead of blocking on its outcome. Poll
+`--install_progress` for status.
 
-Incompatible with `.fs` bundles — when `--update_type` is set, bundle
-extraction is skipped and the file is passed directly to the installer.
-Cannot be combined with `--automatic`; doing so returns exit 64.
+### `--install_progress`
+
+Report the state of the install the D-Bus service is currently tracking
+(`InstallState`/`InstallProgress`). Independent of how that install was
+started — a detached local install, an ADU-driven one, or one this CLI
+process did not itself start.
 
 | Exit code | Meaning |
 |:---------:|---------|
-| 60 | Value is not `fw` or `app` |
-| 64 | Passed without `--update_file` |
+| 46 | No installation queued |
+| 47 | Installation in progress (percentage printed to stdout) |
+| 48 | Installation finished (percentage printed to stdout) |
+| 49 | Installation failed (last reached percentage printed to stdout) |
+
+### `--cancel_install <session_id (uint32)>`
+
+Best-effort cancel for the given session id (`CancelInstall` on the bus).
+Does not interrupt the running install — the worker still runs to
+completion — it only changes how the outcome is reported once it does; see
+the `CancelInstall` method doc in the D-Bus interface for the exact
+semantics.
+
+| Exit code | Meaning |
+|:---------:|---------|
+| 1 | `session_id` is not a plain decimal number (generic parse error; usage printed) |
+| 47 | Cancel requested; final outcome via `--install_progress` |
+| 49 | `session_id` is `0`, or the `CancelInstall` D-Bus call failed |
 
 ### `--commit_update`
 
@@ -79,6 +129,8 @@ Must be called after rebooting into the new or rolled-back slot.
 | 17 | Nothing to commit (already idle) |
 | 18 | U-Boot state incompatible |
 | 19 | System error |
+| 58 | An install interrupted before its target was activated has been settled (discarded, slot quarantined) |
+| 59 | A durable state from an older generation has been settled (nothing confirmed, nothing discarded) |
 
 ### `--update_reboot_state`
 
@@ -101,6 +153,8 @@ human-readable string to stdout.
 | 31 | `INCOMPLETE_FW_ROLLBACK` | FW rolled back, pending commit |
 | 32 | `INCOMPLETE_APP_ROLLBACK` | APP rolled back, pending commit |
 | 33 | `INCOMPLETE_APP_FW_ROLLBACK` | Both rolled back, pending commit |
+| 55 | `UPDATE_REBOOT_STATE_INDETERMINATE` | Pending, but the reboot state can't be told (no app image mounted) |
+| 57 | `ROLLBACK_APP_REBOOT_INDETERMINATE` | App rollback awaits commit, no app image mounted |
 
 See
 [fs-updater-lib state machine](https://github.com/fsembedded/fs-updater-lib/blob/main/docs/state-machine.md)
@@ -116,31 +170,6 @@ the next update will succeed:
 | 22 (`FW_UPDATE_REBOOT_FAILED`) | `--rollback_update` → `--apply_update` → reboot → `--commit_update` |
 | 23–25 (`INCOMPLETE_*`) | Reboot (via `--apply_update`), then `--commit_update` — do **not** call `--commit_update` before rebooting |
 
-### `--automatic`
-
-Install an update from environment variables. Intended for automated
-USB-stick update flows. **Supports the new `.fs` bundle procedure only** —
-old component files (`.raucb`, raw application) are not supported; use
-`--update_file --update_type` for those.
-
-| Variable | Required | Description |
-|----------|:--------:|-------------|
-| `UPDATE_STICK` | Yes | Mount point of the update media |
-| `UPDATE_FILE` | Yes | Filename (relative to `UPDATE_STICK`) to install |
-
-```bash
-export UPDATE_STICK=/mnt/usb
-export UPDATE_FILE=update.fs
-fs-updater --automatic
-```
-
-| Exit code | Meaning |
-|:---------:|---------|
-| 0/4/8 | Install successful (same as `--update_file`) |
-| 1–11 | Install errors |
-| 62 | `UPDATE_STICK` not set |
-| 63 | `UPDATE_FILE` not set |
-
 ---
 
 ## Category B: Rollback and slot management
@@ -149,8 +178,8 @@ fs-updater --automatic
 
 Request a rollback to the previous firmware and/or application version.
 Sets `update_reboot_state` to 7, 8, or 9 depending on what is rolling back.
-Creates the `rollbackUpdate` signal file. A reboot via `--apply_update` is
-required to complete the rollback.
+Local durable-state operation — no D-Bus call. A reboot via `--apply_update`
+is required to complete the rollback.
 
 | Exit code | Meaning |
 |:---------:|---------|
@@ -158,47 +187,58 @@ required to complete the rollback.
 | 13 | Progress error |
 | 14 | Internal error |
 | 15 | System error |
+| 54 | Refused: target slot is marked bad, or the firmware install never reached the boot order |
+| 56 | Refused: target slot was never provisioned (no image installed there) |
 
 ### `--switch_fw_slot`
 
 Switch the active firmware slot (A → B or B → A) without going through a
-full update cycle. Creates the `rollbackUpdate` signal file. A reboot via
-`--apply_update` is required.
+full update cycle. Same error mapping as `--rollback_update` above
+(shared classifier). A reboot via `--apply_update` is required.
 
-Same exit code range as `--rollback_update` (12–15).
+Same exit code range as `--rollback_update` (12–15, 54).
 
 ### `--switch_app_slot`
 
 Switch the active application slot (A → B or B → A). Same semantics as
-`--switch_fw_slot`.
+`--switch_fw_slot`, including the shared error mapping.
 
-Same exit code range (12–15).
+Same exit code range (12–15, 54, 56).
 
 ### `--apply_update`
 
-Initiate reboot to complete a pending update or rollback.
+Complete a pending install or rollback. Two paths, chosen automatically:
 
-| Mode | Condition | Action |
-|------|-----------|--------|
-| Local | No ADU agent signal-file context | Calls `reboot(2)` directly |
-| ADU signal-file | `applyUpdate` signal file expected | Creates the `applyUpdate` signal file |
+| Condition | Action |
+|-----------|--------|
+| A D-Bus install this CLI process is tracking has finished | Calls `Apply` on the service, then `reboot(2)` directly if it reports a reboot is required |
+| No install tracked in this session | Reads the durable `update_reboot_state` via the library and reboots if that state needs it |
+
+Neither path creates a file or waits on anything external; `--apply_update`
+either reboots or reports there was nothing to do.
 
 | Exit code | Meaning |
 |:---------:|---------|
-| 50 | Reboot initiated or apply signal created |
-| 51 | Apply signal creation failed, or nothing to apply |
+| 50 | Applied (reboot performed, or none was needed) |
+| 51 | Nothing to apply, or the service `Apply` call failed |
 | 70 | `reboot(2)` returned an error; see stderr |
 
 ---
 
-## Category C: Network update pipeline
+## Category C: Network update state (D-Bus, read-only from the CLI's side)
 
-These arguments implement signal-file-based IPC with the ADU agent.
-See [Signal Files](../integration/signal-files.md) for the protocol.
+These arguments read the D-Bus service's session state. In a cloud (ADU)
+deployment the ADU handler is its own direct D-Bus client for the equivalent
+calls (`StartDownload`/`StartInstall`/`Apply`) and does not invoke these;
+they exist for manual/diagnostic use, or for an integrator that wants to
+drive the same session through the CLI instead of writing its own D-Bus
+client. See [D-Bus Session Protocol](../integration/dbus-session-protocol.md)
+for the underlying `CheckUpdateAvailable`/`StartDownload`/... calls and the
+`de.fsembedded.fsupdate1` interface reference for the full contract.
 
 ### `--is_update_available`
 
-Read `update_type`, `update_version`, `update_size` from the work directory.
+Calls `CheckUpdateAvailable` and prints the result (type, version, size).
 
 | Exit code | Meaning |
 |:---------:|---------|
@@ -209,39 +249,32 @@ Read `update_type`, `update_version`, `update_size` from the work directory.
 
 ### `--download_update`
 
-Check metadata and create the `downloadUpdate` signal file to trigger the
-ADU agent to start the download.
+Reports whether a download is currently in progress on the service. Does
+**not** start a download itself — the update source (the ADU handler, over
+D-Bus) does that with `StartDownload`; this command only observes
+`DownloadState`.
 
 | Exit code | Meaning |
 |:---------:|---------|
-| 38 | No download queued |
-| 39 | Download started |
-| 40 | Download already in progress |
-| 41 | Failed to start download |
+| 38 | Nothing queued |
+| 40 | A download is already in progress |
+
+Codes 39 (`UPDATE_DOWNLOAD_STARTED`) and 41 (`UPDATE_DOWNLOAD_FAILED`) are
+reserved by the stability contract but not produced by this command — it
+never initiates or fails a download itself.
 
 ### `--download_progress`
 
-Read `update_location` and compare current vs expected file sizes to report
-download progress. Prints percentage to stdout.
+Reads `DownloadState`/`DownloadProgress` and reports percentage to stdout.
 
 | Exit code | Meaning |
 |:---------:|---------|
-| 42 | No download started |
-| 43 | Waiting for download location |
-| 44 | Download in progress (percentage printed to stdout) |
+| 42 | No download active, or the last one failed |
+| 44 | Downloading (percentage printed to stdout) |
 | 45 | Download complete |
 
-### `--install_update`
-
-Check that `update_location` exists, then create the `installUpdate` signal
-file to trigger the ADU agent to run the installation.
-
-| Exit code | Meaning |
-|:---------:|---------|
-| 46 | No downloaded file ready |
-| 47 | Installation started |
-| 48 | Installation finished |
-| 49 | Installation failed |
+Code 43 (`UPDATE_DOWNLOAD_WAITING_TO_START`) is reserved but not produced —
+there is no separate "waiting to start" state on the current session model.
 
 ---
 
@@ -302,8 +335,13 @@ All four arguments share the same exit-code range:
 
 Enable verbose debug logging to stderr. Combinable with any action argument.
 
+### `--serial`
+
+Send log output to the serial console instead of the default. Combinable
+with any action argument, like `--debug`.
+
 ```bash
-fs-updater --debug --update_file /mnt/usb/firmware.raucb
+fs-updater --debug --serial --install_update /mnt/usb/firmware.fs
 ```
 
 ---
@@ -329,12 +367,15 @@ fs-updater --debug --update_file /mnt/usb/firmware.raucb
 
 | Exit code | Meaning |
 |:---------:|---------|
-| 60 | `--update_type` value is not `fw` or `app` |
-| 61 | Path passed to `--update_file` does not exist |
-| 62 | `UPDATE_STICK` environment variable not set (`--automatic`) |
-| 63 | `UPDATE_FILE` environment variable not set (`--automatic`) |
-| 64 | `--update_type` passed without `--update_file` |
+| 61 | Path passed to `--install_update` (or the bare operand) does not exist or is not accessible |
 | 65 | Multiple mutually exclusive action flags passed |
+| 1 | Any option value the parser rejects outright — not a decimal number where one is required, a state letter that isn't exactly one character, an unknown option — exits `1` with usage printed, ahead of the codes above |
+
+Codes 60 (`INVALID_UPDATE_TYPE`), 62 (`MISSING_ENV_UPDATE_STICK`), 63
+(`MISSING_ENV_UPDATE_FILE`), and 64 (`UPDATE_TYPE_WITHOUT_FILE`) belonged to
+the retired `--update_type`/`--automatic` flags. They are reserved by the
+stability contract — never reused for something else — but this CLI no
+longer produces them.
 
 ## Fatal errors
 
