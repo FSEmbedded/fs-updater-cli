@@ -129,7 +129,7 @@ TEST(Classify, EmptyPathWithInstallUpdateIsBadPath)
 /* An empty positional without --install_update stays a bare-path rejection: the
  * order matters — the bare-path rule fires before the empty-path check, so the
  * outcome is parse_error with the bare-path message, not bad_path. */
-TEST(Classify, EmptyPathWithoutInstallUpdateIsGuardB)
+TEST(Classify, EmptyPathWithoutInstallUpdateHitsBarePathRule)
 {
     RawFlags f{};
     f.install_path_set = true;
