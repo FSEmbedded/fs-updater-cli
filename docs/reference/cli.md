@@ -317,13 +317,15 @@ there is no separate "waiting to start" state on the current session model.
 
 ### `--firmware_version`
 
-Print the current firmware version string (from U-Boot environment) to stdout.
-Always exits 0 on success.
+Print the current firmware version to stdout; the library reads it from the
+file named in its
+[Versions](https://github.com/fsembedded/fs-updater-lib/blob/master/docs/reference/api.md#versions)
+entry. Exits 0 on success.
 
 ### `--application_version`
 
-Print the current application version string (from U-Boot environment) to stdout.
-Always exits 0 on success.
+Print the current application version to stdout, read the same way as
+`--firmware_version`. Exits 0 on success.
 
 ### `--version`
 
@@ -334,8 +336,10 @@ Print the CLI version and build date to stdout. Version is set in
 
 ## Category E: State-bad flags
 
-These arguments manage the `update` U-Boot variable that marks individual slots
-as bad (unbootable). A bad slot is excluded from rollback targets.
+These arguments read and set the bad mark of one slot in the `update` U-Boot
+variable (format in the library's
+[`update` variable format](https://github.com/fsembedded/fs-updater-lib/blob/master/docs/reference/uboot-variables.md#update-variable-format)).
+A slot marked bad is refused as a rollback or switch target.
 
 ### `--set_app_state_bad <A|B>`
 
@@ -383,18 +387,15 @@ fs-updater --debug --serial --install_update /mnt/usb/firmware.fs
 
 ## U-Boot variables
 
-| Variable | Values | Written by | Purpose |
-|----------|--------|-----------|---------|
-| `update` | 4-char string | CLI | Per-slot state: `0`=committed, `1`=uncommitted, `2`=bad. Positions: [0]=FW_A, [1]=APP_A, [2]=FW_B, [3]=APP_B |
-| `update_reboot_state` | 0–13 | CLI / dynamic-overlay | 13-state machine position |
-| `BOOT_ORDER` | `"A B"` / `"B A"` | CLI / U-Boot | Boot slot priority |
-| `BOOT_ORDER_OLD` | `"A B"` / `"B A"` | CLI | Previous boot order, used as rollback reference |
-| `BOOT_A_LEFT` | 0–3 | U-Boot | Remaining boot attempts for slot A |
-| `BOOT_B_LEFT` | 0–3 | U-Boot | Remaining boot attempts for slot B |
-| `rauc_cmd` | `"rauc.slot=A"` / `"rauc.slot=B"` | U-Boot | Currently booted slot (from kernel cmdline) |
-| `application` | `A` / `B` | CLI | Active application slot |
+The variables, their accepted values and every writer are described once, in
+the library's
+[U-Boot Variables](https://github.com/fsembedded/fs-updater-lib/blob/master/docs/reference/uboot-variables.md#variable-reference)
+reference. The CLI reaches them through the library, with two direct uses of
+its own:
 
-**`update` variable example:** `"0010"` = FW_A committed, APP_A committed, FW_B uncommitted, APP_B committed.
+- The state-bad flags (Category E) read and set the bad mark of one position
+  in `update`.
+- `--serial` reads `console` to find the serial device it writes the log to.
 
 ---
 

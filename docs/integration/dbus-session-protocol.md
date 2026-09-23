@@ -124,13 +124,18 @@ sequenceDiagram
     participant UB as U-Boot Env
 
     User->>CLI: --rollback_update
-    CLI->>UB: update_reboot_state = 7/8/9 (rollback pending: FW/APP/both)
+    CLI->>UB: rollback state stored by the library
     CLI-->>User: exit 12 (prepared), or 54/56 if the target slot can't take it
 
     User->>CLI: --apply_update
     CLI->>UB: read update_reboot_state (no D-Bus session tracked)
     CLI-->>CLI: reboot()
 ```
+
+Which state the library stores, and whether the rollback needs the reboot at
+all, is described in the library's
+[transition diagram](https://github.com/fsembedded/fs-updater-lib/blob/master/docs/state-machine.md#transition-diagram)
+(Phase 3).
 
 After the reboot, `--commit_update` finalises the rollback (exit 16) or
 settles a state the current flow no longer writes (exit 58/59 — see
