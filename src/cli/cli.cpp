@@ -168,8 +168,9 @@ void cli::fs_update_cli::rollback_update()
 
         if (update_reboot_state == update_definitions::UBootBootstateFlags::INCOMPLETE_APP_FW_UPDATE)
         {
+            /* One call: the firmware rollback completes the application half
+             * itself, and the application verb refuses this state. */
             cli_io::write_stdout("Start application and firmware rollback\n");
-            this->update_handler->rollback_application();
             this->update_handler->rollback_firmware();
         }
         else if (update_reboot_state == update_definitions::UBootBootstateFlags::INCOMPLETE_FW_UPDATE)
@@ -196,11 +197,14 @@ void cli::fs_update_cli::rollback_update()
     {
         cli_io::write_stderr(string("Rollback update progress error: ") + e.what() + " errno: " + std::to_string(e.errorno) + "\n");
         /* Same mapper as the slot switches, because a rollback reaches the same
-         * refusals: a state that says an update is in flight with a bitfield
-         * that says nothing is does not take the pending arm, it falls through
-         * to the committed-slot-switch verdict. Refusals the mapper does not
-         * name still answer 13. */
+         * refusals: the target slot of a switch marked bad or never
+         * provisioned. Refusals the mapper does not name still answer 13. */
         this->return_code = cli::map_slot_switch_errno(e.errorno);
+    }
+    catch (const fs::NotAllowedUpdateState &e)
+    {
+        cli_io::write_stderr(string("Rollback not allowed: ") + e.what() + "\n");
+        this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_BAD);
     }
     catch (const fs::BaseFSUpdateException &e)
     {
@@ -244,6 +248,11 @@ void cli::fs_update_cli::switch_firmware_slot()
 
         this->return_code = cli::map_slot_switch_errno(e.errorno);
     }
+    catch (const fs::NotAllowedUpdateState &e)
+    {
+        cli_io::write_stderr(string("Switch firmware slot not allowed: ") + e.what() + "\n");
+        this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_BAD);
+    }
     catch (const fs::BaseFSUpdateException &e)
     {
         cli_io::write_stderr(string("Rollback firmware update error: ") + e.what() + "\n");
@@ -281,6 +290,11 @@ void cli::fs_update_cli::switch_application_slot()
         cli_io::write_stderr(string("Rollback application progress error: ") + e.what() + " errno : " + std::to_string(e.errorno) + "\n");
 
         this->return_code = cli::map_slot_switch_errno(e.errorno);
+    }
+    catch (const fs::NotAllowedUpdateState &e)
+    {
+        cli_io::write_stderr(string("Switch application slot not allowed: ") + e.what() + "\n");
+        this->return_code = static_cast<int>(UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_BAD);
     }
     catch (const fs::BaseFSUpdateException &e)
     {
@@ -373,9 +387,8 @@ void cli::fs_update_cli::print_update_reboot_state()
             /* No clean remedy for this shape: confirmPendingApplicationFirmwareUpdate()
              * has no never-activated branch (unlike its firmware-only sibling), so
              * commit throws instead of settling and exits 19, not a no-op; rollback
-             * still runs the application half before the firmware half is refused,
-             * though nothing persists from it. */
-            cli_io::write_stdout("Application and firmware update pending; the install never reached the boot order — no clean remedy here: commit fails, rollback is refused for firmware after the application half already ran\n");
+             * is refused before anything runs. */
+            cli_io::write_stdout("Application and firmware update pending; the install never reached the boot order — no clean remedy here: commit fails, rollback is refused\n");
             this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::UPDATE_REBOOT_STATE_INDETERMINATE);
         }
     }

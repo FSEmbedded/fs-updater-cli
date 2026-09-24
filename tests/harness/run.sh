@@ -130,7 +130,7 @@ trap 'restore_fixture; exit 143' TERM HUP
 # Case-count guard: the total is declared here and checked against what
 # actually ran, so a run that never reached part of the file cannot end in
 # "everything passed". Bump it when a case is added.
-EXPECTED_CASES=71
+EXPECTED_CASES=72
 
 fails=0
 passes=0
@@ -354,7 +354,7 @@ expect_verb_named "commit: firmware installed but reboot still owed is refused, 
     'firmware update reboot missing' \
     2 0010 'BOOT_ORDER=B A'
 expect_verb "rollback: nothing pending on a settled device" --rollback_update 27 0 0000
-expect_verb "rollback: a pending firmware update is undone" --rollback_update 12 2 0000
+expect_verb "rollback: a pending firmware update is undone" --rollback_update 12 2 0010 'BOOT_ORDER=B A'
 expect_verb_named "rollback: an indeterminate app rollback is named" --rollback_update 57 \
     'no app image mounted' 8 0000
 
@@ -514,23 +514,22 @@ expect_verb_named "an ambiguous bitfield is refused on read, before any arm" \
 expect_verb_named "commit: an app rollback with nothing mounted is settled" \
     --commit_update 16 'Commit update' 8 0000
 
-# NOT a mount test. The state says an application update is in flight and the
-# bitfield says nothing is, so the pending arm is not taken and this seed reaches
-# the committed-slot-switch verdict instead -- where the target slot has no image
-# under user-mode emulation. Line and code agree: the rollback door maps the
-# refusal errnos exactly as the switch doors do. With a RAUC fixture
-# present this same seed settles instead of refusing; measuring the mount half
-# needs that fixture and is out of scope here.
-expect_verb_named "rollback: a settled bitfield sends a pending state to the switch verdict" \
-    --rollback_update 56 'slot B was never provisioned' 3 0000
+# A pending state whose bitfield holds nothing in flight owns no rollback move,
+# and is not answered with the slot switch of the idle state: the verb refuses
+# by naming the state, and the refusal is the state error (54), not a progress
+# failure (13). Only a commit, or the manual recipe, leads out of it.
+expect_verb_named "rollback: a settled bitfield in a pending state is refused" \
+    --rollback_update 54 'not allowed in update state 3' 3 0000
+expect_verb_named "rollback: a settled firmware bitfield in a pending state is refused" \
+    --rollback_update 54 'not allowed in update state 2' 2 0000
 
-# The mapper's other branch, at the same door. A rollback whose target slot is
+# The mapper's other branch, at the switch doors. A switch whose target slot is
 # marked bad is refused with EPERM, which reaches the caller as the state
-# error (54), not as a generic progress failure (13). Both
-# branches are pinned here so the shared mapper cannot be half-adopted: a change
-# that reverted one of them would leave the other green.
-expect_verb_named "rollback: a target slot marked bad is refused as a state error" \
-    --rollback_update 54 'not allowed' 2 0020
+# error (54), not as a generic progress failure (13). Both branches are pinned
+# so the shared mapper cannot be half-adopted: a change that reverted one of
+# them would leave the other green.
+expect_verb_named "switch: a target firmware slot marked bad is refused as a state error" \
+    --switch_fw_slot 54 'not allowed' 0 0020
 
 # --apply_update is pinned only where it refuses. Where it has real work it ends
 # in a reboot, and there is no reboot here, so it answers with the system-level
