@@ -18,6 +18,27 @@ constexpr uint32_t application_update_state = 1;
 
 using std::string;
 
+namespace
+{
+
+/* The update reboot state's own line for an install that was not booted.
+ * Printed in place of print_update_reboot_state(), whose reading of the
+ * boot order takes a spent attempt for a completed reboot. */
+string missing_reboot_line(update_definitions::UBootBootstateFlags state)
+{
+    switch (state)
+    {
+    case update_definitions::UBootBootstateFlags::INCOMPLETE_FW_UPDATE:
+        return "Missing reboot after firmware update requested\n";
+    case update_definitions::UBootBootstateFlags::INCOMPLETE_APP_FW_UPDATE:
+        return "Missing reboot after application and firmware update\n";
+    default:
+        return "Missing reboot after application update requested\n";
+    }
+}
+
+} // namespace
+
 cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
 		cmd("F&S Update Framework CLI", ' ', FUS_CLI_PROJECT_VERSION, false),
 		arg_update("",
@@ -47,7 +68,8 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
 		arg_rollback_update("",
 				 "rollback_update",
 				 "Rollback of the last installed update "\
-				 "(must be started before commit update)"
+				 "(must be started after the reboot into the update "\
+				 "and before commit update)"
 				 ),
 		arg_commit_update("",
 				  "commit_update",
@@ -302,10 +324,11 @@ void cli::fs_update_cli::commit_update()
 
 void cli::fs_update_cli::rollback_update()
 {
+    update_definitions::UBootBootstateFlags update_reboot_state =
+        update_definitions::UBootBootstateFlags::NO_UPDATE_REBOOT_PENDING;
     try
     {
-        const update_definitions::UBootBootstateFlags update_reboot_state =
-            this->update_handler->get_update_reboot_state();
+        update_reboot_state = this->update_handler->get_update_reboot_state();
 
         this->update_handler->create_work_dir();
 
@@ -339,6 +362,21 @@ void cli::fs_update_cli::rollback_update()
         }
         cli_io::write_stdout("Rollback finished successful. Reboot required.\n");
         this->return_code = static_cast<int>(UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_SUCCESSFUL);
+    }
+    catch (const updater::MissingReboot &)
+    {
+        cli_io::write_stdout(missing_reboot_line(update_reboot_state));
+        cli_io::write_stdout("Rollback is not allowed before the reboot. Run --apply_update to reboot into the "
+                             "installed update; --rollback_update is allowed after the reboot and before "
+                             "--commit_update.\n");
+        this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::UPDATE_REBOOT_PENDING);
+    }
+    catch (const updater::CommitRequired &)
+    {
+        cli_io::write_stdout("Incomplete application update. Commit required.\n");
+        cli_io::write_stdout("Rollback is not allowed: the application install was interrupted before it was "
+                             "activated. Run --commit_update to clear it.\n");
+        this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_UPDATE);
     }
     catch (const fs::GenericException &e)
     {
