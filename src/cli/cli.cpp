@@ -37,6 +37,40 @@ string missing_reboot_line(update_definitions::UBootBootstateFlags state)
     }
 }
 
+/* The marker can be cleaned away before the reboot; the state still says
+ * whether an install is waiting for one. */
+bool install_awaiting_reboot(fs::FSUpdate &handler)
+{
+    const update_definitions::UBootBootstateFlags state = handler.get_update_reboot_state();
+    if (state == update_definitions::UBootBootstateFlags::INCOMPLETE_FW_UPDATE ||
+        state == update_definitions::UBootBootstateFlags::INCOMPLETE_APP_FW_UPDATE)
+    {
+        return !handler.is_reboot_complete(true);
+    }
+    if (state == update_definitions::UBootBootstateFlags::INCOMPLETE_APP_UPDATE)
+    {
+        return !handler.is_reboot_complete(false);
+    }
+    return false;
+}
+
+/* Whether the reboot a rollback or switch announced has happened. The
+ * marker in the tmpfs work directory does not survive a reboot taken outside
+ * --apply_update, so only the persistent state decides. An application mount
+ * that cannot be read counts as not rebooted: the reboot is then the way out. */
+bool rollback_reboot_completed(fs::FSUpdate &handler, update_definitions::UBootBootstateFlags state)
+{
+    const bool firmware = state != update_definitions::UBootBootstateFlags::ROLLBACK_APP_REBOOT_PENDING;
+    try
+    {
+        return handler.is_reboot_complete(firmware);
+    }
+    catch (const updater::GetLoopDevices &)
+    {
+        return false;
+    }
+}
+
 } // namespace
 
 cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
@@ -964,8 +998,20 @@ void cli::fs_update_cli::handle_apply_update()
     const string work_dir = this->update_handler->get_work_dir().string();
     const string installed_path = posix_helpers::path_join(work_dir, "updateInstalled");
     const string rollback_path = posix_helpers::path_join(work_dir, "rollbackUpdate");
+    const bool rollback_marker_present = posix_helpers::path_exists(rollback_path.c_str());
+    const update_definitions::UBootBootstateFlags update_reboot_state =
+        this->update_handler->get_update_reboot_state();
+    const bool rollback_pending =
+        update_reboot_state == update_definitions::UBootBootstateFlags::ROLLBACK_FW_REBOOT_PENDING ||
+        update_reboot_state == update_definitions::UBootBootstateFlags::ROLLBACK_APP_REBOOT_PENDING ||
+        update_reboot_state == update_definitions::UBootBootstateFlags::ROLLBACK_APP_FW_REBOOT_PENDING;
+    // An earlier apply already wrote its state; only the marker shows that its reboot is still owed.
+    const bool rollback_written =
+        update_reboot_state == update_definitions::UBootBootstateFlags::INCOMPLETE_FW_ROLLBACK ||
+        update_reboot_state == update_definitions::UBootBootstateFlags::INCOMPLETE_APP_ROLLBACK ||
+        update_reboot_state == update_definitions::UBootBootstateFlags::INCOMPLETE_APP_FW_ROLLBACK;
 
-    if (posix_helpers::path_exists(installed_path.c_str()))
+    if (posix_helpers::path_exists(installed_path.c_str()) || install_awaiting_reboot(*this->update_handler))
     {
         if (!posix_helpers::path_exists(posix_helpers::path_join(work_dir, "applyUpdate").c_str()) &&
             !posix_helpers::path_exists(posix_helpers::path_join(work_dir, "downloadUpdate").c_str()))
@@ -996,10 +1042,10 @@ void cli::fs_update_cli::handle_apply_update()
             }
         }
     }
-    else if (posix_helpers::path_exists(rollback_path.c_str()))
+    else if (rollback_pending || (rollback_written && rollback_marker_present))
     {
-        const update_definitions::UBootBootstateFlags update_reboot_state =
-            this->update_handler->get_update_reboot_state();
+        const bool already_rebooted =
+            rollback_pending && rollback_reboot_completed(*this->update_handler, update_reboot_state);
 
         if (update_reboot_state == update_definitions::UBootBootstateFlags::ROLLBACK_APP_FW_REBOOT_PENDING)
         {
@@ -1017,19 +1063,29 @@ void cli::fs_update_cli::handle_apply_update()
                 update_definitions::UBootBootstateFlags::INCOMPLETE_APP_ROLLBACK);
         }
 
-        cli_io::write_stdout("Apply rollback update...\n");
-
-        if(this->reboot() != 0) {
-            const int saved = errno;
-            cli_io::write_stderr(string("Failed to reboot system: ") + strerror(saved) + "\n");
-            this->return_code = static_cast<int>(UPDATER_SYSTEM::REBOOT_FAILED);
-        } else {
+        if (already_rebooted)
+        {
+            /* The reboot already happened outside --apply_update; only the
+             * state needed catching up. */
+            cli_io::write_stdout("Apply rollback update: reboot already completed, update state settled...\n");
             this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFUL);
         }
-
-        if (this->return_code != static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFUL))
+        else
         {
-            this->update_handler->update_reboot_state(update_reboot_state);
+            cli_io::write_stdout("Apply rollback update...\n");
+
+            if(this->reboot() != 0) {
+                const int saved = errno;
+                cli_io::write_stderr(string("Failed to reboot system: ") + strerror(saved) + "\n");
+                this->return_code = static_cast<int>(UPDATER_SYSTEM::REBOOT_FAILED);
+            } else {
+                this->return_code = static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFUL);
+            }
+
+            if (this->return_code != static_cast<int>(UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFUL))
+            {
+                this->update_handler->update_reboot_state(update_reboot_state);
+            }
         }
     }
     else

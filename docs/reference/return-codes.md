@@ -106,8 +106,8 @@ All exit codes from `src/cli/fs_updater_error.h`. Valid POSIX range is 0–125
 
 | Code | Enum | Trigger |
 |:----:|------|---------|
-| 50 | `UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFUL` | Reboot initiated or apply signal created |
-| 51 | `UPDATER_APPLY_UPDATE_STATE::APPLY_FAILED` | Failed to reboot or create signal |
+| 50 | `UPDATER_APPLY_UPDATE_STATE::APPLY_SUCCESSFUL` | Reboot initiated, apply signal created, or state settled after a reboot taken outside apply |
+| 51 | `UPDATER_APPLY_UPDATE_STATE::APPLY_FAILED` | Failed to create signal, or nothing to apply |
 
 ## State-bad flags (`--set_*_state_bad`, `--is_*_state_bad`)
 

@@ -20,7 +20,7 @@ directory.
 | `installUpdate` | `--install_update` | ADU agent | Signal: run the installation |
 | `updateInstalled` | ADU agent / lib | `--install_update`, `--apply_update` | Installation complete |
 | `applyUpdate` | `--apply_update` | ADU agent | Signal: trigger apply (network mode) |
-| `rollbackUpdate` | `--rollback_update`, `--switch_*_slot` | `--apply_update` | Rollback prepared |
+| `rollbackUpdate` | `--rollback_update`, `--switch_*_slot` | `--apply_update` | Rollback prepared; read only once `--apply_update` has written its state, as proof that the reboot is still owed |
 
 ## Network update pipeline
 
@@ -87,7 +87,7 @@ sequenceDiagram
     CLI->>FS: create rollbackUpdate
 
     User->>CLI: --apply_update
-    CLI->>FS: read rollbackUpdate (exists)
+    CLI->>UB: read update_reboot_state (7/8/9), reboot completed?
     CLI->>UB: update_reboot_state = 10/11/12
-    CLI->>CLI: reboot()
+    CLI->>CLI: reboot() unless the reboot already happened
 ```

@@ -185,8 +185,8 @@ Initiate reboot to complete a pending update or rollback.
 
 | Exit code | Meaning |
 |:---------:|---------|
-| 50 | Reboot initiated or apply signal created |
-| 51 | Apply signal creation failed, or nothing to apply |
+| 50 | Reboot initiated, apply signal created, or a rollback or switch whose reboot already happened outside `--apply_update` had its state settled without a reboot |
+| 51 | Apply signal creation failed, or nothing to apply (every call after the state was settled) |
 | 70 | `reboot(2)` returned an error; see stderr |
 
 ---
