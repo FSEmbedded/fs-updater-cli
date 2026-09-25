@@ -311,6 +311,13 @@ void cli::fs_update_cli::commit_update()
         cli_io::write_stderr("Not allowed update state in UBoot\n");
         this->return_code = static_cast<int>(UPDATER_COMMIT_STATE::UPDATE_NOT_ALLOWED_UBOOT_STATE);
     }
+    catch (const updater::FirmwareRebootStateNotDefined &)
+    {
+        /* BOOT_ORDER names a single slot: RAUC still owns the other one
+         * mid-write, so whether the reboot succeeded can't be told yet.
+         * Answer like a plain state query instead of a raw internal error. */
+        this->print_update_reboot_state();
+    }
     catch (const std::exception &e)
     {
         cli_io::write_stderr(string("FS updater cli error: ") + e.what() + "\n");
@@ -377,6 +384,13 @@ void cli::fs_update_cli::rollback_update()
         cli_io::write_stdout("Rollback is not allowed: the application install was interrupted before it was "
                              "activated. Run --commit_update to clear it.\n");
         this->return_code = static_cast<int>(UPDATER_UPDATE_REBOOT_STATE::INCOMPLETE_APP_UPDATE);
+    }
+    catch (const updater::FirmwareRebootStateNotDefined &)
+    {
+        /* BOOT_ORDER names a single slot: RAUC still owns the other one
+         * mid-write, so whether the reboot succeeded can't be told yet.
+         * Answer like a plain state query instead of a raw internal error. */
+        this->print_update_reboot_state();
     }
     catch (const fs::GenericException &e)
     {
