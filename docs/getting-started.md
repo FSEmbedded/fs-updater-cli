@@ -59,6 +59,8 @@ fs-updater --commit_update
 ```
 
 Exit code `16` = committed. Exit code `17` = nothing to commit (already idle).
+Exit code `75` = committed, but a slot switch did not hold: the board still runs
+the slot it switched away from, and that slot stays.
 
 ## Check the current update state
 

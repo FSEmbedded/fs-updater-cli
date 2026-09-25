@@ -32,7 +32,9 @@ enum class UPDATER_COMMIT_STATE : int{
     UPDATE_COMMIT_SUCCESSFUL = 16,
     UPDATE_NOT_NEEDED = 17,
     UPDATE_NOT_ALLOWED_UBOOT_STATE = 18,
-    UPDATE_SYSTEM_ERROR = 19
+    UPDATE_SYSTEM_ERROR = 19,
+    /* Outside 16-19: that block is full, 55-74 are reserved for other categories. */
+    UPDATE_COMMIT_SWITCH_NOT_TAKEN = 75
 };
 
 enum class UPDATER_UPDATE_REBOOT_STATE : int{

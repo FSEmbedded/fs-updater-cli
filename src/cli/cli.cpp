@@ -329,15 +329,20 @@ void cli::fs_update_cli::commit_update()
 {
     try
     {
-        if (this->update_handler->commit_update() == true)
+        switch (this->update_handler->commit_update_outcome())
         {
+        case fs::CommitOutcome::COMMITTED:
             cli_io::write_stdout("Commit update\n");
             this->return_code = static_cast<int>(UPDATER_COMMIT_STATE::UPDATE_COMMIT_SUCCESSFUL);
-        }
-        else
-        {
+            break;
+        case fs::CommitOutcome::SWITCH_NOT_TAKEN:
+            cli_io::write_stdout("Commit update, switch not taken: the running slot stays\n");
+            this->return_code = static_cast<int>(UPDATER_COMMIT_STATE::UPDATE_COMMIT_SWITCH_NOT_TAKEN);
+            break;
+        case fs::CommitOutcome::NOT_NEEDED:
             cli_io::write_stdout("Commit update not needed\n");
             this->return_code = static_cast<int>(UPDATER_COMMIT_STATE::UPDATE_NOT_NEEDED);
+            break;
         }
     }
     catch (const fs::NotAllowedUpdateState &e)

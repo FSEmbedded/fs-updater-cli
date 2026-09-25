@@ -46,6 +46,9 @@ All exit codes from `src/cli/fs_updater_error.h`. Valid POSIX range is 0–125
 | 17 | `UPDATER_COMMIT_STATE::UPDATE_NOT_NEEDED` | Nothing to commit (idle) |
 | 18 | `UPDATER_COMMIT_STATE::UPDATE_NOT_ALLOWED_UBOOT_STATE` | U-Boot state incompatible |
 | 19 | `UPDATER_COMMIT_STATE::UPDATE_SYSTEM_ERROR` | System error during commit |
+| 75 | `UPDATER_COMMIT_STATE::UPDATE_COMMIT_SWITCH_NOT_TAKEN` | Committed, but the requested slot switch did not hold: the running slot stays (a second commit answers 17) |
+
+75 lies outside 16–19 because that block is full and 55–74 are reserved for other categories.
 
 ## Update state query (`--update_reboot_state`)
 

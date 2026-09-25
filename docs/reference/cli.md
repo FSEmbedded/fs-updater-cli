@@ -79,6 +79,7 @@ Must be called after rebooting into the new or rolled-back slot.
 | 17 | Nothing to commit (already idle) |
 | 18 | U-Boot state incompatible |
 | 19 | System error |
+| 75 | Committed, but the requested slot switch did not hold: the bootloader runs the old slot, which stays |
 
 ### `--update_reboot_state`
 
