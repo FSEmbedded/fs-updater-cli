@@ -59,8 +59,22 @@ busy, denied) are reported before any of these: see 61/66/67 under
 | 13 | `UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_PROGRESS_ERROR` | Error during rollback |
 | 14 | `UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_INTERNAL_ERROR` | Internal error (rollback) |
 | 15 | `UPDATER_UPDATE_ROLLBACK_STATE::UPDATE_ROLLBACK_SYSTEM_ERROR` | System error (rollback) |
-| 54 | `UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_BAD` | Refused: target slot is marked bad or uncommitted, or (firmware only) the install never reached the boot order |
+| 54 | `UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_BAD` | Refused: target slot is marked bad or uncommitted, (firmware only) the install never reached the boot order, or the durable update state owns no such move (nothing was changed; the message names the state and the way out) |
 | 56 | `UPDATER_SETGET_UPDATE_STATE::UPDATE_STATE_UNPROVISIONED` | Refused: target slot was never provisioned. Not reachable on `--switch_fw_slot`, which has no unprovisioned refusal |
+
+`--rollback_update`, `--switch_fw_slot` and `--switch_app_slot` share one
+errno mapper, so a refusal the library raises for the same reason arrives as
+the same code on every door. `--rollback_update` only calls into the library
+while a library state 2, 3 or 4 is stored — every other state is answered by
+that state's own `--update_reboot_state` code before the library is asked
+(see [`--rollback_update`](cli.md#--rollback_update)). Within 2/3/4 the
+library can still refuse the call it was given — an update whose own digits
+cannot be identified — and that refusal also exits 54, before anything is
+staged; see the library's
+[transition diagram](https://github.com/fsembedded/fs-updater-lib/blob/master/docs/state-machine.md#transition-diagram)
+(Phase 3). `--switch_fw_slot` and `--switch_app_slot` call into the library
+only from the idle state, so the same refusal there is not reached from the
+states a caller normally acts on.
 
 ## Commit (`--commit_update`)
 

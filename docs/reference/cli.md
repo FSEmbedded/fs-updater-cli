@@ -167,7 +167,7 @@ the enum names of the exit codes are listed in
 | 27 | `NO_UPDATE_REBOOT_PENDING` (0) | Always | None |
 | 28 | `ROLLBACK_FW_REBOOT_PENDING` (7) | A firmware slot switch, before and after its reboot | Reboot once, then `--commit_update`; see [below](#rebooting-after-a-firmware-rollback-or-slot-switch) |
 | 29 | `ROLLBACK_APP_REBOOT_PENDING` (8) | The rollback's reboot has not happened | `--apply_update`, then `--commit_update` after the reboot |
-| 30 | `ROLLBACK_APP_FW_REBOOT_PENDING` (9) | The rollback's reboot has not happened, or a combined update was rolled back before its own reboot | `--apply_update`, then `--commit_update` after the reboot; for a combined update rolled back before its reboot, see [`--rollback_update`](#--rollback_update) |
+| 30 | `ROLLBACK_APP_FW_REBOOT_PENDING` (9) | A combined update's own reboot had already landed on the new slot when it was rolled back | `--apply_update`, then `--commit_update` after the reboot |
 | 31 | 7, or `INCOMPLETE_FW_ROLLBACK` (10) | 7: a firmware update rolled back after its reboot, before and after the rollback's reboot, or a slot switch whose boot fell back to the previous slot; 10: always | 7: as for 28; 10: `--commit_update` (16; it can refuse with 18) |
 | 32 | 8, or `INCOMPLETE_APP_ROLLBACK` (11) | 8: the rollback's reboot took effect; 11: always | `--commit_update` (16) |
 | 33 | 9, or `INCOMPLETE_APP_FW_ROLLBACK` (12) | 9: the rollback's reboot took effect; 12: always | `--commit_update` (16; for 12 it can refuse with 18) |
@@ -205,7 +205,8 @@ table.
   `--commit_update` fails with 19 (with differing orders the result follows the
   boot evidence, e.g. 16 after a failed reboot, 18 while the reboot is
   missing), and
-  `--rollback_update` is refused for the firmware half.
+  `--rollback_update` is refused outright: the install never reached the boot
+  order, so there is nothing for the rollback to switch away from.
 
 #### Rebooting after a firmware rollback or slot switch
 
@@ -235,31 +236,28 @@ Acts only while an update is pending (library states 2–4, which
 failed install included, it changes nothing, prints the state and exits with
 that state's `--update_reboot_state` code.
 
-What the rollback stores depends on whether the update's reboot has happened;
-the library's
-[transition diagram](https://github.com/fsembedded/fs-updater-lib/blob/master/docs/state-machine.md#transition-diagram)
-(Phase 3) lists every case. Run `--update_reboot_state` afterwards and follow
-its next step: 27 means the device is already back on the proven slot, 29–31
-need a reboot and then a commit (see
+What the rollback stores depends on whether the update's reboot has already
+happened and landed on the new slot, decided from fresh evidence (the written
+slot, the running slot and its boot budget for firmware; the mounted image
+for application), not from a stored marker; the library's
+[Rolling back before the update's reboot](https://github.com/fsembedded/fs-updater-lib/blob/master/docs/state-machine.md#rolling-back-before-the-updates-reboot)
+lists every case. When the update's reboot never happened, or the bootloader
+already fell back — on state 2 or 4 — the rollback settles at once:
+the abandoned slot (both slots, for state 4) is marked bad, the boot order
+and budgets are restored, and `--update_reboot_state` reports 27 (idle)
+straight away, still exiting 12 for the rollback itself. When the reboot
+already landed on the new slot, the rollback is prepared instead and
+`--update_reboot_state` reports 29–31, which need a reboot and then a commit
+(see
 [Rebooting after a firmware rollback or slot switch](#rebooting-after-a-firmware-rollback-or-slot-switch)).
-After a bootloader fallback the reboot has already undone the firmware. On
-state 2 the rollback changes nothing, still exits 12, and
-`--update_reboot_state` keeps reporting 23. On state 4 it still points the
-application back and stores 9, which `--update_reboot_state` reports as 33
-at once; its commit settles the failed firmware slot without marking it bad. Commit rather than roll back after a fallback; see the
-library's
-[transition diagram](https://github.com/fsembedded/fs-updater-lib/blob/master/docs/state-machine.md#transition-diagram)
-(Phase 3). A combined update rolled
-back before its reboot stores a state that no verb leads out of; see
-[Rolling back a combined update before its reboot](https://github.com/fsembedded/fs-updater-lib/blob/master/docs/state-machine.md#rolling-back-a-combined-update-before-its-reboot).
 
 | Exit code | Meaning |
 |:---------:|---------|
-| 12 | Rollback prepared (after a bootloader fallback on state 2, nothing changed; see above) |
+| 12 | Rollback prepared, or already settled at once (see above) |
 | 13 | Progress error |
 | 14 | Internal error |
 | 15 | System error |
-| 54 | Refused: target slot is marked bad or uncommitted, or the firmware install never reached the boot order |
+| 54 | Refused: target slot is marked bad or uncommitted, the firmware install never reached the boot order, or (rare) the pending update's own digits could not be identified |
 | 56 | Refused: target slot was never provisioned (no image installed there) |
 
 ### `--switch_fw_slot`
