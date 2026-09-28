@@ -352,8 +352,7 @@ void cli::fs_update_cli::commit_update()
     }
     catch (const updater::FirmwareRebootStateNotDefined &)
     {
-        /* BOOT_ORDER names a single slot: RAUC still owns the other one
-         * mid-write, so whether the reboot succeeded can't be told yet.
+        /* The boot variables fit no known outcome of the pending update.
          * Answer like a plain state query instead of a raw internal error. */
         this->print_update_reboot_state();
     }
@@ -426,8 +425,7 @@ void cli::fs_update_cli::rollback_update()
     }
     catch (const updater::FirmwareRebootStateNotDefined &)
     {
-        /* BOOT_ORDER names a single slot: RAUC still owns the other one
-         * mid-write, so whether the reboot succeeded can't be told yet.
+        /* The boot variables fit no known outcome of the pending update.
          * Answer like a plain state query instead of a raw internal error. */
         this->print_update_reboot_state();
     }

@@ -73,6 +73,14 @@ sets `update_reboot_state = 0` (idle).
 
 Must be called after rebooting into the new or rolled-back slot.
 
+When the reboot did not land in the written firmware slot
+(`--update_reboot_state` answers 21 or 22), the commit acknowledges the
+failure instead: RAUC marks the written slot bad (`rauc status mark-bad
+other`, it leaves `BOOT_ORDER` and keeps `BOOT_x_LEFT = 0`), its `update`
+digit becomes `2`, the running slot's attempts are refilled and the state
+returns to idle. The written slot is not re-armed; a new install is the way
+back onto it.
+
 | Exit code | Meaning |
 |:---------:|---------|
 | 16 | Committed successfully |
@@ -89,11 +97,11 @@ human-readable string to stdout.
 | Exit code | `UBootBootstateFlags` state | Meaning |
 |:---------:|-----------------------------|---------|
 | 20 | `FAILED_APP_UPDATE` | Application update failed |
-| 21 | `FAILED_FW_UPDATE` | Firmware update failed |
-| 22 | `FW_UPDATE_REBOOT_FAILED` | FW installed, bootloader fell back to old slot |
-| 23 | `INCOMPLETE_FW_UPDATE` | Firmware installed, pending reboot |
-| 24 | `INCOMPLETE_APP_UPDATE` | Application installed, pending reboot |
-| 25 | `INCOMPLETE_APP_FW_UPDATE` | Both installed, pending reboot |
+| 21 | `FAILED_FW_UPDATE` | Firmware update failed: the installer reported an error, or the install stopped before or while the slot was written and the old firmware runs |
+| 22 | `FW_UPDATE_REBOOT_FAILED` | FW written, but the bootloader could not boot it and fell back to the old slot |
+| 23 | `INCOMPLETE_FW_UPDATE` | Firmware installed and booted, pending commit |
+| 24 | `INCOMPLETE_APP_UPDATE` | Application installed and mounted, pending commit |
+| 25 | `INCOMPLETE_APP_FW_UPDATE` | Both installed and booted, pending commit |
 | 26 | `UPDATE_REBOOT_PENDING` | Reboot requested but not yet performed |
 | 27 | `NO_UPDATE_REBOOT_PENDING` | Idle — no pending update |
 | 28 | `ROLLBACK_FW_REBOOT_PENDING` | FW rollback pending reboot |
@@ -113,9 +121,10 @@ the next update will succeed:
 | Exit code | Required next action |
 |:---------:|---------------------|
 | 20 (`FAILED_APP_UPDATE`) | `--rollback_update` → `--apply_update` → reboot → `--commit_update` |
-| 21 (`FAILED_FW_UPDATE`) | `--rollback_update` → `--apply_update` → reboot → `--commit_update` |
-| 22 (`FW_UPDATE_REBOOT_FAILED`) | `--rollback_update` → `--apply_update` → reboot → `--commit_update` |
-| 23–25 (`INCOMPLETE_*`) | Reboot (via `--apply_update`), then `--commit_update` — do **not** call `--commit_update` before rebooting |
+| 21 (`FAILED_FW_UPDATE`) | `--commit_update` acknowledges it (16); the written slot stays bad. `--rollback_update` is refused and answers 21 |
+| 22 (`FW_UPDATE_REBOOT_FAILED`) | `--commit_update` acknowledges it (16); the written slot stays bad. `--rollback_update` is refused and answers 22 |
+| 23–25 (`INCOMPLETE_*`) | `--commit_update` once the application has verified the booted update, or `--rollback_update` → `--apply_update` → reboot → `--commit_update` |
+| 26 (`UPDATE_REBOOT_PENDING`) | Reboot via `--apply_update` — `--commit_update` is refused before the reboot |
 
 ### `--automatic`
 
@@ -152,6 +161,11 @@ Request a rollback to the previous firmware and/or application version.
 Sets `update_reboot_state` to 7, 8, or 9 depending on what is rolling back.
 Creates the `rollbackUpdate` signal file. A reboot via `--apply_update` is
 required to complete the rollback.
+
+A firmware update whose slot never ran (`--update_reboot_state` answers 21
+or 22) has nothing to roll back to: the request is refused, prints
+"Rollback is not allowed because update reboot state is wrong." and answers
+21 or 22. `--commit_update` acknowledges that state.
 
 | Exit code | Meaning |
 |:---------:|---------|

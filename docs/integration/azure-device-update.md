@@ -108,8 +108,11 @@ On resume the handler must:
 
 1. Call `--update_reboot_state` to read the current state via its **exit code**.
 2. If exit code is 23, 24, or 25 (`INCOMPLETE_*`): proceed directly to `Apply()`.
-3. If exit code is 20 or 21 (`FAILED_*`) or 22 (`FW_UPDATE_REBOOT_FAILED`): the
-   previous install failed; call `Cancel()` to roll back before retrying.
+3. If exit code is 20 (`FAILED_APP_UPDATE`): the previous install failed;
+   call `Cancel()` to roll back before retrying. If it is 21
+   (`FAILED_FW_UPDATE`) or 22 (`FW_UPDATE_REBOOT_FAILED`): the written
+   firmware slot never ran; run `fs-updater --commit_update` to acknowledge
+   it (a rollback is refused), then retry the install.
 
 See the [state machine recovery table](https://github.com/fsembedded/fs-updater-lib/blob/main/docs/state-machine.md#stale-and-stuck-states)
 for the full per-state recovery calls, and
