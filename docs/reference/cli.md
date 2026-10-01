@@ -59,7 +59,8 @@ Specifies the component type for old-format component files used with
 
 Incompatible with `.fs` bundles — when `--update_type` is set, bundle
 extraction is skipped and the file is passed directly to the installer.
-Cannot be combined with `--automatic`; doing so returns exit 64.
+Cannot be combined with `--automatic`; doing so returns exit 64. In
+automatic mode the type comes from the `UPDATE_TYPE` environment variable.
 
 | Exit code | Meaning |
 |:---------:|---------|
@@ -129,14 +130,15 @@ the next update will succeed:
 ### `--automatic`
 
 Install an update from environment variables. Intended for automated
-USB-stick update flows. **Supports the new `.fs` bundle procedure only** —
-old component files (`.raucb`, raw application) are not supported; use
-`--update_file --update_type` for those.
+USB-stick update flows. Installs a `.fs` bundle, or a bare firmware or
+application image when `UPDATE_TYPE` names its type (the same as
+`--update_file --update_type`).
 
 | Variable | Required | Description |
 |----------|:--------:|-------------|
 | `UPDATE_STICK` | Yes | Mount point of the update media |
 | `UPDATE_FILE` | Yes | Filename (relative to `UPDATE_STICK`) to install |
+| `UPDATE_TYPE` | No | `fw` or `app` for a bare image; unset or empty for a `.fs` bundle |
 
 ```bash
 export UPDATE_STICK=/mnt/usb
@@ -148,6 +150,7 @@ fs-updater --automatic
 |:---------:|---------|
 | 0/4/8 | Install successful (same as `--update_file`) |
 | 1–11 | Install errors |
+| 60 | `UPDATE_TYPE` is non-empty and not `fw` or `app` |
 | 62 | `UPDATE_STICK` not set |
 | 63 | `UPDATE_FILE` not set |
 
@@ -344,7 +347,7 @@ fs-updater --debug --update_file /mnt/usb/firmware.raucb
 
 | Exit code | Meaning |
 |:---------:|---------|
-| 60 | `--update_type` value is not `fw` or `app` |
+| 60 | `--update_type` value (or `UPDATE_TYPE` with `--automatic`) is not `fw` or `app` |
 | 61 | Path passed to `--update_file` does not exist |
 | 62 | `UPDATE_STICK` environment variable not set (`--automatic`) |
 | 63 | `UPDATE_FILE` environment variable not set (`--automatic`) |

@@ -116,7 +116,8 @@ cli::fs_update_cli::fs_update_cli(int argc, const char ** argv):
 			),
 		arg_automatic("",
 			    "automatic",
-				"Automatic update modus"
+				"Automatic update modus (environment: UPDATE_STICK, "\
+				"UPDATE_FILE, optional UPDATE_TYPE fw or app)"
 			    ),
 		arg_debug("",
 			  "debug",
@@ -259,16 +260,16 @@ bool cli::fs_update_cli::create_rollback_marker()
 // Update execution
 // ---------------------------------------------------------------------------
 
-void cli::fs_update_cli::update_image_state(const string &update_file)
+void cli::fs_update_cli::update_image_state(const string &update_file, const string *requested_type)
 {
     try
     {
         cli_io::write_stdout("Update started\n");
         uint8_t installed_update_type = 0;
         string update_type;
-        if (this->arg_update_type.isSet())
+        if (requested_type != nullptr)
         {
-            update_type = this->arg_update_type.getValue();
+            update_type = *requested_type;
             if ((update_type.compare("app") != 0) && (update_type.compare("fw") != 0))
             {
                 cli_io::write_stderr("Update type: " + update_type + " does not exist.\n");
@@ -755,7 +756,8 @@ void cli::fs_update_cli::handle_update_file()
         this->return_code = static_cast<int>(UPDATER_CLI_VALIDATION::UPDATE_FILE_NOT_FOUND);
         return;
     }
-    this->update_image_state(update_location);
+    this->update_image_state(update_location,
+        this->arg_update_type.isSet() ? &this->arg_update_type.getValue() : nullptr);
 }
 
 void cli::fs_update_cli::handle_automatic()
@@ -785,7 +787,11 @@ void cli::fs_update_cli::handle_automatic()
     }
     update_file += update_file_env;
 
-    this->update_image_state(update_file);
+    /* Unset or empty selects the .fs container, as without --update_type */
+    const char *update_type_env = std::getenv("UPDATE_TYPE");
+    const string update_type = (update_type_env != nullptr) ? update_type_env : "";
+
+    this->update_image_state(update_file, update_type.empty() ? nullptr : &update_type);
 }
 
 void cli::fs_update_cli::handle_print_version()

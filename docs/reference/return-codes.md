@@ -124,7 +124,7 @@ All exit codes from `src/cli/fs_updater_error.h`. Valid POSIX range is 0–125
 
 | Code | Enum | Trigger |
 |:----:|------|---------|
-| 60 | `UPDATER_CLI_VALIDATION::INVALID_UPDATE_TYPE` | `--update_type` not `fw` or `app` |
+| 60 | `UPDATER_CLI_VALIDATION::INVALID_UPDATE_TYPE` | `--update_type` (or `UPDATE_TYPE` with `--automatic`) not `fw` or `app` |
 | 61 | `UPDATER_CLI_VALIDATION::UPDATE_FILE_NOT_FOUND` | Path given to `--update_file` does not exist |
 | 62 | `UPDATER_CLI_VALIDATION::MISSING_ENV_UPDATE_STICK` | `UPDATE_STICK` not set (`--automatic`) |
 | 63 | `UPDATER_CLI_VALIDATION::MISSING_ENV_UPDATE_FILE` | `UPDATE_FILE` not set (`--automatic`) |

@@ -64,8 +64,9 @@ namespace cli
 		/**
 		 * Internal function to run update and handle errors as return_value:
 		 * @param update_file Path to update package (fully resolved)
+		 * @param requested_type "fw" or "app" for a bare image, nullptr for a .fs container
 		 */
-		void update_image_state(const std::string &update_file);
+		void update_image_state(const std::string &update_file, const std::string *requested_type);
 
 		/**
 		 * Create rollback marker file in work directory.
